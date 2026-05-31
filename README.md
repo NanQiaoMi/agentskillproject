@@ -69,14 +69,84 @@ graph TD
 │   ├── PRD.md               # 产品功能及非目标清单
 │   ├── DESIGN.md            # 视觉规范及三态交互表现
 │   └── ARCHITECTURE.md      # 技术栈、表结构及 API 契约
-├── .cursorrules             # 自动加载的 Cursor 运行时卡关规则
-├── .clinerules              # 自动加载的 Cline / Roo Code 运行时卡关规则
+├── .cursorrules             # 自动加载 of Cursor 运行时卡关规则
+├── .clinerules              # 自动加载 of Cline / Roo Code 运行时卡关规则
 └── README.md                # 本框架使用指南 (您当前阅读的文件)
 ```
 
 ---
 
-## 🚀 三、 零起点快速上手指南 (新手必读)
+## 🔄 三、 完整端到端协同开发流程图
+
+下面的图展示了**人类总管 (User)**、**三个专属 AI 会话窗口**以及**本地 Git 状态机**在整个软件开发生命周期中的端到端完整流转：
+
+```mermaid
+graph TD
+    %% 角色区域定义
+    subgraph User["👤 人类总管 (User)"]
+        Define["1. 构思并定义 Spec (Docs)"]
+        CmdAdd["2. 聊天生成任务卡 (cli add)"]
+        ResolveEnv["8. 手动排查宿主机环境故障"]
+    end
+
+    subgraph CLI["⚙️ 状态机与 Git 引擎 (agentflow.py)"]
+        CheckDeps{"3. 校验前置任务是否 Done?"}
+        BranchOut["4. 自动切入特征分支<br>git checkout -b feature/task-xxx"]
+        CommitDev["6. 自动 add 并本地提交<br>git commit -m 'feat: ...'"]
+        AutoMerge["10. 自动切回基线并合并<br>git merge --no-ff<br>物理删除 feature 分支"]
+    end
+
+    subgraph DevAgent["🚀 开发窗口 (antigravity / codex)"]
+        TaskStart["5. 读取任务卡 & 声明白名单文件"]
+        BuildRun["5.1 编码开发 & 本地微提交存档"]
+        SubmitTask["5.2 指示提审 (cli submit)"]
+        FixCode["7.1 在隔离分支上修复 Bug"]
+    end
+
+    subgraph ReviewAgent["🛡️ 审查窗口 (cloudecode)"]
+        RunTests["6.1 跑测本地门禁 (cli review --run-tests)<br>(Lint / Type Check / Unit Test)"]
+        CheckTests{"6.2 测试与断言是否全数通过?"}
+        CmdApprove["9. 发送批准 (review --approve)"]
+        CmdReject["7. 发送打回 (review --reject)"]
+        CmdEnvFail["7.2 报告环境故障 (review --env-fail)"]
+    end
+
+    %% 流转连线
+    Define --> CmdAdd
+    CmdAdd --> CheckDeps
+    CheckDeps -->|前置未完成| CmdAdd
+    CheckDeps -->|已就绪| BranchOut
+    BranchOut --> TaskStart
+    TaskStart --> BuildRun
+    BuildRun --> SubmitTask
+    SubmitTask --> CommitDev
+    CommitDev --> RunTests
+    RunTests --> CheckTests
+    
+    CheckTests -->|是 (Green)| CmdApprove
+    CheckTests -->|否 (Code Bug)| CmdReject
+    CheckTests -->|否 (Env Error)| CmdEnvFail
+    
+    CmdReject -->|回切 feature 分支| FixCode
+    FixCode --> SubmitTask
+    
+    CmdEnvFail -->|挂起指派给 User| ResolveEnv
+    ResolveEnv --> RunTests
+    
+    CmdApprove --> AutoMerge
+    AutoMerge -->|任务状态归档为 Done| Done((🏁 任务完成))
+
+    %% 节点样式美化
+    style User fill:#2D3142,stroke:#4F5D75,stroke-width:2px,color:#fff
+    style CLI fill:#4F5D75,stroke:#D9D9D9,stroke-width:2px,color:#fff
+    style DevAgent fill:#355C7D,stroke:#6C5B7B,stroke-width:2px,color:#fff
+    style ReviewAgent fill:#5A3E4E,stroke:#C06C84,stroke-width:2px,color:#fff
+    style Done fill:#4E9F3D,stroke:#1E5128,stroke-width:2px,color:#fff
+```
+
+---
+
+## 🚀 四、 零起点快速上手指南 (新手必读)
 
 如果您是第一次使用 AgentFlow，请按照以下三个核心阶段进行“从零开始的配置与开发输入”：
 
@@ -89,7 +159,7 @@ graph TD
 
 【我的项目名称】：<请在此处替换为您真实的项目名称，如：MyAmazingApp>
 
-你好！我需要在当前本地目录下，为我的新项目全自动创建对应的文件夹并部署 AgentFlow 多智能体协作框架。请扮演系统运维与架构专家，在后台自动完成以下搭建动作（我不需要手动操作任何终端）：
+你好！我需要在当前本地目录下，为我的新项目全自动创建对应的文件夹并部署 AgentFlow多智能体协作框架。请扮演系统运维与架构专家，在后台自动完成以下搭建动作（我不需要手动操作任何终端）：
 
 1. 在当前目录下，创建一个以【我的项目名称】命名的子文件夹（以下简称为项目目录）。
 2. 从你的代码库中在后台自动生成并释放以下框架核心文件到项目目录下：
@@ -175,7 +245,7 @@ graph TD
 
 ---
 
-## 🔄 四、 任务状态机生命周期与 Git 分支流转
+## 🔄 五、 任务状态机生命周期与 Git 分支流转
 
 所有的开发状态由 `.agentflow/tasks/` 下的独立卡片状态机驱动，并在后台自动与 Git 分支绑定流转：
 
@@ -194,7 +264,7 @@ stateDiagram-v2
 
 ---
 
-## 🛠️ 五、 CLI 命令速查手册
+## 🛠️ 六、 CLI 命令速查手册
 
 虽然所有的命令都应由 AI 智能体在您的对话指挥下自动在终端调用，但您（人类）也可以随时在项目根目录下手动调用它们来进行状态检查：
 
@@ -209,7 +279,7 @@ stateDiagram-v2
 
 ---
 
-## 🚨 六、 铁的开发纪律 (Build Discipline)
+## 🚨 七、 铁的开发纪律 (Build Discipline)
 
 为了确保大型项目的多人/多智能体协作稳定性，`.cursorrules` 会强制 AI 遵循以下 **“Build 纪律”**：
 1.  **单项突破**：AI 绝对不能一次性开发全部 Spec，必须根据任务卡片中的 **验收项清单 (Acceptance Criteria)**，**一次只开发一个验收项**。
@@ -219,7 +289,7 @@ stateDiagram-v2
 
 ---
 
-## 🛡️ 七、 生产级就绪核对清单 (Review Checkpoints)
+## 🛡️ 八、 生产级就绪核对清单 (Review Checkpoints)
 
 在任务提交 `cloudecode` 审查通过并最终合入 master 之前，必须强行在后台跑测并通过以下硬性检测：
 *   **安全性 (Security)**：

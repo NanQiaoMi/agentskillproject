@@ -22,3 +22,17 @@ Before performing any task or modifying any code in this repository, you must:
 - Do NOT modify the task metadata (the JSON block inside HTML comments at the top of task files) manually. Always use the `agentflow.py` CLI script for state transitions.
 - Maintain strict directory boundaries to prevent code conflicts.
 - Refer to the project [README.md](file:///d:/agentskillproject/README.md) for full architecture specifications.
+
+---
+
+## 4. Vibe Coding Build Discipline (Crucial)
+- Never attempt to implement the entire task spec at once.
+- Look for the "Acceptance Criteria" (验收项) checklist inside `.agentflow/tasks/<TASK_ID>.md`.
+- Implement and test only **ONE** acceptance criterion at a time.
+- Once verified, output a message recommending the user to commit or execute a git commit (e.g. `git commit -m "feat: TASK_ID pass criterion X"`) as a checkpoint before starting the next item.
+- If changes break the code and cannot be easily fixed, immediately reset to the last checkpoint (e.g. `git reset --hard HEAD`) to avoid messy source code degeneration.
+
+## 5. Context Management & Security
+- **Context Rot Prevention**: When a task is completed and merged, prompt the user to start a new chat session to clear context history. This avoids performance decay due to excessively long context windows.
+- **Learn from Examples**: Before implementing new functionality, search the workspace for existing, similar modules. Follow the existing coding style, test frameworks, and error logging conventions.
+- **Security Constraint**: Never write plain-text credentials (passwords, API keys) into files. Always read them from environment variables or a `.env` file. Refer to `src/backend/` configuration files for reference.

@@ -4,20 +4,18 @@
 
 ---
 
-## 1. 准备工作：项目从零启动
+## 1. 准备工作：AI 自动解压与搭建
 
-当您在一个全新的、空的目录中启动项目时，请按照以下步骤部署环境：
+在新项目启动时，您不需要手动解压文件或建立目录，直接让 AI 助手为您服务：
 
-1. **建立物理目录**：
-   在您本地创建项目根目录（例如 `d:\agentskillproject`），并在该目录下创建以下文件夹：
-   ```powershell
-   mkdir src/frontend
-   mkdir src/backend
-   ```
-2. **确认框架就绪**：
-   确保您的项目根目录下存在 `.agentflow/` 文件夹（包含 `agentflow.py`、`config.json` 等）以及根目录下的 `.cursorrules` 和 `.clinerules` 规则文件。
-3. **打开三个独立的 AI 聊天窗口**：
-   在您的智能体软件中打开此项目，并开启三个独立的会话：
+1. **拖入压缩包**：
+   将您打包好的 `agentflow.zip`（包含 `.agentflow/` 文件夹及规则文件）拖入空的项目目录中。
+2. **在 AI 窗口对话**：
+   在您打开的 AI 会话中发送一句话：
+   > “*帮我将当前目录下的 agentflow.zip 解压到当前项目根目录，并自动初始化 Git 本地仓库和物理目录结构。*”
+   - AI 助手在收到指令后，会自动在后台终端调用解压命令、建立前端/后端源码目录并执行 `git init`。
+3. **分流三个独立会话窗口**：
+   框架搭建完成后，开启三个独立的会话窗口分别对应各个智能体角色：
    - **窗口 A**：命名为“前端开发 antigravity”
    - **窗口 B**：命名为“后端开发 codex”
    - **窗口 C**：命名为“代码审查 cloudecode”
@@ -107,69 +105,59 @@
 ```
 
 ---
+## 3. 核心心法实操全周期示例 (以“忘记密码”功能为例)
 
-## 3. 功能开发实操全周期示例 (以“忘记密码”功能为例)
+AgentFlow 完美契合 **Brainstorm → Spec → Build** 这一最稳的 Vibe Coding 节奏。请遵循以下三个步骤进行项目落地：
 
-在完成初始化后，您只需要进行简单的中文指令下达，后台命令执行均由智能体软件代劳：
+### 阶段 1：Brainstorm (头脑风暴)
+当您有一个原始想法（如“*我想做一个‘忘记密码’功能，需要有页面和发送链接的后端API。*”）时，**不要急于写代码**：
+1. 打开与 `codex` (后端助手) 或 `antigravity` (前端助手) 的窗口，输入：
+   > “我打算做‘忘记密码’功能。请扮演系统架构师，用 5C 框架对我进行烤问（Grill-me），帮我澄清背景、边界、接口契约和测试真值（Ground Truth）。”
+2. 与 AI 进行 1~2 轮问答，彻底聊清楚：
+   - 密码链接的 Token 时效是多长？
+   - 邮箱不存在时，接口是否要返回相同的提示（以防撞库）？
+   - 如何提供测试数据真值（Ground Truth）？
 
-### 阶段 1：想法录入与拆单
-- **您在 窗口 A (antigravity) 输入**：
-  > “*我想做一个‘忘记密码’功能，需要有页面和发送链接的后端API。*”
-- **antigravity 的自动动作**：
-  在后台自动调用 `add` 命令创建任务卡片：
-  - 创建 `TASK-003.md` (重置密码API，负责人指定给 `codex`)。
-  - 创建 `TASK-004.md` (忘记密码页面，负责人指定给 `antigravity`，声明依赖于 TASK-003)。
-- **antigravity 的回复**：提示您任务已创建好，可以去 codex 窗口让其接单开发。
+### 阶段 2：Spec (建立共识)
+头脑风暴结束后，由智能体在后台自动调用 `add` 命令创建任务卡片。**此时创建的任务卡片即为您和 AI 开发前按下的“同意键”（Spec）**：
+- 在后台生成 `TASK-003.md`（后端 API）和 `TASK-004.md`（前端页面，依赖 TASK-003）。
+- **每个任务卡片必须包含明确的原子化“验收项清单（Acceptance Criteria）”**。例如 `TASK-003` 包含：
+  - `[ ] 验收项 1: 调用 /api/forgot-password 传入不存在的邮箱时，返回 success: true（模糊返回防止撞库）`
+  - `[ ] 验收项 2: 传入合规邮箱时，数据库生成有效 Token，并向测试日志中输出发送的 Mock 链接`
 
-### 阶段 2：后端开发
-- **您在 窗口 B (codex) 输入**：
-  > “*开始开发任务 TASK-003。*”
-- **codex 的自动动作**：
-  - 自动运行 `python .agentflow/agentflow.py start TASK-003` 锁定任务。
-  - 自动在 `src/backend/` 编写接口代码。
-  - 编写完后，自动运行 `python .agentflow/agentflow.py submit TASK-003 --files "src/backend/forgot_password.py"` 提交审查。
-- **codex 的回复**：提示接口开发完毕并提审，指引您让 cloudecode 开始审计。
-
-### 阶段 3：接口审查与自动测试
-- **您在 窗口 C (cloudecode) 输入**：
-  > “*审查任务 TASK-003。*”
-- **cloudecode 的自动动作**：
-  - 自动运行 `python .agentflow/agentflow.py review TASK-003 --run-tests`。
-  - 读取测试日志（`.agentflow/logs/test_TASK-003.log`）。
-  - 若测试通过，自动运行：`python .agentflow/agentflow.py review TASK-003 --approve --comment "四维度审查：通过..."` 归档任务。
-- **cloudecode 的回复**：提示后端测试通过并已归档，指引您让 antigravity 开始前端开发。
-
-### 阶段 4：前端页面开发
-- **您在 窗口 A (antigravity) 输入**：
-  > “*开始开发前端页面 TASK-004。*”
-- **antigravity 的自动动作**：
-  - 自动运行 `python .agentflow/agentflow.py start TASK-004`。（*注意：由于其依赖的前置任务 TASK-003 状态已经是 Done，校验成功，允许启动*）。
-  - 自动在 `src/frontend/` 编写 HTML 表单。
-  - 开发完毕后，自动运行 `python .agentflow/agentflow.py submit TASK-004 --files "src/frontend/forgot_password.html"`。
-- **antigravity 的回复**：提示前端页面完成并提审。
-
-### 阶段 5：前端审查与归档
-- **您在 窗口 C (cloudecode) 输入**：
-  > “*审查任务 TASK-004。*”
-- **cloudecode 的自动动作**：
-  - 自动运行测试并核验前端代码。
-  - 验证通过后，自动运行 `python .agentflow/agentflow.py review TASK-004 --approve --comment "..."`。
-- **cloudecode 的回复**：提示整个忘记密码功能开发闭环完成。
+### 阶段 3：Build (小步开发，跑通存档)
+这是开发阶段。**切忌将整份 Spec (任务描述) 丢给 AI 直接写完**。应指挥智能体执行以下节奏：
+1. **启动并锁定任务**：
+   在 `codex` 窗口输入：“*启动任务 TASK-003，拉出独立分支。*”
+   - AI 自动执行 `python .agentflow/agentflow.py start TASK-003`，切入特征分支 `feature/task-003`。
+2. **一次只做一个验收项**：
+   在 `codex` 窗口指挥：“*我们先实现 TASK-003 中的 验收项 1（邮箱不合法检查与模糊响应），其他功能先不管。*”
+   - AI 仅编写这部分逻辑。
+3. **跑通并存档**：
+   - 运行本地测试（或让 AI 编写临时验证脚本并执行）。
+   - 确认通过后，指挥 AI 执行本地 commit 存档：`git commit -m "feat: TASK-003 pass criterion 1"`。
+4. **递进完成，拒绝源码乱麻**：
+   - 接着以同样“小步跑通、立刻存档”的节奏实现“验收项 2”。
+   - 如果实现“验收项 2”时把之前的代码改坏了，**立刻回滚到 criterion 1 存档点**，避免代码陷入不可挽回的泥潭。
+5. **提交审查**：
+   所有验收项全部小步通过并存档后，AI 自动执行：
+   ```bash
+   python .agentflow/agentflow.py submit TASK-003 --files "src/backend/forgot_password.py" --operator codex
+   ```
+6. **审查与合并**：
+   在 `cloudecode` 窗口跑测并审批。通过后，任务归档为 `done`，`feature/task-003` 自动安全合并到 `master` 且被删除。
+7. **解锁前端任务**：
+   此时，前端 `antigravity` 检测到前置依赖已 `done`，可以启动并以同样的“一次开发一个验收项”的节奏，完成 `TASK-004` 的前端页面编码。
 
 ---
 
-## 4. 疑难排查：如何应对“打回”或“环境异常”
+## 4. 常见问题与容错机制
 
 ### 4.1 代码被 cloudecode 打回（Reject）
-- **现象**：cloudecode 在审查时测试失败或发现逻辑硬伤，会自动发出打回指令，任务被退回给开发（如 `codex`），状态变为 `fixing`。
-- **您的操作**：
-  1. 打开 `codex` 窗口，输入：“*查看打回原因并进行修复。*”
-  2. `codex` 会自动运行 `show` 命令读取任务卡片底部的审查意见，在本地修改代码，并重新运行 `submit` 提审。
-  3. 修复完毕后，您再去 `cloudecode` 窗口输入：“*重新审查。*” 即可。
+- **现象**：测试失败或四维度审计发现硬伤，任务退回 `fixing` 状态。
+- **应对心法**：打开开发窗口，输入“*查看打回原因，按照‘一次只修复一个痛点，跑通即存档’的原则进行修复并重新提审*”。
 
 ### 4.2 本地运行环境损坏（Env Fail）
-- **现象**：自动化测试运行失败不是因为代码 Bug，而是因为您本地环境没有安装对应的运行库。cloudecode 会在后台执行 `review --env-fail`。
-- **您的操作**：
-  1. 任务的负责人会自动变成 `user` (也就是您)。
-  2. 您在自己的电脑终端中手动安装对应依赖库或解决环境端口占用。
-  3. 解决完后，打开 `cloudecode` 窗口输入：“*环境问题已解决，重新审查。*”，流转将继续。
+- **现象**：测试跑不通是因为本地缺少依赖库或本地端口冲突。
+- **应对心法**：任务负责人会自动变成 `user`。您只需在自己的电脑终端中手动安装对应依赖库或解决环境问题，完成后在 cloudecode 窗口输入“*环境问题已解决，重新跑测*”即可。
+

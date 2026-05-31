@@ -168,6 +168,15 @@ python .agentflow/agentflow.py submit TASK-002 --files "src/backend/server.py,sr
 3. **交互契约**：页面元素、路由地址与响应逻辑。
 4. **验收标准 (Acceptance Criteria)**：可验证的测试点。
 
+### 6.4 Vibe Coding 心法应用规范 (Brainstorm -> Spec -> Build)
+AgentFlow 的生命周期完全贯彻了 Vibe Coding 的三步循环，这是保证大型本地项目开发不混乱、不回退的核心心法：
+1. **Brainstorm**：严禁直接让 AI 编码。开工前利用 `/grill-me` 烤问机制，由人类定义问题（做什么、给谁用、到何种程度算完），并完善 5C 需求规范。
+2. **Spec**：将头脑风暴产生的共识，转化为 `.agentflow/tasks/TASK-XXX.md` 中**原子化、可独立验证的“验收项清单（Acceptance Criteria）”**。此 Spec 即为双向确认的“同意键”。
+3. **Build**：遵循 **“一次只开发一个验收项，跑通即存档”** 的小步快跑节奏：
+   - 智能体只锁定当前的单一验收项进行局部实现。
+   - 实现后立即跑测验证，通过后做 Git commit 暂存，形成“小步安全存档点”。
+   - 依次递进。一旦后续改坏，立刻回滚到上一个存档点，拒绝代码回滚退化。
+
 ---
 
 ## 7. 智能体客户端（大模型软件）配置与规范执行指南

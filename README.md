@@ -81,67 +81,51 @@ graph TD
 下面的图展示了**人类总管 (User)**、**三个专属 AI 会话窗口**以及**本地 Git 状态机**在整个软件开发生命周期中的端到端完整流转：
 
 ```mermaid
-graph TD
-    %% 角色区域定义
-    subgraph User["👤 人类总管 (User)"]
-        Define["1. 构思并定义 Spec (Docs)"]
-        CmdAdd["2. 聊天生成任务卡 (cli add)"]
-        ResolveEnv["8. 手动排查宿主机环境故障"]
+sequenceDiagram
+    autonumber
+    actor User as 👤 人类总管 (User)
+    participant CLI as ⚙️ CLI 状态机 (agentflow.py)
+    participant Dev as 🚀 开发窗口 (antigravity/codex)
+    participant Review as 🛡️ 审查窗口 (cloudecode)
+
+    Note over User, CLI: 阶段一：任务创建 (Add)
+    User->>CLI: 运行 add 命令创建新任务卡片
+    CLI-->>User: 生成待办卡片 TASK-xxx.md (状态为 todo)
+
+    Note over User, Dev: 阶段二：认领与分支切入 (Start)
+    User->>Dev: 指导 AI 认领：“开始执行 TASK-xxx”
+    Dev->>CLI: 自动调用 start 命令启动任务
+    Note over CLI: 校验前置任务是否 Done
+    CLI->>CLI: 自动运行 git checkout -b feature/task-xxx
+    CLI-->>Dev: 成功切入特征隔离分支
+
+    Note over Dev: 阶段三：原子功能开发 (Build)
+    Dev->>Dev: 严格按验收指标(AC)编写代码 & 阶段性 Git Commit
+
+    Note over Dev, Review: 阶段四：提审与代码提交 (Submit)
+    User->>Dev: 指导 AI 提审：“可以提交 TASK-xxx”
+    Dev->>CLI: 自动调用 submit 提审命令
+    Note over CLI: 自动暂存并 commit 特征分支代码
+    CLI-->>Review: 状态变更为 review，负责人指派给 cloudecode
+
+    Note over Review: 阶段五：跑测门禁与决断 (Review)
+    User->>Review: 指导 AI 跑测：“运行 TASK-xxx 的测试门禁”
+    Review->>CLI: 自动调用 review --run-tests 运行门禁
+    Note over CLI: 在隔离分支顺次执行 Lint / Type Check / Unit Test
+
+    alt 1. 跑测完全通过 (Green)
+        Review->>CLI: 自动调用 review --approve 批准合入
+        Note over CLI: 自动切回主分支 (main) 并执行 git merge --no-ff
+        Note over CLI: 物理删除本地已完成的 feature/task-xxx 分支
+        CLI-->>User: 🏁 任务顺利合入主线并归档为 done！
+    else 2. 代码有 Bug 需修复 (Red)
+        Review->>CLI: 自动调用 review --reject 打回修复
+        Note over CLI: 自动切回 feature/task-xxx 特征分支
+        CLI-->>Dev: 状态设为 fixing，指派回开发人员继续修复
+    else 3. 宿主机环境异常 (Gray)
+        Review->>CLI: 自动调用 review --env-fail 报告故障
+        CLI-->>User: 状态设为 review，指派回人类排查宿主机环境问题
     end
-
-    subgraph CLI["⚙️ 状态机与 Git 引擎 (agentflow.py)"]
-        CheckDeps{"3. 校验前置任务是否 Done?"}
-        BranchOut["4. 自动切入特征分支<br>git checkout -b feature/task-xxx"]
-        CommitDev["6. 自动 add 并本地提交<br>git commit -m 'feat: ...'"]
-        AutoMerge["10. 自动切回基线并合并<br>git merge --no-ff<br>物理删除 feature 分支"]
-    end
-
-    subgraph DevAgent["🚀 开发窗口 (antigravity / codex)"]
-        TaskStart["5. 读取任务卡 & 声明白名单文件"]
-        BuildRun["5.1 编码开发 & 本地微提交存档"]
-        SubmitTask["5.2 指示提审 (cli submit)"]
-        FixCode["7.1 在隔离分支上修复 Bug"]
-    end
-
-    subgraph ReviewAgent["🛡️ 审查窗口 (cloudecode)"]
-        RunTests["6.1 跑测本地门禁 (cli review --run-tests)<br>(Lint / Type Check / Unit Test)"]
-        CheckTests{"6.2 测试与断言是否全数通过?"}
-        CmdApprove["9. 发送批准 (review --approve)"]
-        CmdReject["7. 发送打回 (review --reject)"]
-        CmdEnvFail["7.2 报告环境故障 (review --env-fail)"]
-    end
-
-    %% 流转连线
-    Define --> CmdAdd
-    CmdAdd --> CheckDeps
-    CheckDeps -->|前置未完成| CmdAdd
-    CheckDeps -->|已就绪| BranchOut
-    BranchOut --> TaskStart
-    TaskStart --> BuildRun
-    BuildRun --> SubmitTask
-    SubmitTask --> CommitDev
-    CommitDev --> RunTests
-    RunTests --> CheckTests
-    
-    CheckTests -->|"是 (Green)"| CmdApprove
-    CheckTests -->|"否 (Code Bug)"| CmdReject
-    CheckTests -->|"否 (Env Error)"| CmdEnvFail
-    
-    CmdReject -->|回切 feature 分支| FixCode
-    FixCode --> SubmitTask
-    
-    CmdEnvFail -->|挂起指派给 User| ResolveEnv
-    ResolveEnv --> RunTests
-    
-    CmdApprove --> AutoMerge
-    AutoMerge -->|任务状态归档为 Done| Done((🏁 任务完成))
-
-    %% 节点样式美化
-    style User fill:#2D3142,stroke:#4F5D75,stroke-width:2px,color:#fff
-    style CLI fill:#4F5D75,stroke:#D9D9D9,stroke-width:2px,color:#fff
-    style DevAgent fill:#355C7D,stroke:#6C5B7B,stroke-width:2px,color:#fff
-    style ReviewAgent fill:#5A3E4E,stroke:#C06C84,stroke-width:2px,color:#fff
-    style Done fill:#4E9F3D,stroke:#1E5128,stroke-width:2px,color:#fff
 ```
 
 ---

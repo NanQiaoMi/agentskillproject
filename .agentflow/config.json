@@ -19,8 +19,14 @@
       "scope": "all"
     }
   },
+  "frontend": {
+    "lint_command": "eslint src/frontend/ --fix",
+    "type_check_command": "tsc --noEmit",
+    "test_command": "npm run test"
+  },
   "backend": {
     "lint_command": "python -m py_compile src/backend/register.py",
+    "type_check_command": "mypy src/backend/",
     "test_command": "python src/backend/register_test.py"
   }
 }

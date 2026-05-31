@@ -6,6 +6,7 @@ import glob
 import subprocess
 import argparse
 import re
+import sqlite3
 from datetime import datetime
 
 # 获取工作区目录
@@ -13,6 +14,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TASKS_DIR = os.path.join(BASE_DIR, 'tasks')
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
+DB_FILE = os.path.join(BASE_DIR, 'tasks.db')
 
 # 确保文件夹存在
 os.makedirs(TASKS_DIR, exist_ok=True)
@@ -46,6 +48,92 @@ def is_git_repo():
 def get_current_branch():
     ok, stdout, _ = run_git_cmd(["rev-parse", "--abbrev-ref", "HEAD"])
     return stdout.strip() if ok else "main"
+
+# ==========================================
+# SQLite 缓存数据库辅助函数
+# ==========================================
+def get_db_conn():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    # Create table if not exists
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        description TEXT,
+        assignee TEXT,
+        status TEXT,
+        creator TEXT,
+        dependencies TEXT,
+        affected_files TEXT,
+        comments TEXT,
+        history TEXT
+    )
+    """)
+    conn.commit()
+    return conn
+
+def update_task_in_db(task):
+    try:
+        conn = get_db_conn()
+        conn.execute("""
+        INSERT OR REPLACE INTO tasks (id, title, description, assignee, status, creator, dependencies, affected_files, comments, history)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            task["id"],
+            task["title"],
+            task["description"],
+            task["assignee"],
+            task["status"],
+            task.get("creator", "user"),
+            json.dumps(task.get("dependencies", []), ensure_ascii=False),
+            json.dumps(task.get("affected_files", []), ensure_ascii=False),
+            json.dumps(task.get("comments", []), ensure_ascii=False),
+            json.dumps(task.get("history", []), ensure_ascii=False)
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[-] 更新 SQLite 缓存失败: {e}")
+
+def sync_db():
+    print("[*] 正在重建本地 SQLite 任务缓存 database...")
+    try:
+        conn = get_db_conn()
+        conn.execute("DELETE FROM tasks")
+        conn.commit()
+        
+        # Re-read all md files
+        task_files = glob.glob(os.path.join(TASKS_DIR, "**/TASK-*.md"), recursive=True)
+        count = 0
+        for f in task_files:
+            basename = os.path.basename(f)
+            task_id = os.path.splitext(basename)[0]
+            task = load_task(task_id)
+            if task:
+                conn.execute("""
+                INSERT OR REPLACE INTO tasks (id, title, description, assignee, status, creator, dependencies, affected_files, comments, history)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    task["id"],
+                    task["title"],
+                    task["description"],
+                    task["assignee"],
+                    task["status"],
+                    task.get("creator", "user"),
+                    json.dumps(task.get("dependencies", []), ensure_ascii=False),
+                    json.dumps(task.get("affected_files", []), ensure_ascii=False),
+                    json.dumps(task.get("comments", []), ensure_ascii=False),
+                    json.dumps(task.get("history", []), ensure_ascii=False)
+                ))
+                count += 1
+        conn.commit()
+        conn.close()
+        print(f"[+] SQLite 缓存重构成功，共同步 {count} 个任务。")
+        return True
+    except Exception as e:
+        print(f"[-] SQLite 缓存重构失败: {e}")
+        return False
 
 # ==========================================
 # 核心业务逻辑
@@ -162,20 +250,61 @@ def save_task(task):
             
         with open(path, 'w', encoding='utf-8') as f:
             f.write(md_content)
+        update_task_in_db(task)
     except Exception as e:
         print(f"[-] 保存任务 {task['id']} 失败: {e}")
 
 def get_all_tasks():
-    # 升级为递归扫描，支持多层级目录组织
-    task_files = glob.glob(os.path.join(TASKS_DIR, "**/TASK-*.md"), recursive=True)
+    # 尝试从 SQLite 中读取
     tasks = []
-    for f in task_files:
-        basename = os.path.basename(f)
-        task_id = os.path.splitext(basename)[0]
-        task = load_task(task_id)
-        if task:
-            tasks.append(task)
+    try:
+        if not os.path.exists(DB_FILE):
+            # DB 不存在，自动执行一次同步
+            sync_db()
             
+        conn = get_db_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM tasks")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            # 数据库虽然存在但是空的，可能需要同步
+            # 看看有没有 md 文件，如果有，再次同步
+            task_files = glob.glob(os.path.join(TASKS_DIR, "**/TASK-*.md"), recursive=True)
+            if task_files:
+                sync_db()
+                conn = get_db_conn()
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM tasks")
+                rows = cursor.fetchall()
+                conn.close()
+        
+        for row in rows:
+            tasks.append({
+                "id": row["id"],
+                "title": row["title"],
+                "description": row["description"],
+                "assignee": row["assignee"],
+                "status": row["status"],
+                "creator": row["creator"],
+                "dependencies": json.loads(row["dependencies"]),
+                "affected_files": json.loads(row["affected_files"]),
+                "comments": json.loads(row["comments"]),
+                "history": json.loads(row["history"])
+            })
+    except Exception as e:
+        # 如果 SQLite 出了任何差错，退化为 glob 扫描
+        print(f"[*] 提示: SQLite 查询异常，自动退化为磁盘递归扫描。异常: {e}")
+        task_files = glob.glob(os.path.join(TASKS_DIR, "**/TASK-*.md"), recursive=True)
+        tasks = []
+        for f in task_files:
+            basename = os.path.basename(f)
+            task_id = os.path.splitext(basename)[0]
+            task = load_task(task_id)
+            if task:
+                tasks.append(task)
+                
     # 按照ID数字排序
     def get_id_num(t):
         try:
@@ -545,9 +674,43 @@ def cmd_review(args):
                 print(f"[*] 正在将本地工作区回切至特征分支 {feature_branch} 开展修复...")
                 run_git_cmd(["checkout", feature_branch])
 
+def cmd_sync(args):
+    sync_db()
+
+def cmd_brainstorm(args):
+    print("\n" + "="*80)
+    print("               AgentFlow Brainstorm 脑暴与 Grill-Me 深度访谈启动")
+    print("="*80)
+    print("在进入开发之前，请复制以下提示词发送给您的 AI 助手 (antigravity/codex) 启动脑暴：")
+    print("\n---------------------------------- 复制下方提示词 ----------------------------------")
+    print("【Vibe Coding 脑暴阶段启动：Grill-Me 深度访谈】\n")
+    print("你好！我准备为我的项目开发一个新功能。请扮演系统架构师，根据《大脑风暴与深度访谈 (Grill-Me) 实操规程》，对我进行至少 6 轮的深度访谈以澄清需求。\n")
+    print("我的初始创意为：[在此处填写您的创意，例如：实现‘找回密码’功能]\n")
+    print("请分轮次提问，每轮只提出 1-2 个最关键的问题，深入挖掘可能被我忽略的以下领域：")
+    print("  1. 技术栈可行性与成本评估")
+    print("  2. 三态视觉细节 (加载中/空数据/网络报错)")
+    print("  3. 异常与边缘路径 (弱网、并发冲突、防重点击)")
+    print("  4. 接口数据模型契约与测试真值 (Ground Truth)\n")
+    print("问答完成后，请基于共识编写详细的开发规范文档草稿 (docs/PRD.md, docs/DESIGN.md, docs/ARCHITECTURE.md)。\n")
+    print("现在，请向我提第一轮问题。")
+    print("---------------------------------- 复制上方提示词 ----------------------------------\n")
+
 def main():
+    # 解决 Windows 终端下 UTF-8 字符输出乱码或报错的问题
+    if sys.platform.startswith('win'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except AttributeError:
+            pass
+
     parser = argparse.ArgumentParser(description="AgentFlow 本地多智能体协作工作流管理工具")
     subparsers = parser.add_subparsers(dest="command", help="子命令")
+    
+    # sync
+    p_sync = subparsers.add_parser("sync", help="同步并重建本地 SQLite 任务缓存数据库")
+    
+    # brainstorm
+    p_brainstorm = subparsers.add_parser("brainstorm", help="获取头脑风暴与 Grill-Me 深度访谈启动提示词")
     
     # add
     p_add = subparsers.add_parser("add", help="创建新任务")
@@ -600,6 +763,10 @@ def main():
         cmd_submit(args)
     elif args.command == "review":
         cmd_review(args)
+    elif args.command == "sync":
+        cmd_sync(args)
+    elif args.command == "brainstorm":
+        cmd_brainstorm(args)
     else:
         parser.print_help()
 

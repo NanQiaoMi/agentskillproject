@@ -35,7 +35,8 @@ python .agentflow/agentflow.py review <TASK_ID> --run-tests
 你必须对代码改动进行“标准四维度与生产级就绪 (Production Readiness)”核对：
 1. **功能与可靠性 (Reliability)**：
    - 核对代码是否完全实现了 验收标准（Acceptance Criteria）。
-   - **异常路径 (Unhappy Paths)**：检查是否妥善处理了空状态（Empty States）、接口超时、输入无效等边缘异常，避免应用崩溃。
+   - **规范文档一致性**：检查代码修改是否严格遵循项目 `docs/` 目录下的 `PRD.md`、`DESIGN.md` 和 `ARCHITECTURE.md` 的规范、设计契约与安全规则。
+   - **交互与响应三态校验**：对前端组件与后端响应，必须重点检验是否实现了对“**加载中 (Loading)**”、“**数据为空 (Empty)**”与“**异常报错 (Error)**”三种核心状态的正确展现和拦截机制。
 2. **安全与性能 (Security & Performance)**：
    - **零机密硬编码**：严禁代码中含有明文 API Key、密码或数据库连接串（必须从环境变量或 `.env` 读取）。
    - **输入校验**：对于所有外部输入数据，必须存在合法性与安全校验（防范 SQL 注入与 XSS）。

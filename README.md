@@ -211,13 +211,31 @@ sequenceDiagram
 
 在日常开发中，您（人类）扮演的是**决策者和任务发布者**。请遵循以下标准流程进行日常输入交互：
 
-#### 步骤 1：创意输入与 AI 自动构思建任务 (用户输入)
-您完全不需要亲自敲击终端命令，更不需要手动去其他地方撰写复杂的系统设计文档。您只需在任意一个 AI 对话窗口中用普通中文表达您的创意想法即可：
-*   **您输入**：`“我准备在新版本中添加一个用户注册的功能，请帮我设计好 Spec 技术规范，并在后台生成对应的开发任务卡。”`
-*   **AI 的动作**：
-    1. AI 会在后台自动为您进行系统架构和 Spec 构思，并自动将规范写入项目 `docs/` 目录下的设计文档中。
-    2. 构思完毕后，AI 会自动在后台执行 `python .agentflow/agentflow.py add --title "实现用户注册功能" --desc "编写 /api/register 接口并保存数据..." --assignee codex`。
-    3. 任务卡片 `.agentflow/tasks/TASK-002.md` 自动生成。
+#### 步骤 1：启动脑暴与 AI 深度访谈 (Grill-Me)
+在开发新功能前，不要急于编码或直接创建任务。您可以通过在终端运行 `python .agentflow/agentflow.py brainstorm` 打印获取或直接复制下方提示词，发送给开发智能体窗口，从而启动 6 轮以上烤问（Grill-Me）访谈：
+
+```markdown
+【Vibe Coding 脑暴阶段启动：Grill-Me 深度访谈】
+
+你好！我准备为我的项目开发一个新功能。请扮演系统架构师，根据《大脑风暴与深度访谈 (Grill-Me) 实操规程》，对我进行至少 6 轮的深度访谈以澄清需求。
+
+我的初始创意为：[在此处填写您的创意，例如：实现‘用户注册与邮箱验证’功能]
+
+请分轮次提问，每轮只提出 1-2 个最关键的问题，深入挖掘可能被我忽略的以下领域：
+  1. 技术栈可行性与成本评估
+  2. 三态视觉细节 (加载中/空数据/网络报错)
+  3. 异常与边缘路径 (弱网、并发冲突、防重点击)
+  4. 接口数据模型契约与测试真值 (Ground Truth)
+
+问答完成后，请基于共识编写/修改详细的开发规范文档草案 (docs/PRD.md, docs/DESIGN.md, docs/ARCHITECTURE.md)。
+
+现在，请向我提第一轮问题。
+```
+
+*   **访谈及任务生成**：
+    1. AI 将扮演架构师提问并与您对话。完成后，AI 在后台将共识固化写入 `docs/PRD.md`、`DESIGN.md` 与 `ARCHITECTURE.md`（SDD 规范）。
+    2. 之后，AI 自动在后台执行 `python .agentflow/agentflow.py add --title "实现用户注册功能" --desc "基于 docs 规范编写注册 API 及验证码逻辑..." --assignee codex`。
+    3. 单任务 Markdown 规范卡片 `.agentflow/tasks/TASK-002.md` 自动生成，作为 Spec 开发的“同意键”。
 
 #### 步骤 2：启动任务与开发 (用户输入)
 对于需要开工的窗口，指示 AI 认领并启动。
@@ -269,12 +287,14 @@ stateDiagram-v2
 
 | 功能 | 完整命令语法 | 示例 |
 | :--- | :--- | :--- |
+| **头脑风暴** | `python .agentflow/agentflow.py brainstorm` | `python .agentflow/agentflow.py brainstorm` |
 | **创建任务** | `python .agentflow/agentflow.py add --title <标题> --desc <描述> --assignee <人> [--deps <前置ID>]` | `python .agentflow/agentflow.py add --title "开发验证码接口" --assignee codex` |
 | **列出任务** | `python .agentflow/agentflow.py list [--status <过滤状态>] [--assignee <过滤负责人>]` | `python .agentflow/agentflow.py list --status review` |
 | **查看详情** | `python .agentflow/agentflow.py show <TASK_ID>` | `python .agentflow/agentflow.py show TASK-002` |
 | **认领启动** | `python .agentflow/agentflow.py start <TASK_ID>` | `python .agentflow/agentflow.py start TASK-002` |
 | **提审代码** | `python .agentflow/agentflow.py submit <TASK_ID> --files <修改文件列表>` | `python .agentflow/agentflow.py submit TASK-002 --files src/backend/auth.py` |
 | **跑测审查** | `python .agentflow/agentflow.py review <TASK_ID> {--approve\|--reject\|--env-fail} [--run-tests] --comment <意见>` | `python .agentflow/agentflow.py review TASK-002 --run-tests --approve` |
+| **缓存同步** | `python .agentflow/agentflow.py sync` | `python .agentflow/agentflow.py sync` |
 
 ---
 

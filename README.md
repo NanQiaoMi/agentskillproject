@@ -123,9 +123,9 @@ graph TD
     CommitDev --> RunTests
     RunTests --> CheckTests
     
-    CheckTests -->|是 (Green)| CmdApprove
-    CheckTests -->|否 (Code Bug)| CmdReject
-    CheckTests -->|否 (Env Error)| CmdEnvFail
+    CheckTests -->|"是 (Green)"| CmdApprove
+    CheckTests -->|"否 (Code Bug)"| CmdReject
+    CheckTests -->|"否 (Env Error)"| CmdEnvFail
     
     CmdReject -->|回切 feature 分支| FixCode
     FixCode --> SubmitTask

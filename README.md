@@ -65,12 +65,15 @@ graph TD
 ├── src/
 │   ├── frontend/            # 前端源码保护区 (只允许 antigravity 写入)
 │   └── backend/             # 后端源码保护区 (只允许 codex 写入)
-├── docs/                    # 固化的系统设计规范 (SDD) 目录
-│   ├── PRD.md               # 产品功能及非目标清单
-│   ├── DESIGN.md            # 视觉规范及三态交互表现
-│   └── ARCHITECTURE.md      # 技术栈、表结构及 API 契约
-├── .cursorrules             # 自动加载 of Cursor 运行时卡关规则
-├── .clinerules              # 自动加载 of Cline / Roo Code 运行时卡关规则
+├── docs/                    # 固化的系统设计规范 (SDD) 及多智能体开发指南
+│   ├── PRD.md               # 产品功能与验收标准 (新项目启动后由 AI 自动生成)
+│   ├── DESIGN.md            # 视觉规范与三态交互 (新项目启动后由 AI 自动生成)
+│   ├── ARCHITECTURE.md      # 技术栈、模块划分与 API 契约 (新项目启动后由 AI 自动生成)
+│   ├── project_initiation_and_brainstorming_guide.md  # 🚀 大脑风暴与深度访谈 (Grill-Me) 实操规程
+│   ├── agentflow_detailed_workflow.md                # 🚀 本地多智能体协作与状态流转详细工作流
+│   └── agentflow_bootstrap_guide.md                  # 🚀 一键快速启动指令模板
+├── .cursorrules             # 自动加载的 Cursor 运行时卡关规则
+├── .clinerules              # 自动加载的 Cline / Roo Code 运行时卡关规则
 └── README.md                # 本框架使用指南 (您当前阅读的文件)
 ```
 
@@ -128,7 +131,20 @@ sequenceDiagram
 
 ---
 
-## 🚀 四、 零起点快速上手指南 (新手必读)
+## 📚 四、 框架专属开发与脑暴指南
+
+为了让您的 Vibe Coding 开发体验更加工业级与完整，项目 `docs/` 目录下随包附带了三份极具实操价值的开发指导白皮书：
+
+1. **[大脑风暴与深度访谈 (Grill-Me) 实操规程](file:///d:/agentskillproject/docs/project_initiation_and_brainstorming_guide.md)** (`docs/project_initiation_and_brainstorming_guide.md`)
+   * *核心作用*：详细规范了项目计划阶段，AI 必须使用 `AskUserQuestion` 工具对您进行**至少六轮深度访谈**的实操规范；深挖技术栈、逻辑死角、边界异常和潜在盲区；系统固化了“道、法、术、器”的中国传统 AI 开发哲学。
+2. **[本地多智能体协作与状态流转详细工作流](file:///d:/agentskillproject/docs/agentflow_detailed_workflow.md)** (`docs/agentflow_detailed_workflow.md`)
+   * *核心作用*：详尽拆解了本框架状态机流转底层的全部命令行运作原理，阐述了 AI 如何与本地 Git 分支自动解耦和隔离合并的技术细节。
+3. **[一键快速启动指令模板](file:///d:/agentskillproject/docs/agentflow_bootstrap_guide.md)** (`docs/agentflow_bootstrap_guide.md`)
+   * *核心作用*：提供一键复制给大模型的 Prompt 部署模版，实现零解压、全自动初始化框架的运维操作。
+
+---
+
+## 🚀 五、 零起点快速上手指南 (新手必读)
 
 如果您是第一次使用 AgentFlow，请按照以下三个核心阶段进行“从零开始的配置与开发输入”：
 
@@ -164,8 +180,6 @@ sequenceDiagram
 
 > [!TIP]
 > 发送上述指令后，AI 会自动在后台运行所有 Shell 指令，您只需在聊天框静静等待 AI 搭建完成并向您汇报。
-
----
 
 ### 阶段二：多会话窗口设置（Vibe Coding 专属布局）
 
@@ -230,7 +244,7 @@ sequenceDiagram
 
 ---
 
-## 🔄 五、 任务状态机生命周期与 Git 分支流转
+## 🔄 六、 任务状态机生命周期与 Git 分支流转
 
 所有的开发状态由 `.agentflow/tasks/` 下的独立卡片状态机驱动，并在后台自动与 Git 分支绑定流转：
 
@@ -249,7 +263,7 @@ stateDiagram-v2
 
 ---
 
-## 🛠️ 六、 CLI 命令速查手册
+## 🛠️ 七、 CLI 命令速查手册
 
 虽然所有的命令都应由 AI 智能体在您的对话指挥下自动在终端调用，但您（人类）也可以随时在项目根目录下手动调用它们来进行状态检查：
 
@@ -264,7 +278,7 @@ stateDiagram-v2
 
 ---
 
-## 🚨 七、 铁的开发纪律 (Build Discipline)
+## 🚨 八、 铁的开发纪律 (Build Discipline)
 
 为了确保大型项目的多人/多智能体协作稳定性，`.cursorrules` 会强制 AI 遵循以下 **“Build 纪律”**：
 1.  **单项突破**：AI 绝对不能一次性开发全部 Spec，必须根据任务卡片中的 **验收项清单 (Acceptance Criteria)**，**一次只开发一个验收项**。
@@ -274,7 +288,7 @@ stateDiagram-v2
 
 ---
 
-## 🛡️ 八、 生产级就绪核对清单 (Review Checkpoints)
+## 🛡️ 九、 生产级就绪核对清单 (Review Checkpoints)
 
 在任务提交 `cloudecode` 审查通过并最终合入 master 之前，必须强行在后台跑测并通过以下硬性检测：
 *   **安全性 (Security)**：

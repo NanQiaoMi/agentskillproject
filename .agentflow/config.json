@@ -20,7 +20,7 @@
     }
   },
   "backend": {
-    "lint_command": "python -m py_compile src/backend/register.py",
-    "test_command": "python src/backend/register_test.py"
+    "lint_command": "python -m py_compile src/backend/login.py",
+    "test_command": "python src/backend/login_test.py"
   }
 }

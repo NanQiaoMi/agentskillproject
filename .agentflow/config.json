@@ -1,0 +1,26 @@
+{
+  "project_name": "agentskillproject",
+  "version": "1.0.0",
+  "scopes": {
+    "frontend": "src/frontend",
+    "backend": "src/backend"
+  },
+  "roles": {
+    "antigravity": {
+      "role": "frontend",
+      "scope": "src/frontend"
+    },
+    "codex": {
+      "role": "backend",
+      "scope": "src/backend"
+    },
+    "cloudecode": {
+      "role": "reviewer",
+      "scope": "all"
+    }
+  },
+  "backend": {
+    "lint_command": "python -m py_compile src/backend/register.py",
+    "test_command": "python src/backend/register_test.py"
+  }
+}

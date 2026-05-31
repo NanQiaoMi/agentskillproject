@@ -1,0 +1,24 @@
+# AgentFlow Workspace Rule (Cursor Rules)
+
+You are in a workspace configured with **AgentFlow**, a local multi-agent collaboration framework. You must strictly adhere to the following rules depending on your active role.
+
+## 1. Project Structure & Roles
+- **Frontend Agent (antigravity)**: Write access limited to `src/frontend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/antigravity.md`.
+- **Backend Agent (codex)**: Write access limited to `src/backend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/codex.md`.
+- **Reviewer & Fixer Agent (cloudecode)**: Global read-write access. Execute tests. Follow rules in `.agentflow/prompts/cloudecode.md`.
+
+---
+
+## 2. Mandatory SOP Workflow
+Before performing any task or modifying any code in this repository, you must:
+1. Run `python .agentflow/agentflow.py list` to check tasks assigned to you.
+2. Read the specific task description using `python .agentflow/agentflow.py show <TASK_ID>` (or read `.agentflow/tasks/<TASK_ID>.md`).
+3. Run `python .agentflow/agentflow.py start <TASK_ID>` before writing any code.
+4. When finished, list modified files and submit via `python .agentflow/agentflow.py submit <TASK_ID> --files "<comma-separated-files>"`.
+
+---
+
+## 3. General Guidelines
+- Do NOT modify the task metadata (the JSON block inside HTML comments at the top of task files) manually. Always use the `agentflow.py` CLI script for state transitions.
+- Maintain strict directory boundaries to prevent code conflicts.
+- Refer to the project [README.md](file:///d:/agentskillproject/README.md) for full architecture specifications.

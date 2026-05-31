@@ -44,9 +44,6 @@ graph TD
 *   **Debug 三要素**：向 AI 提交 Bug 时，只提供：“预期表现” vs “实际行为” + “最小复现步骤/代码”。
 *   **测试交给 AI，断言人审**：测试用例可由 AI 批量生成，但测试用例中的断言（Assert）必须由人类最终审计把关。
 
-### 4. 📋 器 (工具底座)
-*   本地 `agentflow.py` CLI 状态机、本地 Git 分支自动化隔离、Commit 微存档点、以及硬性 IDE 卡点规则（`.cursorrules` / `.clinerules`）。
-
 ---
 
 ## 📁 二、 项目目录结构
@@ -79,7 +76,106 @@ graph TD
 
 ---
 
-## 🔄 三、 任务状态机生命周期与 Git 分支流转
+## 🚀 三、 零起点快速上手指南 (新手必读)
+
+如果您是第一次使用 AgentFlow，请按照以下三个核心阶段进行“从零开始的配置与开发输入”：
+
+### 阶段一：一键自动初始化（零解压、零手动建档）
+
+您**不需要**手动建立任何文件夹、复制脚本或解压代码。只需在新创建的空项目根目录下，打开您的 AI 助手（如 Cursor、Cline 或 Roo Code 聊天面板），**完整复制并发送以下指令**：
+
+```markdown
+【项目启动：全自动部署 AgentFlow 本地多智能体协同开发框架】
+
+【我的项目名称】：<请在此处替换为您真实的项目名称，如：MyAmazingApp>
+
+你好！我需要在当前本地目录下，为我的新项目全自动创建对应的文件夹并部署 AgentFlow 多智能体协作框架。请扮演系统运维与架构专家，在后台自动完成以下搭建动作（我不需要手动操作任何终端）：
+
+1. 在当前目录下，创建一个以【我的项目名称】命名的子文件夹（以下简称为项目目录）。
+2. 从你的代码库中在后台自动生成并释放以下框架核心文件到项目目录下：
+   - 项目目录/.agentflow/agentflow.py (Python 控制引擎脚本)
+   - 项目目录/.agentflow/config.json (配置文件)
+   - 项目目录/.agentflow/prompts/antigravity.md, codex.md, cloudecode.md (提示词规程)
+   - 项目目录/.cursorrules (自动生效的 Cursor 规则)
+   - 项目目录/.clinerules (自动生效的 Cline 规则)
+3. 动态配置 config.json：
+   - 自动修改项目目录下的 `.agentflow/config.json`，将里面的 `"project_name"` 字段更新为我的【我的项目名称】。
+4. 建立源码与设计物理目录：
+   - 在项目目录下创建 `src/frontend/` 与 `src/backend/`。
+   - 在项目目录下创建 `docs/` 文件夹。
+5. 初始化本地 Git 仓库并做首次 Commit 存档：
+   - 进入项目目录，在后台自动运行 `git init`。
+   - 执行 `git add .` 与 `git commit -m "chore: initialize AgentFlow project"`。
+
+搭建完成后，请告知我项目已成功创建在哪个路径，并详细列出已成功部署的结构。
+```
+
+> [!TIP]
+> 发送上述指令后，AI 会自动在后台运行所有 Shell 指令，您只需在聊天框静静等待 AI 搭建完成并向您汇报。
+
+---
+
+### 阶段二：多会话窗口设置（Vibe Coding 专属布局）
+
+本框架之所以能发挥最大协同效应，依赖于您在 IDE 中建立**三个独立的 AI 聊天窗口**，并向其分别注入对应的“唤醒词”，从而锁定他们的智能体角色。
+
+#### 1. 打开三个 AI 聊天窗口：
+*   **窗口 A**：重命名或标记为 `前端助手 (antigravity)`
+*   **窗口 B**：重命名或标记为 `后端助手 (codex)`
+*   **窗口 C**：重命名或标记为 `审查与发布 (cloudecode)`
+
+#### 2. 在每个窗口分别发送以下“唤醒词”完成初始化：
+
+*   **窗口 A (antigravity) 唤醒输入**：
+    ```markdown
+    你好！你在这个项目中扮演前端开发智能体 (antigravity)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/antigravity.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee antigravity` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的前端任务。在确认任务前，请勿开始编写任何代码。
+    ```
+*   **窗口 B (codex) 唤醒输入**：
+    ```markdown
+    你好！你在这个项目中扮演后端开发智能体 (codex)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/codex.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee codex` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的后端任务。在确认任务前，请勿开始编写任何代码。
+    ```
+*   **窗口 C (cloudecode) 唤醒输入**：
+    ```markdown
+    你好！你在这个项目中扮演代码审查与修复智能体 (cloudecode)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/cloudecode.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --status review` 检索当前处于审查中 (review) 的任务，并向我汇报目前有哪些待审查任务以及需要运行哪些测试。
+    ```
+
+---
+
+### 阶段三：日常开发协同与“人机对话输入”规范
+
+在日常开发中，您（人类）扮演的是**决策者和任务发布者**。请遵循以下标准流程进行日常输入交互：
+
+#### 步骤 1：创建任务 (用户输入)
+您只需在任意一个 AI 窗口中聊天，让它为您生成任务。
+*   **您输入**：`“帮我创建一个新任务，标题是'设计用户注册接口'，指派给 codex，前置依赖是 TASK-001，描述为'实现 /api/register 并保存到数据库'”`
+*   **AI 的动作**：AI 收到您的中文后，会在后台自动在控制台执行 `python .agentflow/agentflow.py add ...`，并在项目目录生成一封单任务 Markdown 文件 `.agentflow/tasks/TASK-002.md`。
+
+#### 步骤 2：启动任务与开发 (用户输入)
+对于需要开工的窗口，指示 AI 认领并启动。
+*   **您在窗口 B (codex) 输入**：`“开始执行 TASK-002 任务。”`
+*   **AI 的动作**：AI 会在后台执行 `python .agentflow/agentflow.py start TASK-002`，校验其前置依赖。通过后，**自动在本地 Git 切换分支到 `feature/task-002`**，并开始根据卡片中的验收指标编写注册接口代码。
+
+#### 步骤 3：代码提交 (用户输入)
+当 AI 提示它已经完成了代码编写并进行了自测时，指示它提交。
+*   **您在窗口 B (codex) 输入**：`“可以提交 TASK-002 任务了，修改的文件是 src/backend/register.py”`
+*   **AI 的动作**：AI 会自动执行 `python .agentflow/agentflow.py submit TASK-002 --files src/backend/register.py`。这将在特征分支上生成一次 Git 提交（Commit），并将任务状态更改为 `review`，指派人变为 `cloudecode`。
+
+#### 步骤 4：运行测试与审查合并 (用户输入)
+切换到**窗口 C (cloudecode)**，指示审查助手进行跑测与合并。
+*   **您在窗口 C (cloudecode) 输入**：`“运行 TASK-002 的测试门禁，并在通过后予以批准合并。”`
+*   **AI 的动作**：
+    1. AI 在后台执行 `python .agentflow/agentflow.py review TASK-002 --run-tests`，根据 `config.json` 的配置在后台运行风格检查和单元测试。
+    2. 若跑测通过，它会执行 `python .agentflow/agentflow.py review TASK-002 --approve --comment "注册接口测试通过"`。
+    3. **本地自动合并**：系统自动将 `feature/task-002` 分支安全地合入 `master` / `main` 主开发分支，并自动在本地物理删除特征分支。
+
+#### 步骤 5：处理异常或测试失败 (用户输入)
+如果窗口 C 跑测失败并打回为 `fixing` 状态，您需要指引原开发助手进行修复。
+*   **您在窗口 B (codex) 输入**：`“审查未通过，日志显示 register.py 存在类型错误。以下是详细报错：[粘贴报错日志]，请修复它。”`
+*   **AI 的动作**：AI 会发现自己被自动回切到了 `feature/task-002` 分支，开展修复，修复好后重复**步骤 3** 再次提交。
+
+---
+
+## 🔄 四、 任务状态机生命周期与 Git 分支流转
 
 所有的开发状态由 `.agentflow/tasks/` 下的独立卡片状态机驱动，并在后台自动与 Git 分支绑定流转：
 
@@ -96,88 +192,24 @@ stateDiagram-v2
     done --> [*]
 ```
 
-### 状态-分支-角色映射快速查表
+---
 
-| 任务状态 | Git 对应分支 | 负责人 / Assignee | 允许的操作 | 说明 |
-| :--- | :--- | :--- | :--- | :--- |
-| **待处理 (todo)** | `main` 或 `master` | 用户或指定开发 | `start` | 任务刚创建，等待被认领开发 |
-| **进行中 (in_progress)** | `feature/task-xxx` | `antigravity` / `codex` | `submit` | 开发者在对应的隔离特征分支上进行原子功能开发 |
-| **审查中 (review)** | `feature/task-xxx` | `cloudecode` | `review` | 开发已提交，等待自动化测试门禁和最终代码审查 |
-| **修复中 (fixing)** | `feature/task-xxx` | `antigravity` / `codex` | `submit` | 审查被打回，开发者需在此分支上修复 Bug 并重新提审 |
-| **已完成 (done)** | `main` 或 `master` | `user` | 无 | 代码自动合并至主基线，本地特征分支自动物理删除 |
+## 🛠️ 五、 CLI 命令速查手册
+
+虽然所有的命令都应由 AI 智能体在您的对话指挥下自动在终端调用，但您（人类）也可以随时在项目根目录下手动调用它们来进行状态检查：
+
+| 功能 | 完整命令语法 | 示例 |
+| :--- | :--- | :--- |
+| **创建任务** | `python .agentflow/agentflow.py add --title <标题> --desc <描述> --assignee <人> [--deps <前置ID>]` | `python .agentflow/agentflow.py add --title "开发验证码接口" --assignee codex` |
+| **列出任务** | `python .agentflow/agentflow.py list [--status <过滤状态>] [--assignee <过滤负责人>]` | `python .agentflow/agentflow.py list --status review` |
+| **查看详情** | `python .agentflow/agentflow.py show <TASK_ID>` | `python .agentflow/agentflow.py show TASK-002` |
+| **认领启动** | `python .agentflow/agentflow.py start <TASK_ID>` | `python .agentflow/agentflow.py start TASK-002` |
+| **提审代码** | `python .agentflow/agentflow.py submit <TASK_ID> --files <修改文件列表>` | `python .agentflow/agentflow.py submit TASK-002 --files src/backend/auth.py` |
+| **跑测审查** | `python .agentflow/agentflow.py review <TASK_ID> {--approve\|--reject\|--env-fail} [--run-tests] --comment <意见>` | `python .agentflow/agentflow.py review TASK-002 --run-tests --approve` |
 
 ---
 
-## 🛠️ 四、 CLI 命令参考指南
-
-所有操作通过在项目根目录下调用 `python .agentflow/agentflow.py <subcommand>` 完成。
-
-### 1. 创建新任务 (`add`)
-在任务池中追加一个处于 `todo` 状态的新任务卡片。
-*   **命令格式**：
-    ```bash
-    python .agentflow/agentflow.py add --title <标题> --desc <任务描述> --assignee <负责人> [--deps <依赖任务列表>]
-    ```
-*   **示例**：
-    ```bash
-    python .agentflow/agentflow.py add --title "完成用户登录接口" --desc "实现 /api/login 的 POST 请求" --assignee codex --deps TASK-001,TASK-002
-    ```
-
-### 2. 查看任务列表 (`list`)
-展示当前项目的所有任务及其状态。可以使用状态或负责人进行过滤。
-*   **命令格式**：
-    ```bash
-    python .agentflow/agentflow.py list [--status <状态>] [--assignee <负责人>]
-    ```
-*   **示例**：
-    ```bash
-    python .agentflow/agentflow.py list --status review
-    ```
-
-### 3. 显示特定任务详情 (`show`)
-打印特定任务的完整元数据、变更历史、受影响文件和审查意见。
-*   **命令格式**：
-    ```bash
-    python .agentflow/agentflow.py show <TASK_ID>
-    ```
-
-### 4. 认领并启动任务 (`start`)
-校验该任务的前置依赖是否全部变为 `done`。通过后，自动在本地 Git 仓库创建并切入隔离的分支 `feature/task-xxx`。
-*   **命令格式**：
-    ```bash
-    python .agentflow/agentflow.py start <TASK_ID>
-    ```
-*   **系统内部动作**：
-    1. 扫描元数据中的 `"dependencies"`，确保所有前置任务状态为 `done`。
-    2. 执行 `git checkout -b feature/task-xxx`（如果分支不存在）或 `git checkout feature/task-xxx`。
-    3. 更新任务卡片状态为 `in_progress`。
-
-### 5. 提交开发代码进行审查 (`submit`)
-提交开发改动，自动在特征分支上运行 `git add .` 和 `git commit`，将负责人指派给 `cloudecode`。
-*   **命令格式**：
-    ```bash
-    python .agentflow/agentflow.py submit <TASK_ID> --files <逗号分隔的文件列表>
-    ```
-*   **系统内部动作**：
-    1. 自动执行 `git add .`。
-    2. 执行 `git commit -m "feat: implement <TASK_ID> code"`。
-    3. 更新任务元数据中的 `affected_files`，将状态改为 `review`，负责人变更为 `cloudecode`。
-
-### 6. 代码审查与跑测门禁 (`review`)
-由 `cloudecode` 运行本地质量门禁，并依据结果批准、拒绝或上报环境错误。
-*   **命令格式**：
-    ```bash
-    python .agentflow/agentflow.py review <TASK_ID> {--approve | --reject | --env-fail} [--run-tests] --comment <审查意见>
-    ```
-*   **参数说明**：
-    *   `--run-tests`：在后台自动按 `config.json` 的配置顺次执行 Lint、Type Check 以及单元测试，结果重定向记录在 `.agentflow/logs/test_<TASK_ID>.log`。
-    *   `--approve`：批准合并。**核心动作**：自动切回基线分支（如 `main` 或 `master`），执行 `git merge feature/task-xxx --no-ff` 保留清晰合并网络，并在合并成功后自动删除本地的 `feature/task-xxx` 分支。
-    *   `--reject`：拒绝。将状态退回 `fixing`，指派回原开发人，且自动切回特征分支。
-    *   `--env-fail`：环境异常。将任务指派给人类 `user` 排除宿主机环境故障。
-
----
-
-## 🚨 五、 铁的开发纪律 (Build Discipline)
+## 🚨 六、 铁的开发纪律 (Build Discipline)
 
 为了确保大型项目的多人/多智能体协作稳定性，`.cursorrules` 会强制 AI 遵循以下 **“Build 纪律”**：
 1.  **单项突破**：AI 绝对不能一次性开发全部 Spec，必须根据任务卡片中的 **验收项清单 (Acceptance Criteria)**，**一次只开发一个验收项**。
@@ -187,7 +219,7 @@ stateDiagram-v2
 
 ---
 
-## 🛡️ 六、 生产级就绪核对清单 (Review Checkpoints)
+## 🛡️ 七、 生产级就绪核对清单 (Review Checkpoints)
 
 在任务提交 `cloudecode` 审查通过并最终合入 master 之前，必须强行在后台跑测并通过以下硬性检测：
 *   **安全性 (Security)**：
@@ -198,24 +230,3 @@ stateDiagram-v2
     - **物理连接释放**：所有文件、数据库连接、HTTP 连接必须在 `finally` 块中关闭释放。
 *   **可观测性 (Observability)**：
     - 关键性 500/400 异常强行归档为错误日志。
-
----
-
-## 💬 七、 AI 会话唤醒词 (Awakening Prompts)
-
-打开您的三个 AI 对话会话，一键复制并发送对应的提示词：
-
-### 🚀 窗口 A：前端开发助手 (antigravity) 唤醒词
-```markdown
-你好！你在这个项目中扮演前端开发智能体 (antigravity)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/antigravity.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee antigravity` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的前端任务。在确认任务前，请勿开始编写任何代码。
-```
-
-### 🚀 窗口 B：后端开发助手 (codex) 唤醒词
-```markdown
-你好！你在这个项目中扮演后端开发智能体 (codex)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/codex.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee codex` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的后端任务。在确认任务前，请勿开始编写任何代码。
-```
-
-### 🚀 窗口 C：代码审查与修复助手 (cloudecode) 唤醒词
-```markdown
-你好！你在这个项目中扮演代码审查与修复智能体 (cloudecode)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/cloudecode.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --status review` 检索当前处于审查中 (review) 的任务，并向我汇报目前有哪些待审查任务以及需要运行哪些测试。
-```

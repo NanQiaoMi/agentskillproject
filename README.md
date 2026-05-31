@@ -88,9 +88,11 @@ sequenceDiagram
     participant Dev as 🚀 开发窗口 (antigravity/codex)
     participant Review as 🛡️ 审查窗口 (cloudecode)
 
-    Note over User, CLI: 阶段一：任务创建 (Add)
-    User->>CLI: 运行 add 命令创建新任务卡片
-    CLI-->>User: 生成待办卡片 TASK-xxx.md (状态为 todo)
+    Note over User, Dev: 阶段一：想法输入与 AI 自动构思建任务 (Add)
+    User->>Dev: 1. 在聊天框提出创意/功能想法 (普通的中文沟通)
+    Note over Dev: AI 在后台自动编写 docs/ 设计文档 (完成构思与 Spec 编写)
+    Dev->>CLI: 2. AI 在后台自动调用 add 命令创建任务
+    CLI-->>User: 自动生成待办卡片 TASK-xxx.md (状态为 todo)
 
     Note over User, Dev: 阶段二：认领与分支切入 (Start)
     User->>Dev: 指导 AI 认领：“开始执行 TASK-xxx”
@@ -199,10 +201,13 @@ sequenceDiagram
 
 在日常开发中，您（人类）扮演的是**决策者和任务发布者**。请遵循以下标准流程进行日常输入交互：
 
-#### 步骤 1：创建任务 (用户输入)
-您只需在任意一个 AI 窗口中聊天，让它为您生成任务。
-*   **您输入**：`“帮我创建一个新任务，标题是'设计用户注册接口'，指派给 codex，前置依赖是 TASK-001，描述为'实现 /api/register 并保存到数据库'”`
-*   **AI 的动作**：AI 收到您的中文后，会在后台自动在控制台执行 `python .agentflow/agentflow.py add ...`，并在项目目录生成一封单任务 Markdown 文件 `.agentflow/tasks/TASK-002.md`。
+#### 步骤 1：创意输入与 AI 自动构思建任务 (用户输入)
+您完全不需要亲自敲击终端命令，更不需要手动去其他地方撰写复杂的系统设计文档。您只需在任意一个 AI 对话窗口中用普通中文表达您的创意想法即可：
+*   **您输入**：`“我准备在新版本中添加一个用户注册的功能，请帮我设计好 Spec 技术规范，并在后台生成对应的开发任务卡。”`
+*   **AI 的动作**：
+    1. AI 会在后台自动为您进行系统架构和 Spec 构思，并自动将规范写入项目 `docs/` 目录下的设计文档中。
+    2. 构思完毕后，AI 会自动在后台执行 `python .agentflow/agentflow.py add --title "实现用户注册功能" --desc "编写 /api/register 接口并保存数据..." --assignee codex`。
+    3. 任务卡片 `.agentflow/tasks/TASK-002.md` 自动生成。
 
 #### 步骤 2：启动任务与开发 (用户输入)
 对于需要开工的窗口，指示 AI 认领并启动。

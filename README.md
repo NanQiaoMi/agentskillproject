@@ -212,7 +212,18 @@ sequenceDiagram
 搭建完成后，请告知我项目已成功创建在哪个路径，并详细列出已成功部署的结构。
 ```
 
-### 阶段二：多会话窗口设置（Vibe Coding 专属布局）
+### 阶段二：项目计划阶段（脑暴烤问与 SDD 规范固化）
+
+在新项目启动或引入全新大功能时，不要急于编写代码，必须经过**项目计划阶段**以锁定设计与开发边界：
+
+1. **Grill-Me 深度烤问**：在终端运行 `python .agentflow/agentflow.py brainstorm` 打印获取最新的烤问提示词并复制，粘贴给开发智能体窗口，经历至少 6 轮交互式答复。深度明确技术栈可行性、API 契约、交互三态细节（Loading/Empty/Error）和边界场景，挖出死角。
+2. **编写固化三份 SDD 设计文档**：根据深度脑暴达成的共识，由开发智能体在 `/docs` 目录下自动生成并固化 3 份核心设计规范，作为双向确认的“同意键”：
+   - **`docs/PRD.md` (需求文档)**：产品定位、痛点、MVP 核心功能列表、**绝对不做功能黑名单**（防止范围蔓延）以及可度量的验收标准。
+   - **`docs/DESIGN.md` (设计文档)**：视觉主色调、字体、复用组件规范，并着重定义 **加载中 (Loading)**、**数据为空 (Empty)** 与 **异常报错 (Error)** 三种状态的交互与响应 UI 设计。
+   - **`docs/ARCHITECTURE.md` (架构文档)**：锁定技术栈与包版本依赖、表 Schema 数据模型、API 服务层报文规范，以及**禁止破坏的旧逻辑白名单/只读代码目录**。
+3. **任务卡片生成**：用户与 AI 对设计文档反复迭代确认无误后，AI 会自动调用 `add` 命令生成对应的开发卡片（`.agentflow/tasks/TASK-XXX.md`），将卡片内的 Acceptance Criteria（验收项清单）作为最终双方同意并交付的契约，正式宣告计划阶段结束，开发阶段开始。
+
+### 阶段三：多会话窗口设置（Vibe Coding 专属布局）
 
 本框架之所以能发挥最大协同效应，依赖于您在 IDE 中建立**三个独立的 AI 聊天窗口**，并向其分别注入对应的“唤醒词”，从而锁定他们的智能体角色。
 
@@ -225,11 +236,11 @@ sequenceDiagram
 
 *   **窗口 A (antigravity) 唤醒输入**：
     ```markdown
-    你好！你在这个项目中扮演前端开发智能体 (antigravity)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/antigravity.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee antigravity` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的前端任务。在确认任务前，请勿开始编写任何代码。
+    你好！你在这个项目中扮演前端开发智能体 (antigravity)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/antigravity.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee antigravity` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的前端任务。在确认任务前，请勿开始编写 any 代码。
     ```
 *   **窗口 B (codex) 唤醒输入**：
     ```markdown
-    你好！你在这个项目中扮演后端开发智能体 (codex)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/codex.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee codex` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的后端任务。在确认任务前，请勿开始编写任何代码。
+    你好！你在这个项目中扮演后端开发智能体 (codex)。请首先阅读项目根目录下的 `README.md` 文件，并详细阅读 `.agentflow/prompts/codex.md` 指南。然后，请在终端执行 `python .agentflow/agentflow.py list --assignee codex` 列出所有分配给你的任务，并向我汇报当前有哪些待处理 (todo) 或修复中 (fixing) 的后端任务。在确认任务前，请勿开始编写 any 代码。
     ```
 *   **窗口 C (cloudecode) 唤醒输入**：
     ```markdown
@@ -238,7 +249,7 @@ sequenceDiagram
 
 ---
 
-### 阶段三：日常开发协同与“人机对话输入”规范
+### 阶段四：日常开发协同与“人机对话输入”规范
 
 在日常开发中，您（人类）扮演的是**决策者和任务发布者**。请遵循以下标准流程进行日常输入交互：
 

@@ -1,19 +1,20 @@
 # 🪐 AgentFlow: 本地多智能体协作开发框架 (AI-Native Vibe Coding Engine)
 
-[![Framework Version](https://img.shields.io/badge/AgentFlow-v1.1.0-blueviolet?style=for-the-badge)](https://github.com/NanQiaoMi/agentskillproject)
+[![Framework Version](https://img.shields.io/badge/AgentFlow-v1.2.0-blueviolet?style=for-the-badge)](https://github.com/NanQiaoMi/agentskillproject)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](https://github.com/NanQiaoMi/agentskillproject)
 [![Environment](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge)](https://python.org)
 [![Git Integration](https://img.shields.io/badge/Git-Automated-orange?style=for-the-badge)](https://git-scm.com)
+[![Cache Engine](https://img.shields.io/badge/Cache-SQLite3-brightgreen?style=for-the-badge)](https://sqlite.org)
 
-AgentFlow 是一套专为本地多智能体协作设计的**极简、高强度约束、零污染**的工作流与任务管理框架。 
+AgentFlow 是一套专为本地多智能体协作设计的**极简、高强度约束、生产就绪**的工作流与任务管理框架。
 
-本框架以**本地文件系统**为核心，通过**去中心化的单任务 Markdown 文件**与 **Python CLI 工具**作为状态控制器，将前端开发智能体（`antigravity`）、后端开发智能体（`codex`）和审查/发布智能体（`cloudecode`）与人类总管（您）通过纯自然语言对话无缝串联，实现完全无需人类手动敲击终端或频繁管理 Git 分支的**全自动 Vibe Coding 开发流**。
+本框架以**本地文件系统**为核心，通过**去中心化的单任务 Markdown 文件**与 **Python 控制引擎**，将前端开发智能体（`antigravity`）、后端开发智能体（`codex`）和审查/发布智能体（`cloudecode`）与人类项目总管（您）通过纯自然语言对话无缝串联，实现免人工敲击终端、免手动管理 Git 分支的**全自动 Vibe Coding 本地开发流水线**。
 
 ---
 
 ## 🧭 一、 Vibe Coding 哲学体系：道、法、术、器
 
-本框架汲取了前沿 Vibe Coding 社区的核心心法（Brainstorm → Spec → Build），并将其体系化落地为“道、法、术、器”的中国传统哲学开发范式：
+框架汲取了前沿 Vibe Coding 社区的核心心法（Brainstorm → Spec → Build），并将其体系化落地为“道、法、术、器”的开发范式：
 
 ```mermaid
 graph TD
@@ -44,24 +45,64 @@ graph TD
 *   **Debug 三要素**：向 AI 提交 Bug 时，只提供：“预期表现” vs “实际行为” + “最小复现步骤/代码”。
 *   **测试交给 AI，断言人审**：测试用例可由 AI 批量生成，但测试用例中的断言（Assert）必须由人类最终审计把关。
 
+### 4. 📋 器 (工具底座)
+*   本地 Python 控制引擎 + 本地隐藏 SQLite 缓存 + Git 自动化隔离分支 + 运行时拦截器（.cursorrules / .clinerules）。
+
 ---
 
-## 📁 二、 项目目录结构
+## ⚡ 二、 框架新增核心高级特性
+
+为了支撑大规模项目开发并保持本地协作的极致丝滑，AgentFlow v1.2.0 重磅引入了以下生产级特性：
+
+### 1. 本地 SQLite 缓存索引加速 (Local DB Caching)
+*   **痛点**：在大型项目中，当任务量增至数百个时，频繁 glob 扫描并解析 Markdown 头部 JSON 块会导致 `list` 命令出现 1-2 秒的肉眼延迟。
+*   **机制**：引入双轨制存储方案：
+    *   **真源 (Source of Truth)**：依然是 `.md` 任务卡片，方便 Git 追踪和人类直接编辑。
+    *   **缓存层 (Cache Engine)**：本地隐藏 SQLite 数据库 `.agentflow/tasks.db`。
+    *   **自动双写**：任何写操作（`add`、`start`、`submit`、`review`）都会自动将数据落盘并更新至 SQLite 中。
+    *   **零延迟读取**：`list` 操作直接检索 SQLite 缓存（速度提升 100 倍以上，毫秒级响应）。
+    *   **自动重构与退化**：提供 `python .agentflow/agentflow.py sync` 一键重构缓存。如果 SQLite 数据库不存在或环境不支持，脚本会自动执行全局扫描同步或退化为 glob 扫描，保障 100% 健壮性。
+
+### 2. 头脑风暴与 Grill-Me 深度访谈 (6-Round Interview)
+*   **机制**：提供了 `python .agentflow/agentflow.py brainstorm` 打印获取或一键复制的深度访谈唤醒词。
+*   **烤问规范**：要求开发智能体在动手前执行 **至少 6 轮的深度烤问**（避免浅显发问），覆盖：
+    *   技术栈选型与可行性分析（服务器成本、三方 API、安全隔离）；
+    *   前端/后端组件与接口契约设计；
+    *   交互三态细节表现（加载中 Loading、数据为空 Empty、接口/网络报错 Error）；
+    *   异常边界路径（弱网重试、并发竞争锁、防重复提交校验、溢出处理）。
+*   **卡片输出**：AI 整理出 docs/ 下的 SDD 文档（`PRD.md`、`DESIGN.md`、`ARCHITECTURE.md`）后，通过 `add` 自动创建带有 `[ ]` 格式验收清单的任务卡片，作为 Spec 双方同意的“确认键”。
+
+### 3. 多级本地质量门禁 (Local Quality Gates)
+*   **机制**：在 `.agentflow/config.json` 中扩展定义本地多阶段静态/动态自动卡关，包括 `lint_command`、`type_check_command` 与 `test_command`。
+*   **执行与重定向**：`cloudecode` 跑测时会在后台重定向 STDOUT/STDERR 到 `.agentflow/logs/test_TASK-XXX.log` 并捕获退出码。任意一个阶段报错直接打回，保证合入主干的分支具备高水准稳定性。
+*   **环境异常分离**：若测试失败是由于开发机缺少基础运行库或端口冲突等，可运行 `review --env-fail` 挂起，指派给人类（`user`）排查，防止无效的代码修改循环。
+
+### 4. 任务目录Epic分组管理 (Epic Grouping)
+*   **机制**：支持按照 Epic/模块 在 `.agentflow/tasks/` 下建立子文件夹（例如：`.agentflow/tasks/auth/TASK-001.md`），控制引擎基于递归 Glob 机制，能够自动且无感知地在子目录下定位、解析和流转任务文件。
+
+### 5. 防死循环熔断机制 (Self-healing Loop)
+*   **机制**：如果任务在 `review`（审查）与 `fixing`（修复）状态之间往复重试超过 3 次且原因一致，`cloudecode` 规程强制触发**死循环熔断**，自动将任务通过 `env-fail` 挂起或指派回人类，防止智能体在逻辑盲区中无限死锁。
+
+---
+
+## 📁 三、 项目目录结构
 
 ```text
 项目根目录/
 ├── .agentflow/
-│   ├── config.json          # 全局配置及跑测门禁定义
-│   ├── agentflow.py         # 任务流状态机与 Git 分支管理器 (Python CLI)
-│   ├── tasks/               # 单任务 Markdown 卡片存储目录
-│   │   ├── TASK-001.md
+│   ├── config.json          # 全局配置及多级质量门禁跑测指令
+│   ├── agentflow.py         # 状态机控制器、SQLite 缓存与 Git 自动化 CLI
+│   ├── tasks.db             # [自动生成] 本地 SQLite 缓存数据库 (Git 忽略)
+│   ├── tasks/               # 去中心化任务卡片目录 (支持子目录分组管理)
+│   │   ├── auth/            # 模块/Epic 分组
+│   │   │   └── TASK-001.md
 │   │   └── TASK-002.md
-│   ├── logs/                # 测试重定向日志归档目录
+│   ├── logs/                # 测试重定向日志归档目录 (Git 忽略)
 │   │   └── test_TASK-001.log
 │   └── prompts/             # 三方协作助手系统提示词规程
 │       ├── antigravity.md   # 前端开发智能体规程
 │       ├── codex.md         # 后端开发智能体规程
-│       └── cloudecode.md    # 代码审查与修复智能体规程
+│       └── cloudecode.md    # 审计与卡关审查智能体规程
 ├── src/
 │   ├── frontend/            # 前端源码保护区 (只允许 antigravity 写入)
 │   └── backend/             # 后端源码保护区 (只允许 codex 写入)
@@ -72,14 +113,15 @@ graph TD
 │   ├── project_initiation_and_brainstorming_guide.md  # 🚀 大脑风暴与深度访谈 (Grill-Me) 实操规程
 │   ├── agentflow_detailed_workflow.md                # 🚀 本地多智能体协作与状态流转详细工作流
 │   └── agentflow_bootstrap_guide.md                  # 🚀 一键快速启动指令模板
-├── .cursorrules             # 自动加载的 Cursor 运行时卡关规则
-├── .clinerules              # 自动加载的 Cline / Roo Code 运行时卡关规则
+├── .gitignore               # 排除 SQLite 缓存、测试日志及 Python 缓存
+├── .cursorrules             # 自动加载的 Cursor 运行时卡关拦截规则
+├── .clinerules              # 自动加载的 Cline / Roo Code 运行时卡关拦截规则
 └── README.md                # 本框架使用指南 (您当前阅读的文件)
 ```
 
 ---
 
-## 🔄 三、 完整端到端协同开发流程图
+## 🔄 四、 完整端到端协同开发流程图
 
 下面的图展示了**人类总管 (User)**、**三个专属 AI 会话窗口**以及**本地 Git 状态机**在整个软件开发生命周期中的端到端完整流转：
 
@@ -91,10 +133,13 @@ sequenceDiagram
     participant Dev as 🚀 开发窗口
     participant Review as 🛡️ 审查窗口
 
-    %% 阶段一：任务创建
-    User->>Dev: 提出需求想法 (普通的中文沟通)
-    Dev->>Dev: 自动编写 Spec 设计规范
-    Dev->>CLI: 自动执行 add 命令创建任务
+    %% 阶段一：头脑风暴与任务创建
+    User->>Dev: 提出创意想法 (普通的中文沟通)
+    Dev->>User: 执行 Grill-Me 深度烤问 (至少6轮)
+    User->>Dev: 答复架构与细节问题
+    Dev->>Dev: 编写/更新 docs 下的 PRD/DESIGN/ARCHITECTURE
+    Dev->>CLI: 自动执行 add 命令创建任务并写入 Markdown
+    CLI->>CLI: 自动双写更新 SQLite 任务缓存
     CLI-->>User: 自动生成 TASK-xxx.md 任务卡 (todo)
 
     %% 阶段二：认领启动
@@ -104,43 +149,32 @@ sequenceDiagram
     CLI-->>Dev: 开发环境就绪 (隔离分支)
 
     %% 阶段三：开发与提审
-    Dev->>Dev: 根据验收指标开发代码 (Micro-commits)
+    Dev->>Dev: 一次仅开发一个验收项 (Micro-commits, 坏了即 reset --hard)
     User->>Dev: 指示提审
     Dev->>CLI: 自动执行 submit 提审命令
     CLI->>CLI: 自动 commit 暂存特征分支修改
-    CLI-->>Review: 任务状态指派为 review
+    CLI-->>Review: 任务状态指派为 review, 负责人变更为 cloudecode
 
     %% 阶段四：跑测与合并
     User->>Review: 启动审查 (例如: 运行测试门禁)
     Review->>CLI: 自动执行 review --run-tests 命令
-    CLI->>CLI: 自动跑测 (Lint / Type Check / Unit Test)
+    CLI->>CLI: 自动跑测 (Lint / Type Check / Unit Test) 并捕获 Exit Code
 
     alt 1. 测试全部通过 (Green)
         Review->>CLI: 执行 review --approve 批准合入
-        CLI->>CLI: 自动合并至主分支并物理删除特征分支
+        CLI->>CLI: 在特征分支上自动做最终 commit 存档
+        CLI->>CLI: 自动切换回主开发分支 (main/master)
+        CLI->>CLI: 自动执行 --no-ff 合并特征分支，并物理删除该分支
         CLI-->>User: 🏁 任务顺利合入主线 (done)！
     else 2. 代码测试失败 (Red)
         Review->>CLI: 执行 review --reject 打回修复
         CLI->>CLI: 自动回切特征分支 feature/task-xxx
-        CLI-->>Dev: 指派回开发人员修复 (fixing)
+        CLI-->>Dev: 指派回原开发人员修复 (fixing)
     else 3. 宿主机环境故障 (Gray)
         Review->>CLI: 执行 review --env-fail 报告挂起
-        CLI-->>User: 指派给人类排查宿主机环境问题
+        CLI-->>User: 指派给人类排查宿主机环境问题 (user)
     end
 ```
-
----
-
-## 📚 四、 框架专属开发与脑暴指南
-
-为了让您的 Vibe Coding 开发体验更加工业级与完整，项目 `docs/` 目录下随包附带了三份极具实操价值的开发指导白皮书：
-
-1. **[大脑风暴与深度访谈 (Grill-Me) 实操规程](file:///d:/agentskillproject/docs/project_initiation_and_brainstorming_guide.md)** (`docs/project_initiation_and_brainstorming_guide.md`)
-   * *核心作用*：详细规范了项目计划阶段，AI 必须使用 `AskUserQuestion` 工具对您进行**至少六轮深度访谈**的实操规范；深挖技术栈、逻辑死角、边界异常和潜在盲区；系统固化了“道、法、术、器”的中国传统 AI 开发哲学。
-2. **[本地多智能体协作与状态流转详细工作流](file:///d:/agentskillproject/docs/agentflow_detailed_workflow.md)** (`docs/agentflow_detailed_workflow.md`)
-   * *核心作用*：详尽拆解了本框架状态机流转底层的全部命令行运作原理，阐述了 AI 如何与本地 Git 分支自动解耦和隔离合并的技术细节。
-3. **[一键快速启动指令模板](file:///d:/agentskillproject/docs/agentflow_bootstrap_guide.md)** (`docs/agentflow_bootstrap_guide.md`)
-   * *核心作用*：提供一键复制给大模型的 Prompt 部署模版，实现零解压、全自动初始化框架的运维操作。
 
 ---
 
@@ -164,8 +198,8 @@ sequenceDiagram
    - 项目目录/.agentflow/agentflow.py (Python 控制引擎脚本)
    - 项目目录/.agentflow/config.json (配置文件)
    - 项目目录/.agentflow/prompts/antigravity.md, codex.md, cloudecode.md (提示词规程)
-   - 项目目录/.cursorrules (自动生效的 Cursor 规则)
-   - 项目目录/.clinerules (自动生效的 Cline 规则)
+   - 项目目录/.cursorrules (自动生效 of Cursor 规则)
+   - 项目目录/.clinerules (自动生效 of Cline 规则)
 3. 动态配置 config.json：
    - 自动修改项目目录下的 `.agentflow/config.json`，将里面的 `"project_name"` 字段更新为我的【我的项目名称】。
 4. 建立源码与设计物理目录：
@@ -177,9 +211,6 @@ sequenceDiagram
 
 搭建完成后，请告知我项目已成功创建在哪个路径，并详细列出已成功部署的结构。
 ```
-
-> [!TIP]
-> 发送上述指令后，AI 会自动在后台运行所有 Shell 指令，您只需在聊天框静静等待 AI 搭建完成并向您汇报。
 
 ### 阶段二：多会话窗口设置（Vibe Coding 专属布局）
 

@@ -83,50 +83,46 @@ graph TD
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as 👤 人类总管 (User)
-    participant CLI as ⚙️ CLI 状态机 (agentflow.py)
-    participant Dev as 🚀 开发窗口 (antigravity/codex)
-    participant Review as 🛡️ 审查窗口 (cloudecode)
+    actor User as 👤 用户 (User)
+    participant CLI as ⚙️ 控制器 (CLI)
+    participant Dev as 🚀 开发窗口
+    participant Review as 🛡️ 审查窗口
 
-    Note over User, Dev: 阶段一：想法输入与 AI 自动构思建任务 (Add)
-    User->>Dev: 1. 在聊天框提出创意/功能想法 (普通的中文沟通)
-    Note over Dev: AI 在后台自动编写 docs/ 设计文档 (完成构思与 Spec 编写)
-    Dev->>CLI: 2. AI 在后台自动调用 add 命令创建任务
-    CLI-->>User: 自动生成待办卡片 TASK-xxx.md (状态为 todo)
+    %% 阶段一：任务创建
+    User->>Dev: 提出需求想法 (普通的中文沟通)
+    Dev->>Dev: 自动编写 Spec 设计规范
+    Dev->>CLI: 自动执行 add 命令创建任务
+    CLI-->>User: 自动生成 TASK-xxx.md 任务卡 (todo)
 
-    Note over User, Dev: 阶段二：认领与分支切入 (Start)
-    User->>Dev: 指导 AI 认领：“开始执行 TASK-xxx”
-    Dev->>CLI: 自动调用 start 命令启动任务
-    Note over CLI: 校验前置任务是否 Done
-    CLI->>CLI: 自动运行 git checkout -b feature/task-xxx
-    CLI-->>Dev: 成功切入特征隔离分支
+    %% 阶段二：认领启动
+    User->>Dev: 启动开发 (例如: 开始执行 TASK-xxx)
+    Dev->>CLI: 自动执行 start 命令
+    CLI->>CLI: 校验依赖 & 自动切入特征分支 feature/task-xxx
+    CLI-->>Dev: 开发环境就绪 (隔离分支)
 
-    Note over Dev: 阶段三：原子功能开发 (Build)
-    Dev->>Dev: 严格按验收指标(AC)编写代码 & 阶段性 Git Commit
+    %% 阶段三：开发与提审
+    Dev->>Dev: 根据验收指标开发代码 (Micro-commits)
+    User->>Dev: 指示提审
+    Dev->>CLI: 自动执行 submit 提审命令
+    CLI->>CLI: 自动 commit 暂存特征分支修改
+    CLI-->>Review: 任务状态指派为 review
 
-    Note over Dev, Review: 阶段四：提审与代码提交 (Submit)
-    User->>Dev: 指导 AI 提审：“可以提交 TASK-xxx”
-    Dev->>CLI: 自动调用 submit 提审命令
-    Note over CLI: 自动暂存并 commit 特征分支代码
-    CLI-->>Review: 状态变更为 review，负责人指派给 cloudecode
+    %% 阶段四：跑测与合并
+    User->>Review: 启动审查 (例如: 运行测试门禁)
+    Review->>CLI: 自动执行 review --run-tests 命令
+    CLI->>CLI: 自动跑测 (Lint / Type Check / Unit Test)
 
-    Note over Review: 阶段五：跑测门禁与决断 (Review)
-    User->>Review: 指导 AI 跑测：“运行 TASK-xxx 的测试门禁”
-    Review->>CLI: 自动调用 review --run-tests 运行门禁
-    Note over CLI: 在隔离分支顺次执行 Lint / Type Check / Unit Test
-
-    alt 1. 跑测完全通过 (Green)
-        Review->>CLI: 自动调用 review --approve 批准合入
-        Note over CLI: 自动切回主分支 (main) 并执行 git merge --no-ff
-        Note over CLI: 物理删除本地已完成的 feature/task-xxx 分支
-        CLI-->>User: 🏁 任务顺利合入主线并归档为 done！
-    else 2. 代码有 Bug 需修复 (Red)
-        Review->>CLI: 自动调用 review --reject 打回修复
-        Note over CLI: 自动切回 feature/task-xxx 特征分支
-        CLI-->>Dev: 状态设为 fixing，指派回开发人员继续修复
-    else 3. 宿主机环境异常 (Gray)
-        Review->>CLI: 自动调用 review --env-fail 报告故障
-        CLI-->>User: 状态设为 review，指派回人类排查宿主机环境问题
+    alt 1. 测试全部通过 (Green)
+        Review->>CLI: 执行 review --approve 批准合入
+        CLI->>CLI: 自动合并至主分支并物理删除特征分支
+        CLI-->>User: 🏁 任务顺利合入主线 (done)！
+    else 2. 代码测试失败 (Red)
+        Review->>CLI: 执行 review --reject 打回修复
+        CLI->>CLI: 自动回切特征分支 feature/task-xxx
+        CLI-->>Dev: 指派回开发人员修复 (fixing)
+    else 3. 宿主机环境故障 (Gray)
+        Review->>CLI: 执行 review --env-fail 报告挂起
+        CLI-->>User: 指派给人类排查宿主机环境问题
     end
 ```
 

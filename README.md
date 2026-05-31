@@ -318,26 +318,81 @@ sequenceDiagram
 
 #### 步骤 2：启动任务与开发 (用户输入)
 对于需要开工的窗口，指示 AI 认领并启动。
-*   **您在窗口 B (codex) 输入**：`“开始执行 TASK-002 任务。”`
-*   **AI 的动作**：AI 会在后台执行 `python .agentflow/agentflow.py start TASK-002`，校验其前置依赖。通过后，**自动在本地 Git 切换分支到 `feature/task-002`**，并开始根据卡片中的验收指标编写注册接口代码。
 
-#### 步骤 3：代码提交 (用户输入)
-当 AI 提示它已经完成了代码编写并进行了自测时，指示它提交。
-*   **您在窗口 B (codex) 输入**：`“可以提交 TASK-002 任务了，修改的文件是 src/backend/register.py”`
-*   **AI 的动作**：AI 会自动执行 `python .agentflow/agentflow.py submit TASK-002 --files src/backend/register.py`。这将在特征分支上生成一次 Git 提交（Commit），并将任务状态更改为 `review`，指派人变为 `cloudecode`。
+#### 步骤 2：启动开发与认领任务 (一键复制)
+当您决定让开发助手启动某一个任务时，在对应的开发智能体（`antigravity` 或 `codex`）窗口中发送以下指令：
 
-#### 步骤 4：运行测试与审查合并 (用户输入)
-切换到**窗口 C (cloudecode)**，指示审查助手进行跑测与合并。
-*   **您在窗口 C (cloudecode) 输入**：`“运行 TASK-002 的测试门禁，并在通过后予以批准合并。”`
-*   **AI 的动作**：
-    1. AI 在后台执行 `python .agentflow/agentflow.py review TASK-002 --run-tests`，根据 `config.json` 的配置在后台运行风格检查和单元测试。
-    2. 若跑测通过，它会执行 `python .agentflow/agentflow.py review TASK-002 --approve --comment "注册接口测试通过"`。
-    3. **本地自动合并**：系统自动将 `feature/task-002` 分支安全地合入 `master` / `main` 主开发分支，并自动在本地物理删除特征分支。
+```markdown
+【日常协作开发：认领并启动任务】
 
-#### 步骤 5：处理异常或测试失败 (用户输入)
-如果窗口 C 跑测失败并打回为 `fixing` 状态，您需要指引原开发助手进行修复。
-*   **您在窗口 B (codex) 输入**：`“审查未通过，日志显示 register.py 存在类型错误。以下是详细报错：[粘贴报错日志]，请修复它。”`
-*   **AI 的动作**：AI 会发现自己被自动回切到了 `feature/task-002` 分支，开展修复，修复好后重复**步骤 3** 再次提交。
+我确认启动开发前端/后端任务：【在此处填写任务ID，如：TASK-006】。
+
+请自动执行以下动作（不要手动修改卡片）：
+1. 在后台终端运行：`python .agentflow/agentflow.py start <TASK_ID> --operator <antigravity|codex>` 以校验前置依赖。
+2. 校验通过后，自动在本地 Git 切入并锁定该任务的隔离特征分支 `feature/task-xxx`。
+3. 读取任务卡片文件（`.agentflow/tasks/<TASK_ID>.md`）中的所有验收标准（Acceptance Criteria）。
+4. 向我列出你第一步计划实现的首个验收项，确认就绪后等待我指示开始编码。
+```
+
+#### 步骤 3：单一验收项开发与微存档 (一键复制)
+在任务执行中，不要让开发助手一次性写完所有代码。应发送以下指令指挥其进行小步开发：
+
+```markdown
+【日常协作开发：小步迭代，开发首个/下一个验收项】
+
+请开始为【在此处填写任务ID，如：TASK-006】开发以下验收项：
+验收项内容：[在此处填写要开发的具体某一个验收标准，如“实现吸顶毛玻璃导航栏”]
+
+请严格遵守 Build 纪律：
+1. **单项突破**：只修改和编写与该验收项相关的代码，严禁一次性编写卡片中的全部逻辑。
+2. **验证与微存档**：编写完成后，请自测并验证其正常流程与 Loading/Empty/Error 状态。确认跑通后，在控制台执行 `git add .` 与 `git commit -m "feat: <TASK_ID> pass criterion <验收项序号>"` 以保存安全微存档点。
+3. 存档完成后，向我汇报进度并列出下一个计划开发的验收项。
+```
+
+#### 步骤 4：任务开发完成，正式提交审查 (一键复制)
+当任务卡片中的所有验收项均已开发完毕并存档后，在开发智能体窗口中发送以下指令提审：
+
+```markdown
+【日常协作开发：提审代码】
+
+我的任务【在此处填写任务ID，如：TASK-006】的所有验收项已全部开发完毕并安全存档。
+
+请自动执行以下动作：
+1. 仔细核对你修改或新建的文件路径。
+2. 自动在后台运行提审指令：`python .agentflow/agentflow.py submit <TASK_ID> --files "<受影响的文件路径，用逗号隔开，如 src/frontend/index.html>"`。
+3. 提审成功后，告知我任务负责人已自动变更为 `cloudecode`，并提醒我前往 `cloudecode` 会话窗口启动卡关跑测。
+```
+
+#### 步骤 5：启动测试与卡关审查 (一键复制)
+切换到**窗口 C (cloudecode)** 审查智能体窗口，发送以下指令跑测和审计：
+
+```markdown
+【日常协作开发：启动测试与卡关审查】
+
+请对刚刚提审的任务【在此处填写任务ID，如：TASK-006】执行自动化跑测和四维度审查：
+
+1. **自动跑测**：在终端后台自动运行跑测命令：`python .agentflow/agentflow.py review <TASK_ID> --run-tests`。
+2. **分析日志与流转**：读取并分析 `.agentflow/logs/test_<TASK_ID>.log` 文件的测试输出，执行分支处理：
+   - 若测试全部通过（退出码 0），请自动执行批准合并：`python .agentflow/agentflow.py review <TASK_ID> --approve --comment "<填入四维度审计报告>"`。
+   - 若属于本地开发机环境缺失（退出码非 0 且属于系统依赖/端口冲突），请自动执行环境挂起：`python .agentflow/agentflow.py review <TASK_ID> --env-fail --comment "[环境故障] <故障描述>"`。
+   - 若属于代码缺陷/报错（退出码非 0），请自动执行打回修改：`python .agentflow/agentflow.py review <TASK_ID> --reject --comment "<打回的具体原因与修改建议>"`。
+3. 跑测与审查结束后，向我汇报最终决策结论及日志关键摘要。
+```
+
+#### 步骤 6：认领打回任务并修复 (一键复制)
+如果任务被 `cloudecode` 打回为 `fixing` 状态，在原开发助手窗口发送以下指令以拉回隔离分支重新开展修复：
+
+```markdown
+【日常协作开发：认领打回任务并修复】
+
+任务【在此处填写任务ID，如：TASK-006】被 `cloudecode` 打回，当前负责人重新变更为你。
+
+请自动执行以下动作：
+1. 自动在终端运行 `git checkout feature/task-xxx`，确保你的本地工作区已安全切回该任务的隔离特征分支。
+2. 读取该任务卡片 `.agentflow/tasks/<TASK_ID>.md` 底部新增的“审查意见与修复记录”。
+3. 针对打回的问题点，同样按照「一次仅修复一个缺陷，跑通即 commit 存档」的节奏进行修复。
+4. 修复完成后，重新按步骤 4 的提审指令进行提审。
+```
 
 ---
 

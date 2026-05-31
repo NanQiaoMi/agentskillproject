@@ -477,33 +477,6 @@ def cmd_review(args):
         task['assignee'] = "user"
         msg = "代码审查通过。"
         print(f"[+] 任务 {task['id']} 审查已通过！状态变更为: 已完成 (Done)")
-        
-        # Git 分支自动合并支持
-        if is_git_repo():
-            feature_branch = f"feature/{task['id'].lower()}"
-            # 尝试定位主开发基线分支
-            baseline = "main"
-            for b in ["main", "master", "dev", "development"]:
-                ok, _, _ = run_git_cmd(["show-ref", f"refs/heads/{b}"])
-                if ok:
-                    baseline = b
-                    break
-                    
-            print(f"[*] 正在自动合并本地分支 {feature_branch} 到 {baseline}...")
-            # 切入基线分支并进行 non-fast-forward 合并
-            ok_switch, _, err = run_git_cmd(["checkout", baseline])
-            if ok_switch:
-                ok_merge, out_merge, err_merge = run_git_cmd(["merge", feature_branch, "--no-ff", "-m", f"Merge branch '{feature_branch}' into {baseline}"])
-                if ok_merge:
-                    print(f"[+] 成功将 {feature_branch} 合并至 {baseline}。")
-                    # 销毁本地临时特征分支
-                    run_git_cmd(["branch", "-d", feature_branch])
-                    print(f"[+] 已清理本地特征分支: {feature_branch}")
-                else:
-                    print(f"[-] 警告: 自动合并失败，可能存在 Git 冲突。请手动在终端处理。\n错误详情:\n{err_merge or out_merge}")
-            else:
-                print(f"[-] 警告: 无法切回主开发分支 {baseline}，自动合并中止。({err.strip()})")
-                
     else: # reject
         new_status = "fixing"
         prev_dev = "user"
@@ -514,12 +487,6 @@ def cmd_review(args):
         task['assignee'] = prev_dev
         msg = f"代码审查未通过，打回给 {prev_dev} 修复。原因: {args.comment}"
         print(f"[-] 任务 {task['id']} 审查未通过！已打回给: {task['assignee']} 修复")
-        
-        # Git 自动回切至特征分支以方便修复
-        if is_git_repo():
-            feature_branch = f"feature/{task['id'].lower()}"
-            print(f"[*] 正在将本地工作区回切至特征分支 {feature_branch} 开展修复...")
-            run_git_cmd(["checkout", feature_branch])
 
     task['status'] = new_status
     
@@ -539,7 +506,44 @@ def cmd_review(args):
         "message": msg
     })
     
+    # 1. 必须首先保存任务状态到磁盘文件！
     save_task(task)
+    
+    # 2. 如果是本地 Git 仓库，在执行任何 checkout 动作前，先将任务文件修改 commit 到特征分支
+    if is_git_repo():
+        feature_branch = f"feature/{task['id'].lower()}"
+        current = get_current_branch()
+        if current == feature_branch:
+            print(f"[*] 正在自动提交特征分支 {feature_branch} 的最后审查状态修改...")
+            run_git_cmd(["add", "."])
+            run_git_cmd(["commit", "-m", f"chore: review {task['id']} state to {new_status}"])
+
+        # 若审查通过，在特征分支完全干净的前提下，安全切回基线分支并合并
+        if args.approve:
+            baseline = "main"
+            for b in ["main", "master", "dev", "development"]:
+                ok, _, _ = run_git_cmd(["show-ref", f"refs/heads/{b}"])
+                if ok:
+                    baseline = b
+                    break
+                    
+            print(f"[*] 正在自动合并本地分支 {feature_branch} 到 {baseline}...")
+            ok_switch, _, err = run_git_cmd(["checkout", baseline])
+            if ok_switch:
+                ok_merge, out_merge, err_merge = run_git_cmd(["merge", feature_branch, "--no-ff", "-m", f"Merge branch '{feature_branch}' into {baseline}"])
+                if ok_merge:
+                    print(f"[+] 成功将 {feature_branch} 合并至 {baseline}。")
+                    run_git_cmd(["branch", "-d", feature_branch])
+                    print(f"[+] 已清理本地特征分支: {feature_branch}")
+                else:
+                    print(f"[-] 警告: 自动合并失败，可能存在 Git 冲突。请手动在终端处理。\n错误详情:\n{err_merge or out_merge}")
+            else:
+                print(f"[-] 警告: 无法切回主开发分支 {baseline}，自动合并中止。({err.strip()})")
+        elif args.reject:
+            # 若被打回且当前不在特征分支上，切回特征分支以方便开发人员修复
+            if current != feature_branch:
+                print(f"[*] 正在将本地工作区回切至特征分支 {feature_branch} 开展修复...")
+                run_git_cmd(["checkout", feature_branch])
 
 def main():
     parser = argparse.ArgumentParser(description="AgentFlow 本地多智能体协作工作流管理工具")

@@ -194,7 +194,7 @@ sequenceDiagram
 你好！我需要在当前本地目录下，为我的新项目全自动创建对应的文件夹并部署 AgentFlow多智能体协作框架。请扮演系统运维与架构专家，在后台自动完成以下搭建动作（我不需要手动操作任何终端）：
 
 1. 在当前目录下，创建一个以【我的项目名称】命名的子文件夹（以下简称为项目目录）。
-2. 从你的代码库中在后台自动生成并释放以下框架核心文件到项目目录下：
+2. 在后台自动解压当前目录下的 `agentflow.zip` 压缩包，将里面所有的框架文件释放到项目目录中。确保释放后包含：
    - 项目目录/.agentflow/agentflow.py (Python 控制引擎脚本)
    - 项目目录/.agentflow/config.json (配置文件)
    - 项目目录/.agentflow/prompts/antigravity.md, codex.md, cloudecode.md (提示词规程)

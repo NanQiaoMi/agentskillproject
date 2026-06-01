@@ -24,7 +24,7 @@
    git commit -m "feat: complete <id>"
    ```
 3. **审查通过后本地自动合并 (review --approve)**：
-   当 `cloudecode` 运行 `review <id> --approve` 且测试通过后，脚本在本地自动将该特征分支合并回主开发分支（如 `main` 或 `dev`），并删除特征分支：
+   当 `claudecode` 运行 `review <id> --approve` 且测试通过后，脚本在本地自动将该特征分支合并回主开发分支（如 `main` 或 `dev`），并删除特征分支：
    ```bash
    git checkout main
    git merge feature/<id> --no-ff
@@ -56,8 +56,8 @@
 }
 ```
 
-### 2.2 cloudecode 执行逻辑
-`cloudecode` 运行 `review` 时，按顺序在本地静默执行上述三个阶段。任何一个阶段报错，即直接打回。这能保证进入测试阶段的代码已经具备极高的规范性。
+### 2.2 claudecode 执行逻辑
+`claudecode` 运行 `review` 时，按顺序在本地静默执行上述三个阶段。任何一个阶段报错，即直接打回。这能保证进入测试阶段的代码已经具备极高的规范性。
 
 ---
 
@@ -104,7 +104,7 @@ task_files = glob.glob(os.path.join(TASKS_DIR, "**/TASK-*.md"), recursive=True)
 
 ## 5. 本地隔离测试环境 (Local Test Containers)
 
-当 `cloudecode` 运行后端测试时，如果测试涉及真实的数据库读写，直接在开发机本地数据库运行可能会污染您的开发数据，或因为端口冲突导致测试失败。
+当 `claudecode` 运行后端测试时，如果测试涉及真实的数据库读写，直接在开发机本地数据库运行可能会污染您的开发数据，或因为端口冲突导致测试失败。
 
 ### 5.1 方案
-在根目录配置 `docker-compose.test.yml`，每次 `cloudecode` 运行自动化测试前，自动在本地启动一个临时的 Docker 容器数据库（如 MySQL/PostgreSQL/Redis），测试完成后自动销毁。这保证了本地测试环境的高度干净和一致。
+在根目录配置 `docker-compose.test.yml`，每次 `claudecode` 运行自动化测试前，自动在本地启动一个临时的 Docker 容器数据库（如 MySQL/PostgreSQL/Redis），测试完成后自动销毁。这保证了本地测试环境的高度干净和一致。

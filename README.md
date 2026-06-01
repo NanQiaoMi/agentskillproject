@@ -8,7 +8,7 @@
 
 AgentFlow 是一套专为本地多智能体协作设计的**极简、高强度约束、生产就绪**的工作流与任务管理框架。
 
-本框架以**本地文件系统**为核心，通过**去中心化的单任务 Markdown 文件**与 **Python 控制引擎**，将前端开发智能体（`antigravity`）、后端开发智能体（`codex`）和审查/发布智能体（`cloudecode`）与人类项目总管（您）通过纯自然语言对话无缝串联，实现免人工敲击终端、免手动管理 Git 分支的**全自动 Vibe Coding 本地开发流水线**。
+本框架以**本地文件系统**为核心，通过**去中心化的单任务 Markdown 文件**与 **Python 控制引擎**，将前端开发智能体（`antigravity`）、后端开发智能体（`codex`）和审查/发布智能体（`claudecode`）与人类项目总管（您）通过纯自然语言对话无缝串联，实现免人工敲击终端、免手动管理 Git 分支的**全自动 Vibe Coding 本地开发流水线**。
 
 ---
 
@@ -74,14 +74,14 @@ graph TD
 
 ### 3. 多级本地质量门禁 (Local Quality Gates)
 *   **机制**：在 `.agentflow/config.json` 中扩展定义本地多阶段静态/动态自动卡关，包括 `lint_command`、`type_check_command` 与 `test_command`。
-*   **执行与重定向**：`cloudecode` 跑测时会在后台重定向 STDOUT/STDERR 到 `.agentflow/logs/test_TASK-XXX.log` 并捕获退出码。任意一个阶段报错直接打回，保证合入主干的分支具备高水准稳定性。
+*   **执行与重定向**：`claudecode` 跑测时会在后台重定向 STDOUT/STDERR 到 `.agentflow/logs/test_TASK-XXX.log` 并捕获退出码。任意一个阶段报错直接打回，保证合入主干的分支具备高水准稳定性。
 *   **环境异常分离**：若测试失败是由于开发机缺少基础运行库或端口冲突等，可运行 `review --env-fail` 挂起，指派给人类（`user`）排查，防止无效的代码修改循环。
 
 ### 4. 任务目录Epic分组管理 (Epic Grouping)
 *   **机制**：支持按照 Epic/模块 在 `.agentflow/tasks/` 下建立子文件夹（例如：`.agentflow/tasks/auth/TASK-001.md`），控制引擎基于递归 Glob 机制，能够自动且无感知地在子目录下定位、解析和流转任务文件。
 
 ### 5. 防死循环熔断机制 (Self-healing Loop)
-*   **机制**：如果任务在 `review`（审查）与 `fixing`（修复）状态之间往复重试超过 3 次且原因一致，`cloudecode` 规程强制触发**死循环熔断**，自动将任务通过 `env-fail` 挂起或指派回人类，防止智能体在逻辑盲区中无限死锁。
+*   **机制**：如果任务在 `review`（审查）与 `fixing`（修复）状态之间往复重试超过 3 次且原因一致，`claudecode` 规程强制触发**死循环熔断**，自动将任务通过 `env-fail` 挂起或指派回人类，防止智能体在逻辑盲区中无限死锁。
 
 ---
 
@@ -102,7 +102,7 @@ graph TD
 │   └── prompts/             # 三方协作助手系统提示词规程
 │       ├── antigravity.md   # 前端开发智能体规程
 │       ├── codex.md         # 后端开发智能体规程
-│       └── cloudecode.md    # 审计与卡关审查智能体规程
+│       └── claudecode.md    # 审计与卡关审查智能体规程
 ├── src/
 │   ├── frontend/            # 前端源码保护区 (只允许 antigravity 写入)
 │   └── backend/             # 后端源码保护区 (只允许 codex 写入)
@@ -153,7 +153,7 @@ sequenceDiagram
     User->>Dev: 指示提审
     Dev->>CLI: 自动执行 submit 提审命令
     CLI->>CLI: 自动 commit 暂存特征分支修改
-    CLI-->>Review: 任务状态指派为 review, 负责人变更为 cloudecode
+    CLI-->>Review: 任务状态指派为 review, 负责人变更为 claudecode
 
     %% 阶段四：跑测与合并
     User->>Review: 启动审查 (例如: 运行测试门禁)
@@ -197,7 +197,7 @@ sequenceDiagram
 2. 在后台自动解压当前目录下的 `agentflow.zip` 压缩包，将里面所有的框架文件释放到项目目录中。确保释放后包含：
    - 项目目录/.agentflow/agentflow.py (Python 控制引擎脚本)
    - 项目目录/.agentflow/config.json (配置文件)
-   - 项目目录/.agentflow/prompts/antigravity.md, codex.md, cloudecode.md (提示词规程)
+   - 项目目录/.agentflow/prompts/antigravity.md, codex.md, claudecode.md (提示词规程)
    - 项目目录/.cursorrules (自动生效 of Cursor 规则)
    - 项目目录/.clinerules (自动生效 of Cline 规则)
 3. 动态配置 config.json：
@@ -275,7 +275,7 @@ sequenceDiagram
 #### 1. 打开三个 AI 聊天窗口：
 *   **窗口 A**：重命名或标记为 `前端助手 (antigravity)`
 *   **窗口 B**：重命名或标记为 `后端助手 (codex)`
-*   **窗口 C**：重命名或标记为 `审查与发布 (cloudecode)`
+*   **窗口 C**：重命名或标记为 `审查与发布 (claudecode)`
 
 #### 2. 在每个窗口分别发送以下“唤醒词”完成初始化：
 
@@ -335,16 +335,16 @@ sequenceDiagram
     请回复确认你已经完全理解并载入了后端开发智能体 (codex) 的所有规范，并展示你运行任务列表后的首个汇报。
     ```
 
-*   **窗口 C (cloudecode) 唤醒输入**：
+*   **窗口 C (claudecode) 唤醒输入**：
     ```markdown
-    【项目角色初始化：代码审查与修复智能体 (cloudecode)】
+    【项目角色初始化：代码审查与修复智能体 (claudecode)】
 
-    你在这个本地项目中扮演代码审查与修复专家 (cloudecode)。请严格阅读并遵守以下指示：
+    你在这个本地项目中扮演代码审查与修复专家 (claudecode)。请严格阅读并遵守以下指示：
 
     1. **项目规范加载与规则写入**：
        - 立即读取项目根目录下的 `README.md`，理解项目的多智能体协作框架。
-       - 立即读取 `.agentflow/prompts/cloudecode.md`，这是你专属的审查流指南。
-       - **立即将 `.agentflow/prompts/cloudecode.md` 的规范文件核心审查指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
+       - 立即读取 `.agentflow/prompts/claudecode.md`，这是你专属的审查流指南。
+       - **立即将 `.agentflow/prompts/claudecode.md` 的规范文件核心审查指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
        - 你拥有全局读写权限，但只能在执行“审查与修复”时对相关代码进行修改。
 
     2. **工作流命令使用规则**：
@@ -358,7 +358,7 @@ sequenceDiagram
        请立即在终端运行：`python .agentflow/agentflow.py list --status review`。
        检索当前处于待审查状态的开发任务，并向用户汇报当前有哪些任务等待你进行测试与代码审计。
 
-    请回复确认你已经完全理解并载入了代码审查与修复智能体 (cloudecode) 的所有规范，并展示你运行任务列表后的首个汇报。
+    请回复确认你已经完全理解并载入了代码审查与修复智能体 (claudecode) 的所有规范，并展示你运行任务列表后的首个汇报。
     ```
 
 
@@ -438,11 +438,11 @@ sequenceDiagram
 请自动执行以下动作：
 1. 仔细核对你修改或新建的文件路径。
 2. 自动在后台运行提审指令：`python .agentflow/agentflow.py submit <TASK_ID> --files "<受影响的文件路径，用逗号隔开，如 src/frontend/index.html>"`。
-3. 提审成功后，告知我任务负责人已自动变更为 `cloudecode`，并提醒我前往 `cloudecode` 会话窗口启动卡关跑测。
+3. 提审成功后，告知我任务负责人已自动变更为 `claudecode`，并提醒我前往 `claudecode` 会话窗口启动卡关跑测。
 ```
 
 #### 步骤 5：启动测试与卡关审查 (一键复制)
-切换到**窗口 C (cloudecode)** 审查智能体窗口，发送以下指令跑测和审计：
+切换到**窗口 C (claudecode)** 审查智能体窗口，发送以下指令跑测和审计：
 
 ```markdown
 【日常协作开发：启动测试与卡关审查】
@@ -458,12 +458,12 @@ sequenceDiagram
 ```
 
 #### 步骤 6：认领打回任务并修复 (一键复制)
-如果任务被 `cloudecode` 打回为 `fixing` 状态，在原开发助手窗口发送以下指令以拉回隔离分支重新开展修复：
+如果任务被 `claudecode` 打回为 `fixing` 状态，在原开发助手窗口发送以下指令以拉回隔离分支重新开展修复：
 
 ```markdown
 【日常协作开发：认领打回任务并修复】
 
-任务【在此处填写任务ID，如：TASK-006】被 `cloudecode` 打回，当前负责人重新变更为你。
+任务【在此处填写任务ID，如：TASK-006】被 `claudecode` 打回，当前负责人重新变更为你。
 
 请自动执行以下动作：
 1. 自动在终端运行 `git checkout feature/task-xxx`，确保你的本地工作区已安全切回该任务的隔离特征分支。
@@ -482,7 +482,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> todo: 1. cli add 命令创建 (主开发分支)
     todo --> in_progress: 2. cli start 命令 (自动校验依赖，切入 feature/task-xxx 分支)
-    in_progress --> review: 3. cli submit 命令 (阶段性 add 且 commit, 指派给 cloudecode)
+    in_progress --> review: 3. cli submit 命令 (阶段性 add 且 commit, 指派给 claudecode)
     review --> fixing: 4. cli review --reject (审查不通过打回，回切特征分支，指派回开发)
     fixing --> review: 5. cli submit 命令 (修复完毕后重新 commit)
     review --> done: 6. cli review --approve (切回 master, 执行 --no-ff 安全合并，删除特征分支)
@@ -522,7 +522,7 @@ stateDiagram-v2
 
 ## 🛡️ 九、 生产级就绪核对清单 (Review Checkpoints)
 
-在任务提交 `cloudecode` 审查通过并最终合入 master 之前，必须强行在后台跑测并通过以下硬性检测：
+在任务提交 `claudecode` 审查通过并最终合入 master 之前，必须强行在后台跑测并通过以下硬性检测：
 *   **安全性 (Security)**：
     - **零密钥硬编码**：严禁明文密码或 API Token 留存在代码中（必须通过 `.env` 读取）。
     - **安全校验**：所有外部输入全部进行强类型拦截与过滤（防 XSS/SQL 注入）。

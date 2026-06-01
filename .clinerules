@@ -5,7 +5,7 @@ You are in a workspace configured with **AgentFlow**, a local multi-agent collab
 ## 1. Project Structure & Roles
 - **Frontend Agent (antigravity)**: Write access limited to `src/frontend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/antigravity.md`.
 - **Backend Agent (codex)**: Write access limited to `src/backend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/codex.md`.
-- **Reviewer & Fixer Agent (cloudecode)**: Global read-write access. Execute tests. Follow rules in `.agentflow/prompts/cloudecode.md`.
+- **Reviewer & Fixer Agent (claudecode)**: Global read-write access. Execute tests. Follow rules in `.agentflow/prompts/claudecode.md`.
 
 ---
 

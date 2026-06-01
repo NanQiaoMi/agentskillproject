@@ -53,10 +53,10 @@ python .agentflow/agentflow.py show <TASK_ID>
 # 提交审查，并指定你所修改或创建的文件列表（用逗号隔开）
 python .agentflow/agentflow.py submit <TASK_ID> --files "src/frontend/index.html,src/frontend/app.js" --operator antigravity
 ```
-*注：提交后，任务状态会自动变更为 `review`，负责人会自动变更为 `cloudecode`。*
+*注：提交后，任务状态会自动变更为 `review`，负责人会自动变更为 `claudecode`。*
 
 ### 第五步：处理反馈 (若有)
-如果 `cloudecode` 审查后认为有需要改进的地方，任务会被打回，状态变更为 `fixing` 且负责人重新变更为 `antigravity`。
+如果 `claudecode` 审查后认为有需要改进的地方，任务会被打回，状态变更为 `fixing` 且负责人重新变更为 `antigravity`。
 此时你需要：
 1. 打开并阅读 `.agentflow/tasks/<TASK_ID>.md` 查看“审查意见与修复记录”。
 2. 同样遵循 **“一次只修复一个被打回点，跑通即存档”** 的原则进行修复。

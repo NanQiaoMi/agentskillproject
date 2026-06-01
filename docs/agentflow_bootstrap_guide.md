@@ -47,7 +47,7 @@
    - 实现任务的 CRUD（子命令：add, list, show）。
    - 实现状态机流转控制：
      - `start <TASK_ID>`：校验 dependencies 下的前置任务是否已 Done。通过后切入或创建 feature/task-xxx 本地 Git 分支，并将状态置为 in_progress。
-     - `submit <TASK_ID>`：将特征分支修改 add 并 commit，指派给 cloudecode 并将状态置为 review。
+     - `submit <TASK_ID>`：将特征分支修改 add 并 commit，指派给 claudecode 并将状态置为 review。
      - `review <TASK_ID> --run-tests`：顺序执行 config.json 中配置的 lint_command、type_check_command 和 test_command，重定向控制台输出到 .agentflow/logs/test_TASK-XXX.log，捕获退出码。
      - `review <TASK_ID> --approve`：状态置为 done，指派给 user。在特征分支上做最后一次 commit，然后切回 master/main 主分支，执行 --no-ff 安全合并特征分支，并在本地彻底删除该特征分支。
      - `review <TASK_ID> --reject`：状态置为 fixing，指派回原开发，保留在当前特征分支上。
@@ -60,7 +60,7 @@
 4. 自动生成 3 个智能体的中文专属规程文档：
    - `.agentflow/prompts/antigravity.md` (前端开发规程，限制在 src/frontend/)
    - `.agentflow/prompts/codex.md` (后端开发规程，限制在 src/backend/)
-   - `.agentflow/prompts/cloudecode.md` (代码审查与修复规程，包含三态校验、防死循环熔断、Production Readiness 核对)
+   - `.agentflow/prompts/claudecode.md` (代码审查与修复规程，包含三态校验、防死循环熔断、Production Readiness 核对)
 
 5. 在项目根目录下自动创建项目级 IDE 卡点规则文件：
    - `.cursorrules` 与 `.clinerules`。
@@ -88,7 +88,7 @@
 │   └── prompts/             # 三方协作专属提示词规程
 │       ├── antigravity.md   # 前端规程
 │       ├── codex.md         # 后端规程
-│       └── cloudecode.md    # 审计规程
+│       └── claudecode.md    # 审计规程
 ├── src/
 │   ├── frontend/            # 前端写保护区
 │   └── backend/             # 后端写保护区
@@ -104,7 +104,7 @@
     *   **Git 动作**：自动在本地执行 `git checkout -b feature/task-xxx`，如果分支已存在，执行 `git checkout feature/task-xxx`。
 *   `in_progress` / `fixing` $\rightarrow$ `review`：
     *   **触发命令**：`python .agentflow/agentflow.py submit TASK-XXX --files "src/frontend/file.html"`
-    *   **Git 动作**：在本地自动执行 `git add .` 与 `git commit -m "feat: implement TASK-XXX code"`，将受影响的文件路径存入卡片 `affected_files` 字段，把 `assignee` 变更为 `cloudecode`。
+    *   **Git 动作**：在本地自动执行 `git add .` 与 `git commit -m "feat: implement TASK-XXX code"`，将受影响的文件路径存入卡片 `affected_files` 字段，把 `assignee` 变更为 `claudecode`。
 *   `review` $\rightarrow$ `done`：
     *   **触发命令**：`python .agentflow/agentflow.py review TASK-XXX --approve --comment "..."`
     *   **Git 动作**：首先对卡片状态修改进行 commit 存档。然后安全切回主干分支 `master`/`main`。执行非快进合并：`git merge feature/task-xxx --no-ff`，成功后物理清理分支：`git branch -d feature/task-xxx`。
@@ -127,7 +127,7 @@
   "roles": {
     "antigravity": { "role": "frontend", "scope": "src/frontend" },
     "codex": { "role": "backend", "scope": "src/backend" },
-    "cloudecode": { "role": "reviewer", "scope": "all" }
+    "claudecode": { "role": "reviewer", "scope": "all" }
   },
   "backend": {
     "lint_command": "python -m py_compile src/backend/my_script.py",

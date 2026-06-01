@@ -11,7 +11,7 @@
   "comments": [
     {
       "time": "2026-06-01T01:41:11.951562",
-      "author": "cloudecode",
+      "author": "claudecode",
       "comment": "Tests passed"
     }
   ],
@@ -41,7 +41,7 @@
       "time": "2026-06-01T01:41:11.951592",
       "from": "review",
       "to": "done",
-      "operator": "cloudecode",
+      "operator": "claudecode",
       "message": "代码审查通过。"
     }
   ]
@@ -57,11 +57,11 @@
 - `src/backend/register.py`
 
 ## 审查意见与修复记录
-- **cloudecode** (2026-06-01T01:41):
+- **claudecode** (2026-06-01T01:41):
     Tests passed
 
 ## 状态变更历史
 - `2026-06-01T01:22` | **user** | 将状态从 `[none]` 变更为 `[todo]` | 备注: 创建任务
 - `2026-06-01T01:22` | **codex** | 将状态从 `[todo]` 变更为 `[in_progress]` | 备注: 开始执行任务
 - `2026-06-01T01:41` | **codex** | 将状态从 `[in_progress]` 变更为 `[review]` | 备注: 提交审查。影响文件: src/backend/register.py
-- `2026-06-01T01:41` | **cloudecode** | 将状态从 `[review]` 变更为 `[done]` | 备注: 代码审查通过。
+- `2026-06-01T01:41` | **claudecode** | 将状态从 `[review]` 变更为 `[done]` | 备注: 代码审查通过。

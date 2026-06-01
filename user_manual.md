@@ -1,6 +1,6 @@
 # AgentFlow 用户实操手册 (User Manual)
 
-本手册专为**项目总管（您）**设计，指导您如何在不需要手动敲写命令行代码的情况下，仅通过与三个独立的 AI 智能体窗口（`antigravity` 前端、`codex` 后端、`cloudecode` 审计）进行**纯中文自然语言对话**，来高效驱动并完成整个项目开发。
+本手册专为**项目总管（您）**设计，指导您如何在不需要手动敲写命令行代码的情况下，仅通过与三个独立的 AI 智能体窗口（`antigravity` 前端、`codex` 后端、`claudecode` 审计）进行**纯中文自然语言对话**，来高效驱动并完成整个项目开发。
 
 ---
 
@@ -18,7 +18,7 @@
    框架搭建完成后，开启三个独立的会话窗口分别对应各个智能体角色：
    - **窗口 A**：命名为“前端开发 antigravity”
    - **窗口 B**：命名为“后端开发 codex”
-   - **窗口 C**：命名为“代码审查 cloudecode”
+   - **窗口 C**：命名为“代码审查 claudecode”
 
 ---
 
@@ -83,16 +83,16 @@
 请回复确认你已经完全理解并载入了后端开发智能体 (codex) 的所有规范，并展示你运行任务列表后的首个汇报。
 ```
 
-### 🚀 窗口 C：代码审查与修复智能体 (cloudecode) 唤醒词
+### 🚀 窗口 C：代码审查与修复智能体 (claudecode) 唤醒词
 ```markdown
-【项目角色初始化：代码审查与修复智能体 (cloudecode)】
+【项目角色初始化：代码审查与修复智能体 (claudecode)】
 
-你在这个本地项目中扮演代码审查与修复专家 (cloudecode)。请严格阅读并遵守以下指示：
+你在这个本地项目中扮演代码审查与修复专家 (claudecode)。请严格阅读并遵守以下指示：
 
 1. **项目规范加载与规则写入**：
    - 立即读取项目根目录下的 `README.md`，理解项目的多智能体协作框架。
-   - 立即读取 `.agentflow/prompts/cloudecode.md`，这是你专属的审查流指南。
-   - **立即将 `.agentflow/prompts/cloudecode.md` 的规范文件核心审查指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
+   - 立即读取 `.agentflow/prompts/claudecode.md`，这是你专属的审查流指南。
+   - **立即将 `.agentflow/prompts/claudecode.md` 的规范文件核心审查指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
    - 你拥有全局读写权限，但只能在执行“审查与修复”时对相关代码进行修改。
 
 2. **工作流命令使用规则**：
@@ -106,7 +106,7 @@
    请立即在终端运行：`python .agentflow/agentflow.py list --status review`。
    检索当前处于待审查状态的开发任务，并向用户汇报当前有哪些任务等待你进行测试与代码审计。
 
-请回复确认你已经完全理解并载入了代码审查与修复智能体 (cloudecode) 的所有规范，并展示你运行任务列表后的首个汇报。
+请回复确认你已经完全理解并载入了代码审查与修复智能体 (claudecode) 的所有规范，并展示你运行任务列表后的首个汇报。
 ```
 
 ---
@@ -166,7 +166,7 @@ AgentFlow 完美契合 **Brainstorm → Spec → Build** 这一最稳的 Vibe Co
    python .agentflow/agentflow.py submit TASK-003 --files "src/backend/forgot_password.py" --operator codex
    ```
 6. **审查与合并**：
-   在 `cloudecode` 窗口跑测并审批。通过后，任务归档为 `done`，`feature/task-003` 自动安全合并到 `master` 且被删除。
+   在 `claudecode` 窗口跑测并审批。通过后，任务归档为 `done`，`feature/task-003` 自动安全合并到 `master` 且被删除。
 7. **解锁前端任务**：
    此时，前端 `antigravity` 检测到前置依赖已 `done`，可以启动并以同样的“一次开发一个验收项”的节奏，完成 `TASK-004` 的前端页面编码。
 
@@ -174,11 +174,11 @@ AgentFlow 完美契合 **Brainstorm → Spec → Build** 这一最稳的 Vibe Co
 
 ## 4. 常见问题与容错机制
 
-### 4.1 代码被 cloudecode 打回（Reject）
+### 4.1 代码被 claudecode 打回（Reject）
 - **现象**：测试失败或四维度审计发现硬伤，任务退回 `fixing` 状态。
 - **应对心法**：打开开发窗口，输入“*查看打回原因，按照‘一次只修复一个痛点，跑通即存档’的原则进行修复并重新提审*”。
 
 ### 4.2 本地运行环境损坏（Env Fail）
 - **现象**：测试跑不通是因为本地缺少依赖库或本地端口冲突。
-- **应对心法**：任务负责人会自动变成 `user`。您只需在自己的电脑终端中手动安装对应依赖库或解决环境问题，完成后在 cloudecode 窗口输入“*环境问题已解决，重新跑测*”即可。
+- **应对心法**：任务负责人会自动变成 `user`。您只需在自己的电脑终端中手动安装对应依赖库或解决环境问题，完成后在 `claudecode` 窗口输入“*环境问题已解决，重新跑测*”即可。
 

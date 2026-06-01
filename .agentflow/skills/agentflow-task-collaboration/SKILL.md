@@ -1,11 +1,11 @@
 ---
 name: agentflow-task-collaboration
-description: 本地多智能体协作开发与任务管理技能，规范 antigravity (前端开发)、codex (后端开发)、cloudecode (代码审查与修复) 在本地工作区中的代码编写、测试运行、审计通过以及状态流转的一整套闭环动作。
+description: 本地多智能体协作开发与任务管理技能，规范 antigravity (前端开发)、codex (后端开发)、claudecode (代码审查与修复) 在本地工作区中的代码编写、测试运行、审计通过以及状态流转的一整套闭环动作。
 ---
 
 # AgentFlow 本地多智能体协作开发与任务管理技能
 
-本技能用于规范当前项目工作区中 `antigravity`、`codex` 和 `cloudecode` 三个角色的日常开发及协作动作，确保本地任务状态机的一致性与代码库的稳定性。
+本技能用于规范当前项目工作区中 `antigravity`、`codex` 和 `claudecode` 三个角色的日常开发及协作动作，确保本地任务状态机的一致性与代码库的稳定性。
 
 ---
 
@@ -33,7 +33,7 @@ description: 本地多智能体协作开发与任务管理技能，规范 antigr
   2. 接单并变更状态为进行中：`python .agentflow/agentflow.py start <TASK_ID> --operator codex`。
   3. 修改 `src/backend/` 中的代码，编写完成后，运行提审命令：`python .agentflow/agentflow.py submit <TASK_ID> --files "src/backend/<修改的文件>" --operator codex`。
 
-### 2.3 代码审查与修复智能体 (cloudecode)
+### 2.3 代码审查与修复智能体 (claudecode)
 - **读写权限范围**：全局工作区，重点审查 `affected_files` 中列出的改动。
 - **操作指令**：
   1. 获取审查任务：`python .agentflow/agentflow.py list --status review`。
@@ -56,5 +56,5 @@ description: 本地多智能体协作开发与任务管理技能，规范 antigr
 ---
 
 ## 4. 人机协同与熔断避错规范
-1. **防死循环逻辑**：如果同一个任务在 `history` 里的 `review` <-> `fixing` 的状态交替次数已达到 3 次，且均由于相同原因未能通过，则 `cloudecode` 不得再次 reject。应当直接在 comment 中输出求助信息并使用 `--env-fail` 将 assignee 指定给 `user`（用户），暂停自动流水线以引入人工调试。
+1. **防死循环逻辑**：如果同一个任务在 `history` 里的 `review` <-> `fixing` 的状态交替次数已达到 3 次，且均由于相同原因未能通过，则 `claudecode` 不得再次 reject。应当直接在 comment 中输出求助信息并使用 `--env-fail` 将 assignee 指定给 `user`（用户），暂停自动流水线以引入人工调试。
 2. **Git 冲突处理**：框架不会对代码文件进行写保护锁定。如果智能体在写入时发现由于人机并发修改导致了 Git 冲突，智能体应立即中断当前任务，并输出提示信息请用户在本地解决冲突。

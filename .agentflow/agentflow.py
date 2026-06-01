@@ -483,7 +483,7 @@ def cmd_submit(args):
                 
     old_status = task['status']
     task['status'] = 'review'
-    task['assignee'] = 'cloudecode'
+    task['assignee'] = 'claudecode'
     task['affected_files'] = list(set(task.get('affected_files', []) + files))
     task['history'].append({
         "time": datetime.now().isoformat(),
@@ -494,7 +494,7 @@ def cmd_submit(args):
     })
     
     save_task(task)
-    print(f"[+] 任务 {task['id']} 已提交审查！已重新指派负责人为: cloudecode")
+    print(f"[+] 任务 {task['id']} 已提交审查！已重新指派负责人为: claudecode")
 
 def run_automated_tests(task):
     dev_agent = "backend"
@@ -610,7 +610,7 @@ def cmd_review(args):
         new_status = "fixing"
         prev_dev = "user"
         for h in reversed(task['history']):
-            if h['operator'] not in ['cloudecode', 'user']:
+            if h['operator'] not in ['claudecode', 'user']:
                 prev_dev = h['operator']
                 break
         task['assignee'] = prev_dev
@@ -619,7 +619,7 @@ def cmd_review(args):
 
     task['status'] = new_status
     
-    comment_author = args.operator or "cloudecode"
+    comment_author = args.operator or "claudecode"
     if args.comment:
         task['comments'].append({
             "time": datetime.now().isoformat(),

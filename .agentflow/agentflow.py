@@ -674,8 +674,101 @@ def cmd_review(args):
                 print(f"[*] 正在将本地工作区回切至特征分支 {feature_branch} 开展修复...")
                 run_git_cmd(["checkout", feature_branch])
 
+def sync_rules():
+    print("[*] 正在同步并更新 .cursorrules 和 .clinerules ...")
+    
+    # 1. 基础公共规则模版
+    base_template = """# AgentFlow Workspace Rule ({rule_type} Rules)
+
+You are in a workspace configured with **AgentFlow**, a local multi-agent collaboration framework. You must strictly adhere to the following rules depending on your active role.
+
+## 1. Project Structure & Roles
+- **Frontend Agent (antigravity)**: Write access limited to `src/frontend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/antigravity.md`.
+- **Backend Agent (codex)**: Write access limited to `src/backend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/codex.md`.
+- **Reviewer & Fixer Agent (claudecode)**: Global read-write access. Execute tests. Follow rules in `.agentflow/prompts/claudecode.md`.
+
+---
+
+## 2. Mandatory SOP Workflow
+Before performing any task or modifying any code in this repository, you must:
+1. Run `python .agentflow/agentflow.py list` to check tasks assigned to you.
+2. Read the specific task description using `python .agentflow/agentflow.py show <TASK_ID>` (or read `.agentflow/tasks/<TASK_ID>.md`).
+3. Run `python .agentflow/agentflow.py start <TASK_ID>` before writing any code.
+4. When finished, list modified files and submit via `python .agentflow/agentflow.py submit <TASK_ID> --files "<comma-separated-files>"`.
+
+---
+
+## 3. General Guidelines
+- Do NOT modify the task metadata (the JSON block inside HTML comments at the top of task files) manually. Always use the `agentflow.py` CLI script for state transitions.
+- Maintain strict directory boundaries to prevent code conflicts.
+- Refer to the project README.md for full architecture specifications.
+
+---
+
+## 4. Vibe Coding Build Discipline (Crucial)
+- Never attempt to implement the entire task spec at once.
+- Look for the "Acceptance Criteria" (验收项) checklist inside `.agentflow/tasks/<TASK_ID>.md`.
+- Implement and test only ONE acceptance criterion at a time.
+- Once verified, output a message recommending the user to commit or execute a git commit (e.g. `git commit -m "feat: TASK_ID pass criterion X"`) as a checkpoint before starting the next item.
+- If changes break the code and cannot be easily fixed, immediately reset to the last checkpoint (e.g. `git reset --hard HEAD`) to avoid messy source code degeneration.
+
+## 5. Context Management & Security
+- **Context Rot Prevention**: When a task is completed and merged, prompt the user to start a new chat session to clear context history. This avoids performance decay due to excessively long context windows.
+- **Learn from Examples**: Before implementing new functionality, search the workspace for existing, similar modules. Follow the existing coding style, test frameworks, and error logging conventions.
+- **Security Constraint**: Never write plain-text credentials (passwords, API keys) into files. Always read them from environment variables or a `.env` file. Refer to `src/backend/` configuration files for reference.
+
+## 6. Project Planning & Brainstorming (Grill-Me)
+- **6-Round Interview Rule**: When starting a new project, feature brainstorming, or architectural spec design, you MUST initiate at least 6 rounds of deep interviews using the `AskUserQuestion` tool (or through conversational prompts).
+- **Superpowers Application**: During the planning/brainstorming process, you must utilize the **Superpowers** capability (20+ combinable developer skills) to ensure the system design is structurally comprehensive and addresses edge-case complexities.
+- **Chinese Language Requirement for Questions (Crucial)**: All questions asked to the user, Grill-Me interview rounds, and the question text + multiple-choice options (`options` array) in the `ask_question` tool MUST be entirely written in Chinese. Under no circumstances should English questions or English answer options be provided.
+- **Core Interview Focus**: Avoid shallow questions. Deeply explore technology stack validation, interaction logic pathways, edge-case and error boundaries, and potential technical pitfalls or blind spots that the user might have overlooked.
+- **Spec Iteration**: Draft the SDD (System Design Document) specifications based on the interview results. Iterate and refine the design documents according to user feedback repeatedly until they are 100% satisfied before moving to the implementation phase.
+
+## 7. Frontend Design System (UI UX Pro Max)
+- **Design Principles**: When acting as `antigravity` to write or refactor frontend UI code, you must strictly implement the `ui-ux-pro-max` guidelines:
+  - **67 Modern Styles**: Choose standard modern layout styles (e.g. Bento Grid, Minimalism, Glassmorphism, Brutalism, Neumorphism) and keep them consistent.
+  - **161 Color Palettes**: Do not use raw colors (pure red, green, blue). Use sophisticated HSL/RGB gradients or tailored palettes (e.g., space gray, light gold, neon cyan, cream white).
+  - **Typography & Interaction**: Avoid default browser fonts; use Google Fonts (Inter, Outfit, Roboto) with hierarchical weights. All buttons/links must have smooth hover transitions and micro-animations.
+"""
+    
+    # 2. 读取角色提示词文档
+    prompts_dir = os.path.join(BASE_DIR, "prompts")
+    roles = {
+        "antigravity": "antigravity.md",
+        "codex": "codex.md",
+        "claudecode": "claudecode.md"
+    }
+    
+    role_sections = ""
+    for role_name, filename in roles.items():
+        filepath = os.path.join(prompts_dir, filename)
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                # 拼接为子章节
+                role_sections += f"\n\n---\n\n## [Role Specification: {role_name}]\n\n{content}\n"
+            except Exception as e:
+                print(f"[-] 警告: 无法读取角色指南 {filename}: {e}")
+        else:
+            print(f"[-] 提示: 未找到角色规范 {filename}")
+            
+    # 3. 写入规则文件到项目根目录
+    project_root = os.path.dirname(BASE_DIR)
+    
+    for rule_type, filename in [("Cursor", ".cursorrules"), ("Cline", ".clinerules")]:
+        dest_path = os.path.join(project_root, filename)
+        full_content = base_template.format(rule_type=rule_type) + role_sections
+        try:
+            with open(dest_path, 'w', encoding='utf-8') as f:
+                f.write(full_content)
+            print(f"[+] 成功更新规则文件: {filename}")
+        except Exception as e:
+            print(f"[-] 错误: 写入 {filename} 失败: {e}")
+
 def cmd_sync(args):
     sync_db()
+    sync_rules()
 
 def cmd_brainstorm(args):
     print("\n" + "="*80)

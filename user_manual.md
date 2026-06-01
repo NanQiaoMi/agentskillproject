@@ -37,6 +37,8 @@
    - 立即读取 `.agentflow/prompts/antigravity.md`，这是你专属的开发流程指南。
    - **立即将 `.agentflow/prompts/antigravity.md` 的规范文件核心开发指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
    - 了解你的开发目录范围：你**只能**修改 `src/frontend/` 目录下的代码，对其他源码目录（如 `src/backend/`）只有读取权限。
+   - **立即加载并应用你的前端视觉设计规范 (UI UX Pro Max)**：提供 67 种现代设计风格选用与 161 套精细配色系统，确保界面高级质感、优秀排版字体、平滑微交互动画以及良好的设备响应式与无障碍。
+
 
 2. **工作流命令使用规则**：
    - 你的任务流状态全部通过运行 `.agentflow/tasks/` 下的单独 `.md` 任务卡片来追踪。

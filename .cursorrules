@@ -39,5 +39,6 @@ Before performing any task or modifying any code in this repository, you must:
 
 ## 6. Project Planning & Brainstorming (Grill-Me)
 - **6-Round Interview Rule**: When starting a new project, feature brainstorming, or architectural spec design, you MUST initiate at least 6 rounds of deep interviews using the `AskUserQuestion` tool (or through conversational prompts).
+- **Chinese Language Requirement for Questions (Crucial)**: All questions asked to the user, Grill-Me interview rounds, and the question text + multiple-choice options (`options` array) in the `ask_question` tool MUST be entirely written in Chinese. Under no circumstances should English questions or English answer options be provided.
 - **Core Interview Focus**: Avoid shallow questions. Deeply explore technology stack validation, interaction logic pathways, edge-case and error boundaries, and potential technical pitfalls or blind spots that the user might have overlooked.
 - **Spec Iteration**: Draft the SDD (System Design Document) specifications based on the interview results. Iterate and refine the design documents according to user feedback repeatedly until they are 100% satisfied before moving to the implementation phase.

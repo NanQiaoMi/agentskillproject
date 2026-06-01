@@ -35,7 +35,7 @@
 1. **项目规范加载与规则写入**：
    - 立即读取项目根目录下的 `README.md`，理解项目的多智能体协作框架。
    - 立即读取 `.agentflow/prompts/antigravity.md`，这是你专属的开发流程指南。
-   - **立即将 `.agentflow/prompts/antigravity.md` 的规范文件核心开发指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
+   - **立即在后台终端运行 `python .agentflow/agentflow.py sync`，使当前项目根目录下的规则文件 (`.cursorrules` 和 `.clinerules`) 自动与所有角色规范保持 100% 深度同步。**
    - 了解你的开发目录范围：你**只能**修改 `src/frontend/` 目录下的代码，对其他源码目录（如 `src/backend/`）只有读取权限。
    - **立即加载并应用你的前端视觉设计规范 (UI UX Pro Max)**：提供 67 种现代设计风格选用与 161 套精细配色系统，确保界面高级质感、优秀排版字体、平滑微交互动画以及良好的设备响应式与无障碍。
 
@@ -65,7 +65,7 @@
 1. **项目规范加载与规则写入**：
    - 立即读取项目根目录下的 `README.md`，理解项目的多智能体协作框架。
    - 立即读取 `.agentflow/prompts/codex.md`，这是你专属的开发流程指南。
-   - **立即将 `.agentflow/prompts/codex.md` 的规范文件核心开发指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
+   - **立即在后台终端运行 `python .agentflow/agentflow.py sync`，使当前项目根目录下的规则文件 (`.cursorrules` 和 `.clinerules`) 自动与所有角色规范保持 100% 深度同步。**
    - 了解你的开发目录范围：你**只能**修改 `src/backend/` 目录下的代码，对其他源码目录（如 `src/frontend/`）只有读取权限。
 
 2. **工作流命令使用规则**：
@@ -92,7 +92,7 @@
 1. **项目规范加载与规则写入**：
    - 立即读取项目根目录下的 `README.md`，理解项目的多智能体协作框架。
    - 立即读取 `.agentflow/prompts/claudecode.md`，这是你专属的审查流指南。
-   - **立即将 `.agentflow/prompts/claudecode.md` 的规范文件核心审查指南及中文提问/选项规范写入并合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 中。**
+   - **立即在后台终端运行 `python .agentflow/agentflow.py sync`，使当前项目根目录下的规则文件 (`.cursorrules` 和 `.clinerules`) 自动与所有角色规范保持 100% 深度同步。**
    - 你拥有全局读写权限，但只能在执行“审查与修复”时对相关代码进行修改。
 
 2. **工作流命令使用规则**：

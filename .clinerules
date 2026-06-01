@@ -62,7 +62,7 @@ Before performing any task or modifying any code in this repository, you must:
 ## 核心职责与开发范围
 1. **工作范围限制**：你只允许在 `src/frontend/` 目录下创建和修改代码文件。除非用户明确允许，否则不得修改任何 `src/backend/` 下的代码。
 2. **任务依赖**：前端功能编写前，请先通过查看任务详情或与后端 (`codex`) 确认后端 API 规范。
-3. **初始化规则同步**：在收到唤醒词进行初始化时，你必须主动读取 `.agentflow/prompts/antigravity.md`，并将你专属的开发规范和中文提问约束写入/合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 规则文件中。
+3. **初始化规则同步**：在收到唤醒词进行初始化时，你必须主动在终端运行 `python .agentflow/agentflow.py sync`，使当前项目根目录下的规则文件 (`.cursorrules` 和 `.clinerules`) 自动与所有角色规范保持 100% 深度同步。
 
 ## 协作工作流指令
 
@@ -143,7 +143,7 @@ python .agentflow/agentflow.py submit <TASK_ID> --files "src/frontend/index.html
 ## 核心职责与开发范围
 1. **工作范围限制**：你只允许在 `src/backend/` 目录下创建和修改代码文件。除非用户明确允许，否则不得修改任何 `src/frontend/` 下的代码。
 2. **数据与接口设计**：在编写后端逻辑时，应为前端编写清晰的接口契约（例如 API 接口文档、JSON 数据格式定义等），方便前端 (`antigravity`) 对接。
-3. **初始化规则同步**：在收到唤醒词进行初始化时，你必须主动读取 `.agentflow/prompts/codex.md`，并将你专属的开发规范和中文提问约束写入/合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 规则文件中。
+3. **初始化规则同步**：在收到唤醒词进行初始化时，你必须主动在终端运行 `python .agentflow/agentflow.py sync`，使当前项目根目录下的规则文件 (`.cursorrules` 和 `.clinerules`) 自动与所有角色规范保持 100% 深度同步。
 
 ## 协作工作流指令
 
@@ -212,7 +212,7 @@ python .agentflow/agentflow.py submit <TASK_ID> --files "src/backend/server.py,s
 
 # Claudecode 智能体工作流指南 (代码审查与修复)
 
-你在这个项目中的角色是 **代码审查与修复专家 (claudecode)**。你负责本地代码的 logic 走查、安全审计、职责边界验证、自动化测试运行以及在有微小缺陷时的直接代码修复。在收到唤醒词进行初始化时，你必须主动读取 `.agentflow/prompts/claudecode.md`，并将你专属的审查规范和中文提问约束写入/合并到项目根目录下的 `.cursorrules` 和 `.clinerules` 规则文件中。
+你在这个项目中的角色是 **代码审查与修复专家 (claudecode)**。你负责本地代码的 logic 走查、安全审计、职责边界验证、自动化测试运行以及在有微小缺陷时的直接代码修复。在收到唤醒词进行初始化时，你必须主动在终端运行 `python .agentflow/agentflow.py sync`，使当前项目根目录下的规则文件 (`.cursorrules` 和 `.clinerules`) 自动与所有角色规范保持 100% 深度同步。
 
 ## 协作工作流指令
 

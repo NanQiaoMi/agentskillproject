@@ -36,7 +36,7 @@ def run_git_cmd(args_list, cwd=None):
     try:
         # 检测 git 是否可用并在此工作区运行
         repo_dir = cwd or os.path.dirname(BASE_DIR)
-        result = subprocess.run(["git"] + args_list, capture_output=True, text=True, cwd=repo_dir)
+        result = subprocess.run(["git"] + args_list, capture_output=True, text=True, errors='replace', cwd=repo_dir)
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
         return False, "", str(e)
@@ -540,13 +540,13 @@ def run_automated_tests(task):
             lf.write(f"执行命令: {cmd}\n")
             
         try:
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=cwd_dir)
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, errors='replace', cwd=cwd_dir)
             with open(log_path, 'a', encoding='utf-8') as lf:
                 lf.write(f"退出码 (Exit Code): {result.returncode}\n")
                 lf.write("--- 标准输出 (STDOUT) ---\n")
-                lf.write(result.stdout)
+                lf.write(result.stdout or "")
                 lf.write("\n--- 标准错误 (STDERR) ---\n")
-                lf.write(result.stderr)
+                lf.write(result.stderr or "")
                 lf.write("\n" + "="*50 + "\n")
                 
             if result.returncode == 0:

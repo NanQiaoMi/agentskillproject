@@ -19,7 +19,8 @@ python .agentflow/agentflow.py show <TASK_ID>
 2. 检查 `affected_files` 中列出的改动文件路径，并阅读这些文件的实际内容与修改（你可以通过阅读对应文件或查看 `git diff` 来理解变更）。
 
 ### 第三步：运行自动化测试
-运行以下命令以执行为该模块配置的自动化测试：
+1. **测试前置配置核对**：在执行自动化测试前，你必须主动检查对应开发目录中实际的文件类型及技术栈（例如：存在 `Cargo.toml` 代表 Rust；存在 `package.json` 代表 Node.js/Frontend 等），并比对 `.agentflow/config.json` 中配置的 `lint_command`、`type_check_command` 和 `test_command` 指令。如果发现配置不匹配（如 Rust 项目却错误配了 Python 指令），你必须先直接修改 `.agentflow/config.json` 文件以匹配正确的构建与测试命令，然后再执行下一步。
+2. 运行以下命令以执行为该模块配置的自动化测试：
 ```bash
 python .agentflow/agentflow.py review <TASK_ID> --run-tests
 ```

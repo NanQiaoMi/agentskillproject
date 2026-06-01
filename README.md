@@ -1,6 +1,6 @@
 # 🪐 AgentFlow: 本地多智能体协作开发框架 (AI-Native Vibe Coding Engine)
 
-[![Framework Version](https://img.shields.io/badge/AgentFlow-v1.2.0-blueviolet?style=for-the-badge)](https://github.com/NanQiaoMi/agentskillproject)
+[![Framework Version](https://img.shields.io/badge/AgentFlow-v0.0.1-blueviolet?style=for-the-badge)](https://github.com/NanQiaoMi/agentskillproject)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](https://github.com/NanQiaoMi/agentskillproject)
 [![Environment](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge)](https://python.org)
 [![Git Integration](https://img.shields.io/badge/Git-Automated-orange?style=for-the-badge)](https://git-scm.com)
@@ -52,7 +52,7 @@ graph TD
 
 ## ⚡ 二、 框架新增核心高级特性
 
-为了支撑大规模项目开发并保持本地协作的极致丝滑，AgentFlow v1.2.0 重磅引入了以下生产级特性：
+为了支撑大规模项目开发并保持本地协作的极致丝滑，AgentFlow v0.0.1 重磅引入了以下生产级特性：
 
 ### 1. 本地 SQLite 缓存索引加速 (Local DB Caching)
 *   **痛点**：在大型项目中，当任务量增至数百个时，频繁 glob 扫描并解析 Markdown 头部 JSON 块会导致 `list` 命令出现 1-2 秒的肉眼延迟。

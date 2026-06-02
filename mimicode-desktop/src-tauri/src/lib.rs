@@ -807,6 +807,117 @@ fn read_dir_recursive(path: String) -> Result<String, String> {
     }
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct PathMeta {
+    created: String,
+    is_clean: bool,
+}
+
+#[tauri::command]
+fn get_path_metadata(path: String) -> Result<PathMeta, String> {
+    let path_obj = Path::new(&path);
+    if !path_obj.exists() {
+        return Err("Path does not exist".to_string());
+    }
+    let metadata = fs::metadata(path_obj).map_err(|e| e.to_string())?;
+    
+    let created_time = metadata.created()
+        .or_else(|_| metadata.modified())
+        .map(|system_time| {
+            let datetime: chrono::DateTime<chrono::Local> = system_time.into();
+            datetime.format("%Y-%m-%d %H:%M").to_string()
+        })
+        .unwrap_or_else(|_| "Unknown".to_string());
+        
+    let output = Command::new("git")
+        .args(&["status", "--porcelain"])
+        .current_dir(path_obj)
+        .output();
+        
+    let is_clean = match output {
+        Ok(out) => out.status.success() && out.stdout.is_empty(),
+        Err(_) => true,
+    };
+    
+    Ok(PathMeta {
+        created: created_time,
+        is_clean,
+    })
+}
+
+#[tauri::command]
+fn get_git_status(repo_path: String) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(&["status", "--porcelain"])
+        .current_dir(Path::new(&repo_path))
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+fn open_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        #[cfg(target_os = "macos")]
+        Command::new("open").arg(&path).spawn().map_err(|e| e.to_string())?;
+        #[cfg(target_os = "linux")]
+        Command::new("xdg-open").arg(&path).spawn().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn open_in_terminal(path: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        Command::new("cmd")
+            .args(&["/C", "start", "cmd", "/K", &format!("cd /d {}", path)])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        #[cfg(target_os = "macos")]
+        Command::new("open").args(&["-a", "Terminal", &path]).spawn().map_err(|e| e.to_string())?;
+        #[cfg(target_os = "linux")]
+        Command::new("x-terminal-emulator").args(&["--working-directory", &path]).spawn().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn read_file_content(path: String) -> Result<String, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Ok("FILE_NOT_FOUND".to_string());
+    }
+    std::fs::read_to_string(p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn write_file_content(path: String, content: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(p, content).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -829,7 +940,13 @@ pub fn run() {
             list_git_worktrees,
             read_dir_recursive,
             read_agent_configs,
-            check_agent_clis_running
+            check_agent_clis_running,
+            open_in_explorer,
+            open_in_terminal,
+            get_git_status,
+            get_path_metadata,
+            read_file_content,
+            write_file_content
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -954,6 +1071,34 @@ mod tests {
         let pid_path = log_dir.join(format!("{}.pid", task_id));
         fs::remove_file(pid_path).ok();
         fs::remove_file(log_file_path).ok();
+    }
+
+    #[test]
+    fn test_worktree_metadata_and_status() {
+        let project_path = "D:\\agentcode".to_string();
+        let res_meta = get_path_metadata(project_path.clone());
+        assert!(res_meta.is_ok(), "Failed to get path metadata: {:?}", res_meta);
+        let meta = res_meta.unwrap();
+        assert!(!meta.created.is_empty());
+        
+        let res_status = get_git_status(project_path.clone());
+        assert!(res_status.is_ok(), "Failed to get git status: {:?}", res_status);
+    }
+
+    #[test]
+    fn test_file_read_write_api() {
+        let test_path = "D:\\agentcode\\docs\\test_spec.md".to_string();
+        let test_content = "# Hello World\nThis is a test.".to_string();
+        
+        let res_write = write_file_content(test_path.clone(), test_content.clone());
+        assert!(res_write.is_ok());
+        
+        let res_read = read_file_content(test_path.clone());
+        assert!(res_read.is_ok());
+        assert_eq!(res_read.unwrap(), test_content);
+        
+        // Cleanup
+        std::fs::remove_file(test_path).ok();
     }
 }
 

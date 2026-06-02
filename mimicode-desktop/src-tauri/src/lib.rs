@@ -901,12 +901,14 @@ fn open_in_terminal(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn read_file_content(path: String) -> Result<String, String> {
+fn read_file_content(path: String) -> Result<Option<String>, String> {
     let p = std::path::Path::new(&path);
     if !p.exists() {
-        return Ok("FILE_NOT_FOUND".to_string());
+        return Ok(None);
     }
-    std::fs::read_to_string(p).map_err(|e| e.to_string())
+    std::fs::read_to_string(p)
+        .map(Some)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1087,15 +1089,17 @@ mod tests {
 
     #[test]
     fn test_file_read_write_api() {
-        let test_path = "D:\\agentcode\\docs\\test_spec.md".to_string();
+        let mut test_path = std::env::temp_dir();
+        test_path.push("test_spec.md");
+        let test_path_str = test_path.to_string_lossy().to_string();
         let test_content = "# Hello World\nThis is a test.".to_string();
         
-        let res_write = write_file_content(test_path.clone(), test_content.clone());
+        let res_write = write_file_content(test_path_str.clone(), test_content.clone());
         assert!(res_write.is_ok());
         
-        let res_read = read_file_content(test_path.clone());
+        let res_read = read_file_content(test_path_str.clone());
         assert!(res_read.is_ok());
-        assert_eq!(res_read.unwrap(), test_content);
+        assert_eq!(res_read.unwrap(), Some(test_content));
         
         // Cleanup
         std::fs::remove_file(test_path).ok();

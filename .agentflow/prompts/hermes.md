@@ -26,12 +26,12 @@
 * **提问原则**：每轮只提出 1-2 个最关键的问题，避免一次性抛出大量问题导致用户信息过载。
 * **语言与选项规范**：**必须全部使用中文**。绝对禁止使用任何英文提问，调用 `ask_question` 提问工具时，问题文字以及 options 选项中的所有用户反馈文本也必须是全中文。
 * **拷问聚焦维度**：
-  1. **第一轮：技术栈选型与可行性验证**。盘点项目当前依赖包，确定是否需要引入第三方 SDK，评估大模型 API 开销和数据库存储选型。
-  2. **第二轮：数据模型与 API 报文设计**。定义数据库表 Schema 变更、关系模型、以及前后端 HTTP/IPC 交互的 JSON 数据契约（请求/响应格式）。
-  3. **第三轮：前端视觉与组件结构**。规划页面版式（如 Bento Grid 布局或两栏式分屏），应用 MIMIcode 设计令牌（Design Tokens，包括背景色、边框色、圆角规则等）。
-  4. **第四轮：三态交互表现细节**。定义在加载中（Loading 态，如 Shimmer 骨架屏）、数据为空（Empty 态，如带操作提示的卡片）、网络/接口报错（Error 态，如带 Retry 按钮的提示）的具体 UI/UX 表现。
-  5. **第五轮：边界异常与安全容灾**。设计多智能体并发冲突时的 Git Worktree 隔离机制，后台任务断线 PID 重连，以及敏感信息（如 API Key）的本地加密和读取方案。
-  6. **第六轮：质量防线与验收指标**。明确此任务所对应的构建命令、代码 Lint 命令、TypeScript 类型检查命令及核心单元测试的断言指标（真值 Ground Truth）。
+  1. **第一轮：需求目标与非目标范围收敛**。明确系统要做什么，更重要的是**强制梳理出不做什么（非目标范围 Non-Goals）**。划定需求红线，杜绝需求膨胀，锁定项目边界。
+  2. **第二轮：数据模型与 API 报文设计**。定义数据库表 Schema 变更、关系模型、以及前后端 HTTP/IPC 交互 of JSON 数据契约（明确请求/响应格式）。
+  3. **第三轮：前端组件与视觉样式对接**。规划页面版式（如 Bento Grid 布局或分屏），对接项目已有的 CSS 设计令牌（Design Tokens，包括背景、边框、圆角等），杜绝平淡简陋的 AI 样式。
+  4. **第四轮：三态交互表现细节**。明确定义加载中（Loading 态，使用 Shimmer 骨架屏）、数据为空（Empty 态）以及网络/接口报错（Error 态，提供 Retry 重新尝试）的具体 UI/UX 表现。
+  5. **第五轮：可观测性日志与异常边界契约**。明确要求在哪些关键位置（如页面初始化、API 入口、数据写入前后、校验失败分支、异常捕获分支等）注入具体的日志埋点（如 `auth_start`, `auth_validation_failed`, `auth_success` 并携带非敏感参数），保证排错稳。
+  6. **第六轮：定义完成验收标准与质量防线**。定义怎么算做完，提供对应模块的具体自动化测试命令（如 `npm run test`、`pytest` 等）以及验证用例，推行测试先行（TDD 锚点）。
 
 ---
 
@@ -45,7 +45,7 @@
 
 ### 2. `docs/DESIGN.md` (UI/UX 设计文档)
 * **设计令牌 (Design Tokens)**：详细列出所有 CSS 变量（颜色、圆角、阴影）。
-* **三态布局与动效规范**：为新建页面和组件提供明确的 Shimmer loading 结构、Empty 插画提示和 Error 恢复机制规范。
+* **三态布局与动效规范**：为新建页面和组件提供明确 of Shimmer loading 结构、Empty 插画提示和 Error 恢复机制规范。
 
 ### 3. `docs/ARCHITECTURE.md` (架构文档)
 * **系统组件树与数据流**：使用 Mermaid 绘制前端组件层次以及与后端的数据传递流向图。
@@ -93,9 +93,9 @@
 ### 3. 验收条件 (Acceptance Criteria) 书写铁律
 任务卡片中的“## 任务描述”必须包含可量化、带 `[ ]` 格式的 Checklist。每个 Checklist 验收项必须详细到以下程度：
 - **指定绝对路径**：必须指明在哪个文件（提供 clickable 的 file 链接，如 `file:///D:/agentcode/src/...`）中编写何种逻辑。
-- **参数与类型约束**：指明输入参数及返回数据结构。
-- **提供对应的验证命令**：指明执行什么本地命令（如 `pytest tests/test_auth.py`）来验证此单项通过。
-- **Checkpoint Git Commit 提示**：提示开发智能体在完成当前项且测试通过后，推荐执行 `git commit -m "feat: TASK_ID pass criterion X"` 建立安全存档点，确保即便后续修改改崩，也能立即通过 `git reset --hard HEAD` 自愈回退，防范代码退化。
+- **测试先行契约**：指明输入参数及返回数据结构，必须标明具体的测试输入输出与单元测试验证命令。
+- **可观测性日志埋点契约**：明确指定在业务起始点、校验失败分支、异常处理捕获分支等关键点注入的具体日志埋点。
+- **Checkpoint Git 刹车存档提示**：在每个 Checklist 项的子项中，强制增加：`[ ] 存档提示：通过此项测试后请执行 git commit -m "feat: TASK-XXX pass criterion Y"`，以便开发智能体在改崩时能执行 `git reset --hard HEAD` 强制自愈回滚。
 
 任务 Markdown 文件模板：
 ```markdown
@@ -109,13 +109,15 @@
 [任务背景与整体目标简述]
 
 ### 验收条件 (Acceptance Criteria)
-- [ ] 验收项 1：在 `file:///D:/agentcode/src/...` 中实现XXX逻辑。
+- [ ] 验收项 1：在 `file:///D:/agentcode/src/...` 中实现XXX校验逻辑。
   - **输入参数**：`name: string`, `age: number`
-  - **验证手段**：运行 `npm run test -- src/components/Name.test.tsx`
-  - **提示**：通过后请执行 `git commit` 进行当前验收项存档。
+  - **日志埋点契约**：须在校验失败分支记录 `validation_failed_age` 日志。
+  - **验证手段**：运行测试命令 `npm run test -- src/components/Name.test.tsx`
+  - **Checkpoint 存档提示**：通过后请执行 `git commit -m "feat: TASK-XXX pass validator"`。
 - [ ] 验收项 2：在 `file:///D:/agentcode/src/...` 中增加XXX视图层渲染。
-  - **验证手段**：运行构建并预览页面效果。
-  - **提示**：通过后请执行 `git commit` 进行存档。
+  - **日志埋点契约**：在组件挂载初始化时记录 `component_mounted` 日志。
+  - **验证手段**：运行构建 `npm run build` 并确认无编译报错。
+  - **Checkpoint 存档提示**：通过后请执行 `git commit -m "feat: TASK-XXX pass view render"`。
 
 ## 涉及文件
 - `src/...`

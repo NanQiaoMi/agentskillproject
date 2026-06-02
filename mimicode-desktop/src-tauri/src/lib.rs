@@ -845,6 +845,110 @@ fn get_path_metadata(path: String) -> Result<PathMeta, String> {
     })
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct GitDiagnostics {
+    sync_status: String,
+    untracked_count: usize,
+    gitignore_rules: usize,
+    loose_objects: usize,
+    pack_files: usize,
+}
+
+#[tauri::command]
+fn get_git_diagnostics(repo_path: String) -> Result<GitDiagnostics, String> {
+    let repo_path_obj = Path::new(&repo_path);
+    if !repo_path_obj.exists() {
+        return Err("Repository path does not exist".to_string());
+    }
+
+    // 1. Get sync_status
+    let mut sync_status = "未知 (Unknown)".to_string();
+    if let Ok(out) = Command::new("git")
+        .args(&["status", "-sb"])
+        .current_dir(repo_path_obj)
+        .output()
+    {
+        if out.status.success() {
+            let stdout_str = String::from_utf8_lossy(&out.stdout);
+            let first_line = stdout_str.lines().next().unwrap_or("").trim();
+            if first_line.starts_with("##") {
+                let branch_info = &first_line[2..].trim();
+                if branch_info.contains("...") {
+                    if branch_info.contains("[ahead") && branch_info.contains("behind") {
+                        sync_status = "本地与远程分支冲突 (Diverged)".to_string();
+                    } else if branch_info.contains("[ahead") {
+                        sync_status = "本地有未推送的提交 (Ahead)".to_string();
+                    } else if branch_info.contains("behind") {
+                        sync_status = "落后于远程分支，请拉取 (Behind)".to_string();
+                    } else {
+                        sync_status = format!("与远程同步 ({})", branch_info.split("...").next().unwrap_or(""));
+                    }
+                } else {
+                    sync_status = format!("本地分支 ({})，无关联的远程分支", branch_info);
+                }
+            }
+        }
+    }
+
+    // 2. Count untracked files
+    let mut untracked_count = 0;
+    if let Ok(out) = Command::new("git")
+        .args(&["status", "--porcelain"])
+        .current_dir(repo_path_obj)
+        .output()
+    {
+        if out.status.success() {
+            let stdout_str = String::from_utf8_lossy(&out.stdout);
+            untracked_count = stdout_str.lines()
+                .filter(|line| line.starts_with("??"))
+                .count();
+        }
+    }
+
+    // 3. Count gitignore rules
+    let mut gitignore_rules = 0;
+    let gitignore_path = repo_path_obj.join(".gitignore");
+    if gitignore_path.exists() {
+        if let Ok(content) = fs::read_to_string(gitignore_path) {
+            gitignore_rules = content.lines()
+                .filter(|line| !line.trim().is_empty() && !line.trim().starts_with('#'))
+                .count();
+        }
+    }
+
+    // 4. Count loose objects and pack files
+    let mut loose_objects = 0;
+    let mut pack_files = 0;
+    if let Ok(out) = Command::new("git")
+        .args(&["count-objects", "-v"])
+        .current_dir(repo_path_obj)
+        .output()
+    {
+        if out.status.success() {
+            let stdout_str = String::from_utf8_lossy(&out.stdout);
+            for line in stdout_str.lines() {
+                if line.starts_with("count:") {
+                    if let Some(val_str) = line.split(':').nth(1) {
+                        loose_objects = val_str.trim().parse().unwrap_or(0);
+                    }
+                } else if line.starts_with("packs:") {
+                    if let Some(val_str) = line.split(':').nth(1) {
+                        pack_files = val_str.trim().parse().unwrap_or(0);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(GitDiagnostics {
+        sync_status,
+        untracked_count,
+        gitignore_rules,
+        loose_objects,
+        pack_files,
+    })
+}
+
 #[tauri::command]
 fn get_git_status(repo_path: String) -> Result<String, String> {
     let output = Command::new("git")
@@ -947,6 +1051,7 @@ pub fn run() {
             open_in_terminal,
             get_git_status,
             get_path_metadata,
+            get_git_diagnostics,
             read_file_content,
             write_file_content
         ])

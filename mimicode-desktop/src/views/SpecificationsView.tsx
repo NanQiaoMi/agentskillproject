@@ -10,6 +10,58 @@ const XIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export interface ArchNode {
+  id: string;
+  title: string;
+  subtitle: string;
+  type: 'frontend' | 'gateway' | 'backend' | 'database' | 'cache' | 'storage';
+}
+
+const defaultNodes: ArchNode[] = [
+  { id: 'frontend', title: 'Frontend', subtitle: 'React / TypeScript', type: 'frontend' },
+  { id: 'gateway', title: 'API Gateway', subtitle: 'Tauri Router', type: 'gateway' },
+  { id: 'backend', title: 'Backend', subtitle: 'Rust / Actix-web', type: 'backend' },
+  { id: 'database', title: 'PostgreSQL', subtitle: 'Relational DB', type: 'database' },
+  { id: 'cache', title: 'Redis', subtitle: 'Session & Cache', type: 'cache' },
+  { id: 'storage', title: 'MinIO', subtitle: 'Object Storage', type: 'storage' }
+];
+
+const parseArchNodes = (markdown: string): ArchNode[] => {
+  const match = markdown.match(/<!--\s*architecture_diagram\s+([\s\S]*?)\s*-->/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to parse architecture diagram nodes json", e);
+    }
+  }
+  return defaultNodes;
+};
+
+const saveNodesToDoc = (currentContent: string, currentNodes: ArchNode[]) => {
+  const jsonStr = JSON.stringify(currentNodes);
+  const commentStr = `<!-- architecture_diagram ${jsonStr} -->`;
+  
+  let updatedContent = currentContent;
+  const regex = /<!--\s*architecture_diagram[\s\S]*?-->/;
+  if (regex.test(updatedContent)) {
+    updatedContent = updatedContent.replace(regex, commentStr);
+  } else {
+    updatedContent = updatedContent.trim() + '\n\n' + commentStr;
+  }
+  return updatedContent;
+};
+
+const ArrowRight = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+
 const TEMPLATES: Record<string, string> = {
   PRD: `# PRD-001: 用户登录与权限系统
 
@@ -136,6 +188,21 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   const [editContent, setEditContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nodes, setNodes] = useState<ArchNode[]>(defaultNodes);
+  const [editingNode, setEditingNode] = useState<ArchNode | null>(null);
+
+  // Modal local states
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalSubtitle, setModalSubtitle] = useState('');
+  const [modalType, setModalType] = useState<'frontend' | 'gateway' | 'backend' | 'database' | 'cache' | 'storage'>('frontend');
+
+  useEffect(() => {
+    if (editingNode) {
+      setModalTitle(editingNode.title);
+      setModalSubtitle(editingNode.subtitle);
+      setModalType(editingNode.type);
+    }
+  }, [editingNode]);
   
   // File path mapping
   const getFilePath = (tab: string) => {
@@ -155,8 +222,15 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
         if (!active) return;
         if (res === null || res === 'FILE_NOT_FOUND') {
           setContent('');
+          if (activeTab === 'Architecture') {
+            setNodes(defaultNodes);
+          }
         } else {
           setContent(res);
+          if (activeTab === 'Architecture') {
+            const parsed = parseArchNodes(res);
+            setNodes(parsed);
+          }
         }
       } catch (err) {
         if (active) {
@@ -193,8 +267,14 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
     setError(null);
     try {
       const filePath = getFilePath(activeTab);
-      await invoke('write_file_content', { path: filePath, content: editContent });
-      setContent(editContent);
+      let contentToSave = editContent;
+      if (activeTab === 'Architecture') {
+        const parsed = parseArchNodes(editContent);
+        setNodes(parsed);
+        contentToSave = saveNodesToDoc(editContent, parsed);
+      }
+      await invoke('write_file_content', { path: filePath, content: contentToSave });
+      setContent(contentToSave);
       setIsEditing(false);
     } catch (err) {
       console.error("Failed to save specification content", err);
@@ -210,7 +290,56 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
     setError(null);
   };
 
+  const syncNodesToDisk = async (updatedNodes: ArchNode[]) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const filePath = getFilePath('Architecture');
+      const currentContent = content || TEMPLATES['Architecture'] || '';
+      const newContent = saveNodesToDoc(currentContent, updatedNodes);
+      await invoke('write_file_content', { path: filePath, content: newContent });
+      setContent(newContent);
+    } catch (err) {
+      console.error("Failed to sync diagram nodes to disk", err);
+      setError(`Failed to sync diagram: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddNode = () => {
+    const newId = `node_${Date.now()}`;
+    const newNode: ArchNode = {
+      id: newId,
+      title: 'New Node',
+      subtitle: 'Description',
+      type: 'frontend'
+    };
+    const updatedNodes = [...nodes, newNode];
+    setNodes(updatedNodes);
+    syncNodesToDisk(updatedNodes);
+  };
+
+  const handleConfirmEdit = (updatedNode: ArchNode) => {
+    const updatedNodes = nodes.map(n => n.id === updatedNode.id ? updatedNode : n);
+    setNodes(updatedNodes);
+    setEditingNode(null);
+    syncNodesToDisk(updatedNodes);
+  };
+
+  const handleDeleteNode = (nodeId: string) => {
+    const updatedNodes = nodes.filter(n => n.id !== nodeId);
+    setNodes(updatedNodes);
+    setEditingNode(null);
+    syncNodesToDisk(updatedNodes);
+  };
+
   const showSidebar = activeTab === 'Architecture';
+
+  const frontendNodes = nodes.filter(n => n.type === 'frontend');
+  const gatewayNodes = nodes.filter(n => n.type === 'gateway');
+  const backendNodes = nodes.filter(n => n.type === 'backend');
+  const resourceNodes = nodes.filter(n => ['database', 'cache', 'storage'].includes(n.type));
 
   return (
     <div className="view-container bg-main" style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -430,12 +559,181 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                   }}
                 >
                   <div dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }} />
+
+                  {activeTab === 'Architecture' && (
+                    <div className="arch-diagram-container" style={{ marginTop: '32px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', width: '100%' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <h3 style={{ fontSize: '15px', color: 'var(--color-text-main)', fontWeight: 600, margin: 0 }}>交互式系统架构拓扑 (Interactive Topology)</h3>
+                          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>点击节点卡片编辑属性，或在此处添加新节点</span>
+                        </div>
+                        <button className="btn btn-primary" onClick={handleAddNode} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                          <Icons.Plus style={{ width: '12px', height: '12px', marginRight: '6px' }} />
+                          Add Node
+                        </button>
+                      </div>
+
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto 1fr auto 1fr auto 1fr',
+                        alignItems: 'center',
+                        gap: '16px',
+                        width: '100%',
+                        padding: '24px',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-lg)'
+                      }}>
+                        {/* Column 1: Frontend */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Frontend</div>
+                          {frontendNodes.map(node => (
+                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
+                              <div className="arch-node-title">{node.title}</div>
+                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            </div>
+                          ))}
+                          {frontendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                        </div>
+
+                        <ArrowRight style={{ color: 'var(--color-text-muted)' }} />
+
+                        {/* Column 2: Gateway */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Gateway</div>
+                          {gatewayNodes.map(node => (
+                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
+                              <div className="arch-node-title">{node.title}</div>
+                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            </div>
+                          ))}
+                          {gatewayNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                        </div>
+
+                        <ArrowRight style={{ color: 'var(--color-text-muted)' }} />
+
+                        {/* Column 3: Backend */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Backend</div>
+                          {backendNodes.map(node => (
+                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
+                              <div className="arch-node-title">{node.title}</div>
+                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            </div>
+                          ))}
+                          {backendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                        </div>
+
+                        <ArrowRight style={{ color: 'var(--color-text-muted)' }} />
+
+                        {/* Column 4: Resources */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Resources</div>
+                          {resourceNodes.map(node => (
+                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
+                              <div className="arch-node-title">{node.title}</div>
+                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            </div>
+                          ))}
+                          {resourceNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Modal Editor */}
+      {editingNode && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ width: '400px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Node</h3>
+              <button 
+                onClick={() => setEditingNode(null)} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
+              >
+                <XIcon style={{ width: '16px', height: '16px' }} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Node Name (Title)</label>
+                <input 
+                  type="text" 
+                  className="intercept-input" 
+                  value={modalTitle} 
+                  onChange={(e) => setModalTitle(e.target.value)} 
+                  placeholder="e.g. Frontend, PostgreSQL"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Technology Details (Subtitle)</label>
+                <input 
+                  type="text" 
+                  className="intercept-input" 
+                  value={modalSubtitle} 
+                  onChange={(e) => setModalSubtitle(e.target.value)} 
+                  placeholder="e.g. React / TypeScript, Relational DB"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Node Type</label>
+                <select 
+                  className="form-select" 
+                  value={modalType} 
+                  onChange={(e) => setModalType(e.target.value as any)}
+                >
+                  <option value="frontend">Frontend</option>
+                  <option value="gateway">API Gateway</option>
+                  <option value="backend">Backend</option>
+                  <option value="database">Database</option>
+                  <option value="cache">Cache</option>
+                  <option value="storage">Storage</option>
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+              <button 
+                className="btn" 
+                onClick={() => handleDeleteNode(editingNode.id)}
+                style={{ 
+                  color: 'var(--color-destructive)', 
+                  borderColor: 'var(--color-destructive)',
+                  backgroundColor: 'transparent'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <Icons.Trash2 style={{ width: '14px', height: '14px', marginRight: '4px' }} />
+                Delete
+              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn" onClick={() => setEditingNode(null)}>Cancel</button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => handleConfirmEdit({
+                    id: editingNode.id,
+                    title: modalTitle,
+                    subtitle: modalSubtitle,
+                    type: modalType
+                  })}
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

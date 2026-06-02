@@ -63,25 +63,34 @@ const parseMarkdown = (md: string): string => {
   // Hide embedded json diagram
   let cleanMd = md.replace(/<!--\s*architecture_diagram[\s\S]*?-->/g, '');
   
+  // 1. Escape HTML tags right after stripping out architecture_diagram (XSS Prevention)
+  let text = cleanMd.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  
   // Normalize windows newlines
-  let text = cleanMd.replace(/\r\n/g, '\n');
+  text = text.replace(/\r\n/g, '\n');
 
-  // 1. Extract code blocks
+  // Prefix salt for code blocks (Regex Placeholder Salting)
+  const salt = Math.random().toString(36).substring(2, 9);
+  const getPlaceholder = (idx: number) => `__CODE_BLOCK_${salt}_${idx}__`;
+
+  // 2. Extract code blocks
   const codeBlocks: string[] = [];
   text = text.replace(/```(.*?)\n([\s\S]*?)```/g, (_, lang, codeContent) => {
-    const placeholder = `__CODE_BLOCK_PLACEHOLDER_${codeBlocks.length}__`;
-    // Escape HTML tags inside code blocks so they render literally
-    const escapedCode = codeContent
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    const placeholder = getPlaceholder(codeBlocks.length);
+    // Escape & that are not part of basic entities (like lt, gt, amp, quot, apos) to prevent double-escaping
+    const escapedCode = codeContent.replace(/&(?!lt;|gt;|amp;|quot;|apos;)/g, '&amp;');
     
     const html = `<pre style="background-color: var(--bg-terminal); color: #E2E8F0; padding: 16px; border-radius: var(--radius-md); overflow-x: auto; font-family: var(--font-mono); font-size: 13px; margin: 16px 0; border: 1px solid var(--color-border);"><code class="language-${lang || ''}">${escapedCode}</code></pre>`;
     codeBlocks.push(html);
     return `\n\n${placeholder}\n\n`;
   });
 
-  // 2. Perform other markdown conversions
+  // Preprocess input text to ensure headers and lists are parsed correctly as block elements (Heading/List Spacing Preprocessing)
+  text = text.replace(/^(#+ .*?)$/gm, '\n\n$1\n\n');
+  text = text.replace(/^(- .*?)$/gm, '\n\n$1\n\n');
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  // 3. Perform other markdown conversions
   let html = text
     .replace(/^# (.*?)$/gm, '<h1 class="markdown-h1" style="font-size: 20px; font-weight: 600; color: var(--color-text-main); margin-bottom: 16px; border-bottom: 1px solid var(--color-border); padding-bottom: 8px; margin-top: 16px;">$1</h1>')
     .replace(/^## (.*?)$/gm, '<h2 class="markdown-h2" style="font-size: 16px; font-weight: 600; color: var(--color-text-main); margin-top: 24px; margin-bottom: 12px;">$1</h2>')
@@ -91,21 +100,25 @@ const parseMarkdown = (md: string): string => {
     .replace(/^- (.*?)$/gm, '<li style="margin-left: 20px; margin-bottom: 6px; color: var(--color-text-secondary);">$1</li>')
     .replace(/\*\*(.*?)\*\*/g, '<strong style="color: var(--color-text-main); font-weight: 600;">$1</strong>')
     .replace(/`(.*?)`/g, '<code style="font-family: var(--font-mono); font-size: 12px; background-color: var(--bg-hover); padding: 2px 6px; border-radius: 4px; color: var(--color-primary-orange);">$1</code>')
-    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" style="color: var(--color-primary-orange); text-decoration: none;">$1</a>');
+    .replace(/\[(.*?)\]\((.*?)\)/g, (_, linkText, url) => {
+      // Sanitize link URLs to prevent javascript: XSS URIs
+      const sanitizedUrl = url.trim().toLowerCase().startsWith('javascript:') ? '#' : url;
+      return `<a href="${sanitizedUrl}" target="_blank" style="color: var(--color-primary-orange); text-decoration: none;">${linkText}</a>`;
+    });
 
-  // 3. Paragraph wrapping for loose lines
+  // 4. Paragraph wrapping for loose lines
   html = html.split('\n\n').map(p => {
     const trimmed = p.trim();
     if (!trimmed) return '';
-    if (trimmed.startsWith('<h') || trimmed.startsWith('<div') || trimmed.startsWith('<li') || trimmed.startsWith('<pre') || trimmed.startsWith('<ul') || trimmed.startsWith('__CODE_BLOCK_PLACEHOLDER_')) {
+    if (trimmed.startsWith('<h') || trimmed.startsWith('<div') || trimmed.startsWith('<li') || trimmed.startsWith('<pre') || trimmed.startsWith('<ul') || trimmed.startsWith(`__CODE_BLOCK_${salt}_`)) {
       return trimmed;
     }
     return `<p style="margin-bottom: 12px; line-height: 1.6; color: var(--color-text-secondary);">${trimmed}</p>`;
   }).join('\n');
 
-  // 4. Restore code blocks
+  // 5. Restore code blocks
   codeBlocks.forEach((codeHtml, idx) => {
-    const placeholder = `__CODE_BLOCK_PLACEHOLDER_${idx}__`;
+    const placeholder = getPlaceholder(idx);
     html = html.replace(placeholder, codeHtml);
   });
 
@@ -122,6 +135,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // File path mapping
   const getFilePath = (tab: string) => {
@@ -134,6 +148,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
 
     const loadContent = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const filePath = getFilePath(activeTab);
         const res: string | null = await invoke('read_file_content', { path: filePath });
@@ -146,6 +161,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
       } catch (err) {
         if (active) {
           console.error("Failed to load specifications", err);
+          setError(`Failed to load file: ${err instanceof Error ? err.message : String(err)}`);
         }
       } finally {
         if (active) {
@@ -164,6 +180,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
 
   const handleEditClick = () => {
     setIsEditing(true);
+    setError(null); // Clear errors when editing begins
     if (!content || content.trim() === '') {
       setEditContent(TEMPLATES[activeTab] || '');
     } else {
@@ -173,6 +190,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
 
   const handleSave = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const filePath = getFilePath(activeTab);
       await invoke('write_file_content', { path: filePath, content: editContent });
@@ -180,6 +198,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
       setIsEditing(false);
     } catch (err) {
       console.error("Failed to save specification content", err);
+      setError(`Failed to save file: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsLoading(false);
     }
@@ -188,6 +207,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   const handleCancel = () => {
     setEditContent('');
     setIsEditing(false);
+    setError(null);
   };
 
   const showSidebar = activeTab === 'Architecture';
@@ -214,6 +234,45 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
             borderRadius: '50%',
             animation: 'spin 1s linear infinite'
           }} />
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+          borderBottom: '1px solid rgba(239, 68, 68, 0.3)',
+          color: '#EF4444',
+          padding: '10px 16px',
+          fontSize: '13px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          width: '100%',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Icons.AlertTriangle style={{ width: '14px', height: '14px', flexShrink: 0 }} />
+            <span>{error}</span>
+          </div>
+          <button 
+            onClick={() => setError(null)} 
+            style={{ 
+              background: 'none', 
+              border: 'none', 
+              color: 'inherit', 
+              cursor: 'pointer', 
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: 0.8,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+          >
+            <XIcon style={{ width: '14px', height: '14px' }} />
+          </button>
         </div>
       )}
 
@@ -283,8 +342,8 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                   fontSize: '13px',
                   lineHeight: '1.6',
                   padding: '16px',
-                  backgroundColor: '#0F172A',
-                  color: '#F8FAFC',
+                  backgroundColor: 'var(--bg-panel)',
+                  color: 'var(--color-text-main)',
                   border: '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-md)',
                   resize: 'none',

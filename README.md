@@ -123,15 +123,15 @@ graph TD
 
 ## 🔄 四、 完整端到端协同开发流程图
 
-下面的图展示了**人类总管 (User)**、**三个专属 AI 会话窗口**以及**本地 Git 状态机**在整个软件开发生命周期中的端到端完整流转：
+下面的图展示了**人类总管 (User)**、**在同一个客户端软件中并行的三个专属 AI 会话窗口**以及**本地 Git 状态机**在整个软件开发生命周期中的端到端完整流转：
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as 👤 用户 (User)
     participant CLI as ⚙️ 控制器 (CLI)
-    participant Dev as 🚀 开发窗口
-    participant Review as 🛡️ 审查窗口
+    participant Dev as 🚀 开发会话 (antigravity/codex)
+    participant Review as 🛡️ 审查会话 (claudecode)
 
     %% 阶段一：头脑风暴与任务创建
     User->>Dev: 提出创意想法 (普通的中文沟通)
@@ -268,18 +268,18 @@ sequenceDiagram
 创建完成后，请在聊天框中列出所有生成的任务 ID、指派人、依赖关系以及它们各自的验收指标。
 ```
 
-### 阶段三：多会话窗口设置（Vibe Coding 专属布局）
+### 阶段三：多会话 Chat 窗口设置（Vibe Coding 专属布局）
 
-本框架之所以能发挥最大协同效应，依赖于您在 IDE 中建立**三个独立的 AI 聊天窗口**，并向其分别注入对应的“唤醒词”，从而锁定他们的智能体角色。
+本框架之所以能发挥最大协同效应，依赖于您在**同一个 AI 客户端软件（如 Cline 或 Cursor）中开启三个独立的 Chat 窗口/会话**，并向其分别注入对应的“唤醒词”，从而锁定他们的智能体角色。
 
-#### 1. 打开三个 AI 聊天窗口：
-*   **窗口 A**：重命名或标记为 `前端助手 (antigravity)`
-*   **窗口 B**：重命名或标记为 `后端助手 (codex)`
-*   **窗口 C**：重命名或标记为 `审查与发布 (claudecode)`
+#### 1. 开启三个 Chat 会话：
+*   **会话 A**：重命名或标记为 `前端助手 (antigravity)`
+*   **会话 B**：重命名或标记为 `后端助手 (codex)`
+*   **会话 C**：重命名或标记为 `审查与发布 (claudecode)`
 
-#### 2. 在每个窗口分别发送以下“唤醒词”完成初始化：
+#### 2. 在每个会话窗口分别发送以下“唤醒词”完成初始化：
 
-*   **窗口 A (antigravity) 唤醒输入**：
+*   **会话 A (antigravity) 唤醒输入**：
     ```markdown
     【项目角色初始化：前端开发智能体 (antigravity)】
 

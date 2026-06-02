@@ -117,7 +117,7 @@ AgentFlow 完美契合 **Brainstorm → Spec → Build** 这一最稳的 Vibe Co
 ### 阶段 1：Brainstorm (头脑风暴与 Grill-Me 深度访谈)
 当您有一个原始功能想法时，**不要急于写代码或创建任务**：
 1. **获取提示词**：您可以在终端运行 `python .agentflow/agentflow.py brainstorm` 获取最新的 Grill-Me 启动提示词，或者直接从下方复制。
-2. **启动深度访谈**：打开与 `codex` (后端助手) 或 `antigravity` (前端助手) 的会话窗口，完整复制并发送以下提示词以启动脑暴流程：
+2. **启动深度访谈**：在 AI 客户端中，打开与 `codex` (会话 B) 或 `antigravity` (会话 A) 的 Chat 窗口，完整复制并发送以下提示词以启动脑暴流程：
 
 ```markdown
 【Vibe Coding 脑暴阶段启动：Grill-Me 深度访谈】
@@ -149,10 +149,10 @@ AgentFlow 完美契合 **Brainstorm → Spec → Build** 这一最稳的 Vibe Co
 ### 阶段 3：Build (小步开发，跑通存档)
 这是开发阶段。**切忌将整份 Spec (任务描述) 丢给 AI 直接写完**。应指挥智能体执行以下节奏：
 1. **启动并锁定任务**：
-   在 `codex` 窗口输入：“*启动任务 TASK-003，拉出独立分支。*”
+   在扮演 `codex` 的 Chat B 窗口输入：“*启动任务 TASK-003，拉出独立分支。*”
    - AI 自动执行 `python .agentflow/agentflow.py start TASK-003`，切入特征分支 `feature/task-003`。
 2. **一次只做一个验收项**：
-   在 `codex` 窗口指挥：“*我们先实现 TASK-003 中的 验收项 1（邮箱不合法检查与模糊响应），其他功能先不管。*”
+   在扮演 `codex` 的 Chat B 窗口指挥：“*我们先实现 TASK-003 中的 验收项 1（邮箱不合法检查与模糊响应），其他功能先不管。*”
    - AI 仅编写这部分逻辑。
 3. **跑通并存档**：
    - 运行本地测试（或让 AI 编写临时验证脚本并执行）。
@@ -166,7 +166,7 @@ AgentFlow 完美契合 **Brainstorm → Spec → Build** 这一最稳的 Vibe Co
    python .agentflow/agentflow.py submit TASK-003 --files "src/backend/forgot_password.py" --operator codex
    ```
 6. **审查与合并**：
-   在 `claudecode` 窗口跑测并审批。通过后，任务归档为 `done`，`feature/task-003` 自动安全合并到 `master` 且被删除。
+   在扮演 `claudecode` 的 Chat C 窗口跑测并审批。通过后，任务归档为 `done`，`feature/task-003` 自动安全合并到 `master` 且被删除。
 7. **解锁前端任务**：
    此时，前端 `antigravity` 检测到前置依赖已 `done`，可以启动并以同样的“一次开发一个验收项”的节奏，完成 `TASK-004` 的前端页面编码。
 
@@ -180,5 +180,5 @@ AgentFlow 完美契合 **Brainstorm → Spec → Build** 这一最稳的 Vibe Co
 
 ### 4.2 本地运行环境损坏（Env Fail）
 - **现象**：测试跑不通是因为本地缺少依赖库或本地端口冲突。
-- **应对心法**：任务负责人会自动变成 `user`。您只需在自己的电脑终端中手动安装对应依赖库或解决环境问题，完成后在 `claudecode` 窗口输入“*环境问题已解决，重新跑测*”即可。
+- **应对心法**：任务负责人会自动变成 `user`。您只需在自己的电脑终端中手动安装对应依赖库或解决环境问题，完成后在扮演 `claudecode` 的 Chat C 窗口输入“*环境问题已解决，重新跑测*”即可。
 

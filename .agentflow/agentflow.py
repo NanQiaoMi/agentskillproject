@@ -678,7 +678,6 @@ def cmd_review(args):
 def sync_rules():
     print("[*] 正在同步并更新 .cursorrules 和 .clinerules ...")
     
-    # 1. 基础公共规则模版
     base_template = """# AgentFlow Workspace Rule ({rule_type} Rules)
 
 You are in a workspace configured with **AgentFlow**, a local multi-agent collaboration framework. You must strictly adhere to the following rules depending on your active role.
@@ -687,10 +686,18 @@ You are in a workspace configured with **AgentFlow**, a local multi-agent collab
 - **Frontend Agent (antigravity)**: Write access limited to `src/frontend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/antigravity.md`.
 - **Backend Agent (codex)**: Write access limited to `src/backend/`. Read-only elsewhere. Follow rules in `.agentflow/prompts/codex.md`.
 - **Reviewer & Fixer Agent (claudecode)**: Global read-write access. Execute tests. Follow rules in `.agentflow/prompts/claudecode.md`.
+- **Planner Agent (hermes)**: Total system planning, Grill-Me SOP, SDD specifications, and atomic task breakdown. Follow rules in `.agentflow/prompts/hermes.md`.
+- **Refactorer Agent (opencode)**: Global codebase search, dead-code removal, batch refactoring, optimization. Follow rules in `.agentflow/prompts/opencode.md`.
 
 ---
 
-## 2. Mandatory SOP Workflow
+## 2. Single Source of Truth (单一真源的 Agent 规则文件)
+- This generated rule file (`.cursorrules` or `.clinerules`) serves as the Single Source of Truth (SSOT) for workspace guidelines.
+- Do NOT edit rules in root `.cursorrules` or `.clinerules` directly. Any rule updates must be made in `.agentflow/prompts/<agent_name>.md` or inside `.agentflow/agentflow.py` templates, and synced via `python .agentflow/agentflow.py sync`.
+
+---
+
+## 3. Mandatory SOP Workflow
 Before performing any task or modifying any code in this repository, you must:
 1. Run `python .agentflow/agentflow.py list` to check tasks assigned to you.
 2. Read the specific task description using `python .agentflow/agentflow.py show <TASK_ID>` (or read `.agentflow/tasks/<TASK_ID>.md`).
@@ -699,37 +706,56 @@ Before performing any task or modifying any code in this repository, you must:
 
 ---
 
-## 3. General Guidelines
-- Do NOT modify the task metadata (the JSON block inside HTML comments at the top of task files) manually. Always use the `agentflow.py` CLI script for state transitions.
-- Maintain strict directory boundaries to prevent code conflicts.
-- Refer to the project README.md for full architecture specifications.
+## 4. Vibe Coding 五大痛点与实战解法
+
+### 痛点一：AI 改代码太快，炸了不知道怎么回退 -> 解法：Git 刹车系统（小步提交、分支隔离）
+- **隔离舱原则**：执行任务前必须在独立隔离特征分支上工作（如 `feature/task-xxx`）。写崩溃时，直接抛弃特征分支。
+- **小步提交点**：严禁一口气修改大量文件再打包测试。必须根据任务卡片的 **验收项 (Acceptance Criteria)**，一次只改动一个项，测试通过后立即本地提交存档（`git commit -m "feat: TASK_ID pass criterion X"`），建立“安全存档点”；一旦后续改崩，立刻 `git reset --hard HEAD` 自愈回滚。
+
+### 痛点二：AI 代码风格不一致 -> 解法：单一真源设计令牌
+- 严格遵循 `docs/DESIGN.md` 与 `docs/ARCHITECTURE.md` 的规范，包含颜色/间距等 CSS 设计令牌、Python snake_case 与 TypeScript camelCase 命名分层。
+
+### 痛点三：AI 变动不可追溯，出问题无法复盘 -> 解法：`agents_chat` 可审计协作
+- 任何重大的核心功能或重构变动，除代码外必须在 `agents_chat/` 目录下创建以 ISO 时间戳命名的 Markdown 审计日志（如 `agents_chat/2026/06/03/2026-06-03T00-50-00Z-add-auth.md`），描述背景、具体变动文件、核心决策、验收结果和后续 TODO。
+
+### 痛点四：AI 代码能跑但不能运 -> 解法：人补深度，AI 给速度
+- AI 负责快速输出代码和竖切 MVP。人类开发者必须强制落实以下高可靠性高安全设计：
+  - **可靠性**：幂等键校验、重试退避机制、死信队列。
+  - **安全性**：敏感配置完全加密（防泄露）、基于角色的权限控制 (RBAC)、敏感操作审计日志。
+  - **可观测性**：结构化 JSON 格式日志、链路追踪、告警机制。
+
+### 痛点五：运行环境不一致 -> 解法：Docker Compose 一键自愈
+- 所有核心服务必须容器化，提供统一版本的 Docker Compose 配置，并在容器启动时自动等待依赖数据库/缓存就绪，自动跑完迁移命令实现启动即自愈。
 
 ---
 
-## 4. Vibe Coding Build Discipline (Crucial)
-- Never attempt to implement the entire task spec at once.
-- Look for the "Acceptance Criteria" (验收项) checklist inside `.agentflow/tasks/<TASK_ID>.md`.
-- Implement and test only ONE acceptance criterion at a time.
-- Once verified, output a message recommending the user to commit or execute a git commit (e.g. `git commit -m "feat: TASK_ID pass criterion X"`) as a checkpoint before starting the next item.
-- If changes break the code and cannot be easily fixed, immediately reset to the last checkpoint (e.g. `git reset --hard HEAD`) to avoid messy source code degeneration.
+## 5. Vibe Coding 九阳神功
 
-## 5. Context Management & Security
+| 字诀 | 要点说明 |
+|:---:|:---|
+| **夯** | Git 刹车系统（小步提交、分支隔离、回退自愈） |
+| **抄** | 抄写本项目中现有的优秀架构骨架和代码规范，避免重复造轮子 |
+| **学** | 理智组合技术栈，做出合理的底层架构与分层设计裁决 |
+| **喂** | 把设计 specs 文档结构化，编写完备的 PRD/DESIGN/ARCHITECTURE 作为 AI 的上下文真源 |
+| **规** | 让 AI 出开发计划，并拆解为可操作的 `[ ]` tasks 任务卡片 |
+| **验** | 多模型交叉验证关键代码，减少单一模型的幻觉和盲区 |
+| **测** | 落实 Lint、类型检查、单元测试自动化，交付结果必须有运行日志证据 |
+| **扩** | 扩展系统功能边界时，必须同步提供可复现的验证手段与用例 |
+| **收** | 监控运行指标，及时处理崩溃日志，上线复盘闭环 |
+
+---
+
+## 6. Context Management & Security
 - **Context Rot Prevention**: When a task is completed and merged, prompt the user to start a new chat session to clear context history. This avoids performance decay due to excessively long context windows.
-- **Learn from Examples**: Before implementing new functionality, search the workspace for existing, similar modules. Follow the existing coding style, test frameworks, and error logging conventions.
 - **Security Constraint**: Never write plain-text credentials (passwords, API keys) into files. Always read them from environment variables or a `.env` file. Refer to `src/backend/` configuration files for reference.
 
-## 6. Project Planning & Brainstorming (Grill-Me)
+---
+
+## 7. Project Planning & Brainstorming (Grill-Me)
 - **6-Round Interview Rule**: When starting a new project, feature brainstorming, or architectural spec design, you MUST initiate at least 6 rounds of deep interviews using the `AskUserQuestion` tool (or through conversational prompts).
-- **Superpowers Application**: During the planning/brainstorming process, you must utilize the **Superpowers** capability (20+ combinable developer skills) to ensure the system design is structurally comprehensive and addresses edge-case complexities.
 - **Chinese Language Requirement for Questions (Crucial)**: All questions asked to the user, Grill-Me interview rounds, and the question text + multiple-choice options (`options` array) in the `ask_question` tool MUST be entirely written in Chinese. Under no circumstances should English questions or English answer options be provided.
 - **Core Interview Focus**: Avoid shallow questions. Deeply explore technology stack validation, interaction logic pathways, edge-case and error boundaries, and potential technical pitfalls or blind spots that the user might have overlooked.
 - **Spec Iteration**: Draft the SDD (System Design Document) specifications based on the interview results. Iterate and refine the design documents according to user feedback repeatedly until they are 100% satisfied before moving to the implementation phase.
-
-## 7. Frontend Design System (UI UX Pro Max)
-- **Design Principles**: When acting as `antigravity` to write or refactor frontend UI code, you must strictly implement the `ui-ux-pro-max` guidelines:
-  - **67 Modern Styles**: Choose standard modern layout styles (e.g. Bento Grid, Minimalism, Glassmorphism, Brutalism, Neumorphism) and keep them consistent.
-  - **161 Color Palettes**: Do not use raw colors (pure red, green, blue). Use sophisticated HSL/RGB gradients or tailored palettes (e.g., space gray, light gold, neon cyan, cream white).
-  - **Typography & Interaction**: Avoid default browser fonts; use Google Fonts (Inter, Outfit, Roboto) with hierarchical weights. All buttons/links must have smooth hover transitions and micro-animations.
 """
     
     # 2. 读取角色提示词文档

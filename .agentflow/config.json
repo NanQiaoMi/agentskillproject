@@ -17,6 +17,14 @@
     "claudecode": {
       "role": "reviewer",
       "scope": "all"
+    },
+    "hermes": {
+      "role": "planner",
+      "scope": "all"
+    },
+    "opencode": {
+      "role": "refactorer",
+      "scope": "all"
     }
   },
   "frontend": {

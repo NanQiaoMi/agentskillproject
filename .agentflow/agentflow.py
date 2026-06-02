@@ -14,7 +14,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TASKS_DIR = os.path.join(BASE_DIR, 'tasks')
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
-DB_FILE = os.path.join(BASE_DIR, 'tasks.db')
+DB_FILE = os.environ.get('AGENTFLOW_DB_PATH') or os.path.join(BASE_DIR, 'tasks.db')
+
 
 # 确保文件夹存在
 os.makedirs(TASKS_DIR, exist_ok=True)
@@ -736,7 +737,9 @@ Before performing any task or modifying any code in this repository, you must:
     roles = {
         "antigravity": "antigravity.md",
         "codex": "codex.md",
-        "claudecode": "claudecode.md"
+        "claudecode": "claudecode.md",
+        "hermes": "hermes.md",
+        "opencode": "opencode.md"
     }
     
     role_sections = ""
@@ -785,6 +788,10 @@ def cmd_brainstorm(args):
     print("现在，请向我提第一轮问题。")
     print("---------------------------------- 复制上方提示词 ----------------------------------\n")
 
+def cmd_json_list(args):
+    tasks = get_all_tasks()
+    print(json.dumps(tasks, ensure_ascii=False, indent=2))
+
 def main():
     # 解决 Windows 终端下 UTF-8 字符输出乱码或报错的问题
     if sys.platform.startswith('win'):
@@ -802,11 +809,14 @@ def main():
     # brainstorm
     p_brainstorm = subparsers.add_parser("brainstorm", help="获取头脑风暴与 Grill-Me 深度访谈启动提示词")
     
+    # json-list
+    p_json_list = subparsers.add_parser("json-list", help="以 JSON 格式输出所有任务列表")
+    
     # add
     p_add = subparsers.add_parser("add", help="创建新任务")
     p_add.add_argument("--title", required=True, help="任务标题")
     p_add.add_argument("--desc", default="", help="任务详细描述")
-    p_add.add_argument("--assignee", required=True, choices=["antigravity", "codex", "user"], help="任务负责人")
+    p_add.add_argument("--assignee", required=True, choices=["antigravity", "codex", "user", "hermes", "opencode", "claudecode"], help="任务负责人")
     p_add.add_argument("--deps", default="", help="前置依赖的任务ID列表，用逗号分隔，如 TASK-001,TASK-002")
     
     # list
@@ -857,6 +867,8 @@ def main():
         cmd_sync(args)
     elif args.command == "brainstorm":
         cmd_brainstorm(args)
+    elif args.command == "json-list":
+        cmd_json_list(args)
     else:
         parser.print_help()
 

@@ -1,8 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
 
-export const SpecificationsView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('Architecture');
+interface SpecificationsViewProps {
+  projectPath: string;
+}
+
+export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectPath }) => {
+  const [activeTab, setActiveTab] = useState('Architecture'); // PRD, Design, Architecture, API Contracts
+  const [content, setContent] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // File path mapping
+  const getFilePath = (tab: string) => {
+    const filename = tab === 'API Contracts' ? 'API_CONTRACTS.md' : `${tab.toUpperCase()}.md`;
+    return `${projectPath}\\docs\\${filename}`;
+  };
+
+  const loadContent = async (tab: string) => {
+    setIsLoading(true);
+    try {
+      const filePath = getFilePath(tab);
+      const res: string | null = await invoke('read_file_content', { path: filePath });
+      if (res === null) {
+        setContent('');
+      } else {
+        setContent(res);
+      }
+    } catch (err) {
+      console.error("Failed to load specifications", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadContent(activeTab);
+    setIsEditing(false);
+  }, [activeTab, projectPath]);
+
+  // Reference variables to bypass unused compiler warnings until fully utilized in subsequent tasks
+  if (false as boolean) {
+    console.log(content, isEditing, editContent, setEditContent, isLoading);
+  }
 
   return (
     <div className="view-container bg-main">

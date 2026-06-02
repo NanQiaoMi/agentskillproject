@@ -76,6 +76,7 @@ function App() {
       }
     } catch (err) {
       console.error(err);
+      alert("MIMIcode 无法加载任务列表！\n\n具体错误信息:\n" + String(err));
       setTasks([]);
     }
   }
@@ -121,7 +122,7 @@ function App() {
     } else if (activeNav === 'Worktrees') {
       return <WorktreesView projectPath={projectPath} />;
     } else if (activeNav === 'Specifications') {
-      return <SpecificationsView />;
+      return <SpecificationsView projectPath={projectPath} />;
     } else if (activeNav === 'Diagnostics') {
       return <DiagnosticsView envStatus={envStatus} />;
     } else if (activeNav === 'Settings') {

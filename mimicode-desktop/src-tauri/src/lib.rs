@@ -484,12 +484,12 @@ fn read_task_log(project_path: String, task_id: String) -> Result<String, String
 }
 
 fn inject_prompt_to_clipboard(project_path: &str, cli_name: &str) {
-    let (role_filename, instruction) = match cli_name {
-        "claude" => ("claudecode", "请读取并遵循项目中的 .agentflow/prompts/claudecode.md 代码审查与修复工作流规程开始工作。"),
-        "gemini" => ("antigravity", "请读取并遵循项目中的 .agentflow/prompts/antigravity.md 前端开发专家工作流规程开始工作。"),
-        "codex" => ("codex", "请读取并遵循项目中的 .agentflow/prompts/codex.md 后端开发专家工作流规程开始工作。"),
-        "opencode" => ("opencode", "请读取并遵循项目中的 .agentflow/prompts/opencode.md 全局重构专家工作流规程开始工作。"),
-        "hermes_agent" | "hermes_dashboard" => ("hermes", "请读取并遵循项目中的 .agentflow/prompts/hermes.md 规划师工作流规程开始工作。"),
+    let role_filename = match cli_name {
+        "claude" => "claudecode",
+        "gemini" => "antigravity",
+        "codex" => "codex",
+        "opencode" => "opencode",
+        "hermes_agent" | "hermes_dashboard" => "hermes",
         _ => return,
     };
     let prompt_path = std::path::Path::new(project_path)
@@ -502,14 +502,13 @@ fn inject_prompt_to_clipboard(project_path: &str, cli_name: &str) {
             .args(&[
                 "-Command",
                 &format!(
-                    "Set-Clipboard -Value '{}'",
-                    instruction
+                    "Get-Content -Raw -Encoding UTF8 '{}' | Set-Clipboard",
+                    prompt_path.to_string_lossy()
                 ),
             ])
             .output();
     }
 }
-
 
 #[tauri::command]
 fn launch_external_cli(cli_name: String, project_path: String) -> Result<String, String> {

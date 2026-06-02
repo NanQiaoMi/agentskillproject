@@ -146,7 +146,7 @@ function App() {
             <a href="#" className={`nav-item ${activeNav === 'Chat' ? 'active' : ''}`} onClick={() => { setActiveNav('Chat'); setViewState('list'); }}>
               <div className="nav-item-left"><Icons.MessageSquare className="nav-icon" /><span>Chat</span></div>
             </a>
-            <a href="#" className={`nav-item ${activeNav === 'Tasks' ? 'active' : ''}`} onClick={() => { setActiveNav('Tasks'); setViewState('list'); }}>
+            <a href="#" className={`nav-item ${activeNav === 'Tasks' ? 'active' : ''}`} onClick={() => { setActiveNav('Tasks'); setViewState('list'); fetchTasks(); }}>
               <div className="nav-item-left"><Icons.CheckSquare className="nav-icon" /><span>Tasks</span></div>
             </a>
             <a href="#" className={`nav-item ${activeNav === 'Agents' ? 'active' : ''}`} onClick={() => { setActiveNav('Agents'); setViewState('list'); }}>

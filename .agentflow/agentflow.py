@@ -817,6 +817,56 @@ def cmd_json_list(args):
     tasks = get_all_tasks()
     print(json.dumps(tasks, ensure_ascii=False, indent=2))
 
+def cmd_delete(args):
+    task_id = args.id.upper()
+    path = get_task_path(task_id)
+    if not os.path.exists(path):
+        print(f"[-] 错误: 任务 {task_id} 不存在。")
+        sys.exit(1)
+    try:
+        os.remove(path)
+        print(f"[+] 任务 {task_id} 文件已成功删除。")
+        sync_db()
+    except Exception as e:
+        print(f"[-] 删除任务 {task_id} 失败: {e}")
+        sys.exit(1)
+
+def cmd_edit(args):
+    task_id = args.id.upper()
+    task = load_task(task_id)
+    if not task:
+        print(f"[-] 错误: 任务 {task_id} 不存在。")
+        sys.exit(1)
+    
+    updated = False
+    if args.title is not None:
+        task["title"] = args.title
+        updated = True
+    if args.desc is not None:
+        task["description"] = args.desc
+        updated = True
+    if args.assignee is not None:
+        task["assignee"] = args.assignee
+        updated = True
+    if args.status is not None:
+        if args.status != task["status"]:
+            task["history"].append({
+                "time": datetime.now().isoformat(),
+                "from": task["status"],
+                "to": args.status,
+                "operator": "user",
+                "message": "修改任务状态"
+            })
+            task["status"] = args.status
+            updated = True
+            
+    if updated:
+        save_task(task)
+        print(f"[+] 任务 {task_id} 修改成功。")
+        sync_db()
+    else:
+        print(f"[*] 任务 {task_id} 未做任何修改。")
+
 def main():
     # 解决 Windows 终端下 UTF-8 字符输出乱码或报错的问题
     if sys.platform.startswith('win'):
@@ -874,6 +924,18 @@ def main():
     p_review.add_argument("--comment", default="", help="审查意见/打回原因/修复详细清单")
     p_review.add_argument("--operator", help="操作人名字")
     
+    # delete
+    p_delete = subparsers.add_parser("delete", help="删除任务")
+    p_delete.add_argument("id", help="任务 ID (如 TASK-001)")
+
+    # edit
+    p_edit = subparsers.add_parser("edit", help="修改任务属性")
+    p_edit.add_argument("id", help="任务 ID")
+    p_edit.add_argument("--title", help="新的任务标题")
+    p_edit.add_argument("--desc", help="新的任务描述")
+    p_edit.add_argument("--assignee", choices=["antigravity", "codex", "user", "hermes", "opencode", "claudecode"], help="新的任务负责人")
+    p_edit.add_argument("--status", choices=list(STATUS_MAP.keys()), help="新的任务状态")
+    
     args = parser.parse_args()
     
     if args.command == "add":
@@ -894,6 +956,10 @@ def main():
         cmd_brainstorm(args)
     elif args.command == "json-list":
         cmd_json_list(args)
+    elif args.command == "delete":
+        cmd_delete(args)
+    elif args.command == "edit":
+        cmd_edit(args)
     else:
         parser.print_help()
 

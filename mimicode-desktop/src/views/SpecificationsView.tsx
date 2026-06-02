@@ -26,7 +26,7 @@ const defaultNodes: ArchNode[] = [
   { id: 'storage', title: 'MinIO', subtitle: 'Object Storage', type: 'storage' }
 ];
 
-const parseArchNodes = (markdown: string): ArchNode[] => {
+const parseArchNodes = (markdown: string): ArchNode[] | null => {
   const match = markdown.match(/<!--\s*architecture_diagram\s+([\s\S]*?)\s*-->/);
   if (match) {
     try {
@@ -34,8 +34,10 @@ const parseArchNodes = (markdown: string): ArchNode[] => {
       if (Array.isArray(parsed)) {
         return parsed;
       }
+      return null;
     } catch (e) {
       console.error("Failed to parse architecture diagram nodes json", e);
+      return null;
     }
   }
   return defaultNodes;
@@ -153,8 +155,10 @@ const parseMarkdown = (md: string): string => {
     .replace(/\*\*(.*?)\*\*/g, '<strong style="color: var(--color-text-main); font-weight: 600;">$1</strong>')
     .replace(/`(.*?)`/g, '<code style="font-family: var(--font-mono); font-size: 12px; background-color: var(--bg-hover); padding: 2px 6px; border-radius: 4px; color: var(--color-primary-orange);">$1</code>')
     .replace(/\[(.*?)\]\((.*?)\)/g, (_, linkText, url) => {
+      // Escape quotes to prevent HTML injection and XSS
+      const escapedUrl = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
       // Sanitize link URLs to prevent javascript: XSS URIs
-      const sanitizedUrl = url.trim().toLowerCase().startsWith('javascript:') ? '#' : url;
+      const sanitizedUrl = escapedUrl.trim().toLowerCase().startsWith('javascript:') ? '#' : escapedUrl;
       return `<a href="${sanitizedUrl}" target="_blank" style="color: var(--color-primary-orange); text-decoration: none;">${linkText}</a>`;
     });
 
@@ -190,6 +194,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   const [error, setError] = useState<string | null>(null);
   const [nodes, setNodes] = useState<ArchNode[]>(defaultNodes);
   const [editingNode, setEditingNode] = useState<ArchNode | null>(null);
+  const [hasJsonError, setHasJsonError] = useState(false);
 
   // Modal local states
   const [modalTitle, setModalTitle] = useState('');
@@ -202,6 +207,19 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
       setModalSubtitle(editingNode.subtitle);
       setModalType(editingNode.type);
     }
+  }, [editingNode]);
+
+  useEffect(() => {
+    if (!editingNode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setEditingNode(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [editingNode]);
   
   // File path mapping
@@ -220,16 +238,22 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
         const filePath = getFilePath(activeTab);
         const res: string | null = await invoke('read_file_content', { path: filePath });
         if (!active) return;
-        if (res === null || res === 'FILE_NOT_FOUND') {
+        if (res === null) {
           setContent('');
           if (activeTab === 'Architecture') {
             setNodes(defaultNodes);
+            setHasJsonError(false);
           }
         } else {
           setContent(res);
           if (activeTab === 'Architecture') {
             const parsed = parseArchNodes(res);
-            setNodes(parsed);
+            if (parsed === null) {
+              setHasJsonError(true);
+            } else {
+              setNodes(parsed);
+              setHasJsonError(false);
+            }
           }
         }
       } catch (err) {
@@ -270,8 +294,13 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
       let contentToSave = editContent;
       if (activeTab === 'Architecture') {
         const parsed = parseArchNodes(editContent);
-        setNodes(parsed);
-        contentToSave = saveNodesToDoc(editContent, parsed);
+        if (parsed === null) {
+          setHasJsonError(true);
+        } else {
+          setNodes(parsed);
+          setHasJsonError(false);
+          contentToSave = saveNodesToDoc(editContent, parsed);
+        }
       }
       await invoke('write_file_content', { path: filePath, content: contentToSave });
       setContent(contentToSave);
@@ -285,6 +314,12 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   };
 
   const handleCancel = () => {
+    if (editContent !== content) {
+      const confirmCancel = window.confirm('您有未保存的修改，确定要放弃吗？');
+      if (!confirmCancel) {
+        return;
+      }
+    }
     setEditContent('');
     setIsEditing(false);
     setError(null);
@@ -567,11 +602,39 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                           <h3 style={{ fontSize: '15px', color: 'var(--color-text-main)', fontWeight: 600, margin: 0 }}>交互式系统架构拓扑 (Interactive Topology)</h3>
                           <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>点击节点卡片编辑属性，或在此处添加新节点</span>
                         </div>
-                        <button className="btn btn-primary" onClick={handleAddNode} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                        <button 
+                          className="btn btn-primary" 
+                          onClick={handleAddNode} 
+                          disabled={hasJsonError}
+                          style={{ 
+                            padding: '6px 12px', 
+                            fontSize: '12px',
+                            opacity: hasJsonError ? 0.5 : 1,
+                            cursor: hasJsonError ? 'not-allowed' : 'pointer'
+                          }}
+                        >
                           <Icons.Plus style={{ width: '12px', height: '12px', marginRight: '6px' }} />
                           Add Node
                         </button>
                       </div>
+
+                      {hasJsonError && (
+                        <div style={{
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.2)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '12px 16px',
+                          color: '#EF4444',
+                          fontSize: '13px',
+                          marginBottom: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <Icons.AlertTriangle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+                          <span>架构配置文件格式错误，请检查 ARCHITECTURE.md 尾部的 JSON 数据。已禁用架构图编辑以防数据覆盖。</span>
+                        </div>
+                      )}
 
                       <div style={{
                         display: 'grid',
@@ -588,9 +651,17 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
                           <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Frontend</div>
                           {frontendNodes.map(node => (
-                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
-                              <div className="arch-node-title">{node.title}</div>
-                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            <div 
+                              key={node.id} 
+                              className={`arch-node ${node.type}`} 
+                              onClick={() => !hasJsonError && setEditingNode(node)} 
+                              style={{ 
+                                cursor: hasJsonError ? 'not-allowed' : 'pointer', 
+                                opacity: hasJsonError ? 0.8 : 1 
+                              }}
+                            >
+                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
+                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
                             </div>
                           ))}
                           {frontendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
@@ -602,9 +673,17 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
                           <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Gateway</div>
                           {gatewayNodes.map(node => (
-                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
-                              <div className="arch-node-title">{node.title}</div>
-                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            <div 
+                              key={node.id} 
+                              className={`arch-node ${node.type}`} 
+                              onClick={() => !hasJsonError && setEditingNode(node)} 
+                              style={{ 
+                                cursor: hasJsonError ? 'not-allowed' : 'pointer', 
+                                opacity: hasJsonError ? 0.8 : 1 
+                              }}
+                            >
+                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
+                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
                             </div>
                           ))}
                           {gatewayNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
@@ -616,9 +695,17 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
                           <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Backend</div>
                           {backendNodes.map(node => (
-                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
-                              <div className="arch-node-title">{node.title}</div>
-                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            <div 
+                              key={node.id} 
+                              className={`arch-node ${node.type}`} 
+                              onClick={() => !hasJsonError && setEditingNode(node)} 
+                              style={{ 
+                                cursor: hasJsonError ? 'not-allowed' : 'pointer', 
+                                opacity: hasJsonError ? 0.8 : 1 
+                              }}
+                            >
+                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
+                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
                             </div>
                           ))}
                           {backendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
@@ -630,9 +717,17 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
                           <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Resources</div>
                           {resourceNodes.map(node => (
-                            <div key={node.id} className={`arch-node ${node.type}`} onClick={() => setEditingNode(node)} style={{ cursor: 'pointer' }}>
-                              <div className="arch-node-title">{node.title}</div>
-                              <div className="arch-node-subtitle">{node.subtitle}</div>
+                            <div 
+                              key={node.id} 
+                              className={`arch-node ${node.type}`} 
+                              onClick={() => !hasJsonError && setEditingNode(node)} 
+                              style={{ 
+                                cursor: hasJsonError ? 'not-allowed' : 'pointer', 
+                                opacity: hasJsonError ? 0.8 : 1 
+                              }}
+                            >
+                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
+                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
                             </div>
                           ))}
                           {resourceNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
@@ -649,7 +744,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
 
       {/* Modal Editor */}
       {editingNode && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setEditingNode(null); }}>
           <div className="modal-card" style={{ width: '400px' }}>
             <div className="modal-header">
               <h3 className="modal-title">Edit Node</h3>

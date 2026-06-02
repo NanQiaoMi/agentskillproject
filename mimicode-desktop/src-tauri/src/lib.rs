@@ -502,7 +502,7 @@ fn inject_prompt_to_clipboard(project_path: &str, cli_name: &str) {
             .args(&[
                 "-Command",
                 &format!(
-                    "Get-Content -Raw '{}' | Set-Clipboard",
+                    "Get-Content -Raw -Encoding UTF8 '{}' | Set-Clipboard",
                     prompt_path.to_string_lossy()
                 ),
             ])

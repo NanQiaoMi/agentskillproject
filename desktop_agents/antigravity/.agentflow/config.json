@@ -1,0 +1,32 @@
+{
+  "project_name": "agentskillproject",
+  "version": "0.0.2",
+  "scopes": {
+    "frontend": "src/frontend",
+    "backend": "src/backend"
+  },
+  "roles": {
+    "antigravity": {
+      "role": "frontend",
+      "scope": "src/frontend"
+    },
+    "codex": {
+      "role": "backend",
+      "scope": "src/backend"
+    },
+    "claudecode": {
+      "role": "reviewer",
+      "scope": "all"
+    }
+  },
+  "frontend": {
+    "lint_command": "eslint src/frontend/ --fix",
+    "type_check_command": "tsc --noEmit",
+    "test_command": "npm run test"
+  },
+  "backend": {
+    "lint_command": "python -m py_compile src/backend/register.py",
+    "type_check_command": "mypy src/backend/",
+    "test_command": "python src/backend/register_test.py"
+  }
+}

@@ -16,29 +16,40 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   // File path mapping
   const getFilePath = (tab: string) => {
     const filename = tab === 'API Contracts' ? 'API_CONTRACTS.md' : `${tab.toUpperCase()}.md`;
-    return `${projectPath}\\docs\\${filename}`;
-  };
-
-  const loadContent = async (tab: string) => {
-    setIsLoading(true);
-    try {
-      const filePath = getFilePath(tab);
-      const res: string | null = await invoke('read_file_content', { path: filePath });
-      if (res === null) {
-        setContent('');
-      } else {
-        setContent(res);
-      }
-    } catch (err) {
-      console.error("Failed to load specifications", err);
-    } finally {
-      setIsLoading(false);
-    }
+    return `${projectPath}/docs/${filename}`;
   };
 
   useEffect(() => {
-    loadContent(activeTab);
+    let active = true;
+
+    const loadContent = async () => {
+      setIsLoading(true);
+      try {
+        const filePath = getFilePath(activeTab);
+        const res: string | null = await invoke('read_file_content', { path: filePath });
+        if (!active) return;
+        if (res === null) {
+          setContent('');
+        } else {
+          setContent(res);
+        }
+      } catch (err) {
+        if (active) {
+          console.error("Failed to load specifications", err);
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadContent();
     setIsEditing(false);
+
+    return () => {
+      active = false;
+    };
   }, [activeTab, projectPath]);
 
   // Reference variables to bypass unused compiler warnings until fully utilized in subsequent tasks

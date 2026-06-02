@@ -697,35 +697,31 @@ You are in a workspace configured with **AgentFlow**, a local multi-agent collab
 
 ---
 
-## 3. Mandatory SOP Workflow
-Before performing any task or modifying any code in this repository, you must:
-1. Run `python .agentflow/agentflow.py list` to check tasks assigned to you.
-2. Read the specific task description using `python .agentflow/agentflow.py show <TASK_ID>` (or read `.agentflow/tasks/<TASK_ID>.md`).
-3. Run `python .agentflow/agentflow.py start <TASK_ID>` before writing any code.
-4. When finished, list modified files and submit via `python .agentflow/agentflow.py submit <TASK_ID> --files "<comma-separated-files>"`.
+## 3. Mandatory SOP Workflow (四步闭环流)
+Before performing any task or modifying any code in this repository, you must execute the 4-step workflow:
+1. **探索 (Explore)**: Use Plan Mode to read and understand the codebase. Refrain from modifying files. Inspect existing modules, dependencies, and environment configurations. Use `@` syntax to reference exact files (e.g. `@src/auth/session.ts`) to avoid vague path descriptions.
+2. **规划 (Plan)**: Run `python .agentflow/agentflow.py show <TASK_ID>` (or read `.agentflow/tasks/<TASK_ID>.md`) to read task details. Formulate a spec-driven implementation plan including core goals, non-goals, testing commands, and log points.
+3. **实现 (Implement)**: Run `python .agentflow/agentflow.py start <TASK_ID>`. Follow the checklist step-by-step. Keep edits small and focused.
+4. **提交 (Commit)**: Run quality gates (Lint, Typecheck, Unit Tests). If successful, commit local changes. Once completed, submit the task using `python .agentflow/agentflow.py submit <TASK_ID> --files "<comma-separated-files>"`.
 
 ---
 
-## 4. Vibe Coding 五大痛点与实战解法
+## 4. Vibe Coding 五稳核心原则
 
-### 痛点一：AI 改代码太快，炸了不知道怎么回退 -> 解法：Git 刹车系统（小步提交、分支隔离）
-- **隔离舱原则**：执行任务前必须在独立隔离特征分支上工作（如 `feature/task-xxx`）。写崩溃时，直接抛弃特征分支。
-- **小步提交点**：严禁一口气修改大量文件再打包测试。必须根据任务卡片的 **验收项 (Acceptance Criteria)**，一次只改动一个项，测试通过后立即本地提交存档（`git commit -m "feat: TASK_ID pass criterion X"`），建立“安全存档点”；一旦后续改崩，立刻 `git reset --hard HEAD` 自愈回滚。
+### 一、 需求稳 —— 锁死边界防膨胀
+- 必须明确“要做什么”和**“不做什么 (Non-Goals)”**。凡是没有明确在需求范围内的额外功能，一律判定为越界，严禁 AI 顺手添加。
 
-### 痛点二：AI 代码风格不一致 -> 解法：单一真源设计令牌
-- 严格遵循 `docs/DESIGN.md` 与 `docs/ARCHITECTURE.md` 的规范，包含颜色/间距等 CSS 设计令牌、Python snake_case 与 TypeScript camelCase 命名分层。
+### 二、 结构稳 —— 逐层生成防混乱
+- 严禁一步到位生成整个项目。必须按数据层、业务层、视图层、测试层逐步、逐层生成，并保持与项目原命名规则和设计风格完全一致。
 
-### 痛点三：AI 变动不可追溯，出问题无法复盘 -> 解法：`agents_chat` 可审计协作
-- 任何重大的核心功能或重构变动，除代码外必须在 `agents_chat/` 目录下创建以 ISO 时间戳命名的 Markdown 审计日志（如 `agents_chat/2026/06/03/2026-06-03T00-50-00Z-add-auth.md`），描述背景、具体变动文件、核心决策、验收结果和后续 TODO。
+### 三、 质量稳 —— 测试先行立锚点
+- 交付必须是可测试和已测试的。必须先写测试用例再写功能实现（TDD），将测试作为安全锚点。每次代码改动必须运行测试，以测试跑通为唯一放行指标。
 
-### 痛点四：AI 代码能跑但不能运 -> 解法：人补深度，AI 给速度
-- AI 负责快速输出代码和竖切 MVP。人类开发者必须强制落实以下高可靠性高安全设计：
-  - **可靠性**：幂等键校验、重试退避机制、死信队列。
-  - **安全性**：敏感配置完全加密（防泄露）、基于角色的权限控制 (RBAC)、敏感操作审计日志。
-  - **可观测性**：结构化 JSON 格式日志、链路追踪、告警机制。
+### 四、 排错稳 —— 日志先行显脉络
+- 所有新建的微服务、API 和模块，必须在第一版就加入完善的可观测性日志。在模块初始化、API 入口、校验失败及异常捕获等关键位置记录日志，杜绝“无日志盲修”。
 
-### 痛点五：运行环境不一致 -> 解法：Docker Compose 一键自愈
-- 所有核心服务必须容器化，提供统一版本的 Docker Compose 配置，并在容器启动时自动等待依赖数据库/缓存就绪，自动跑完迁移命令实现启动即自愈。
+### 五、 交付稳 —— 一键自愈有文档
+- 所有的外部依赖和数据库迁移必须使用容器化进行自愈启动，且必须伴随完整的 README 交付文档（环境变量、启动命令、限制条件），不得将未经整理的裸仓库进行移交。
 
 ---
 
@@ -736,7 +732,7 @@ Before performing any task or modifying any code in this repository, you must:
 | **夯** | Git 刹车系统（小步提交、分支隔离、回退自愈） |
 | **抄** | 抄写本项目中现有的优秀架构骨架和代码规范，避免重复造轮子 |
 | **学** | 理智组合技术栈，做出合理的底层架构与分层设计裁决 |
-| **喂** | 把设计 specs 文档结构化，编写完备的 PRD/DESIGN/ARCHITECTURE 作为 AI 的上下文真源 |
+| **喂** | 把设计 specs 文档结构化，编写完备 of PRD/DESIGN/ARCHITECTURE 作为 AI 的上下文真源 |
 | **规** | 让 AI 出开发计划，并拆解为可操作的 `[ ]` tasks 任务卡片 |
 | **验** | 多模型交叉验证关键代码，减少单一模型的幻觉和盲区 |
 | **测** | 落实 Lint、类型检查、单元测试自动化，交付结果必须有运行日志证据 |
@@ -745,9 +741,12 @@ Before performing any task or modifying any code in this repository, you must:
 
 ---
 
-## 6. Context Management & Security
-- **Context Rot Prevention**: When a task is completed and merged, prompt the user to start a new chat session to clear context history. This avoids performance decay due to excessively long context windows.
-- **Security Constraint**: Never write plain-text credentials (passwords, API keys) into files. Always read them from environment variables or a `.env` file. Refer to `src/backend/` configuration files for reference.
+## 6. Context Management & Git Braking System (Git 刹车与上下文防腐)
+- **隔离舱隔离**：执行任务前必须在独立隔离特征分支上工作（如 `feature/task-xxx`）。
+- **一改一测一 commit**：严格按照验收条件，每实现一个项且测试通过后，立即进行 Git 本地提交存档（`git commit -m "feat: TASK_ID pass criterion X"`）。
+- **纠错 2 次即回退**：对当前步骤的 Bug 修复或代码修改，如果连续 2 次尝试依然引发编译级、Lint 级或测试级报错，**绝对禁止盲目打补丁**，必须立刻执行 `git reset --hard HEAD` 强制撤销并回滚。
+- **重置上下文防宿醉 (/clear)**：回滚后，必须主动向人类用户警报，要求其执行 `/clear` 清理冗长的会话历史，防范上下文腐化及 LLM 幻觉累积。
+- **安全约束**：绝不在文件中硬编码 API 密钥等敏感信息，必须从环境变量读取。
 
 ---
 

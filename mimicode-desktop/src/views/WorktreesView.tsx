@@ -43,11 +43,21 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
   return (
     <div className="view-container bg-panel">
       <div className="view-header">
-        <div className="view-title-row">
+        <div className="view-title-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 className="view-title">Worktrees</h1>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '4px' }}>基于 Git Worktree 的任务隔离环境</p>
           </div>
+          {worktrees.length > 1 && (
+            <select 
+              value={selectedWt?.path} 
+              onChange={(e) => setSelectedWt(worktrees.find(w => w.path === e.target.value))}
+              className="form-select"
+              style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--color-text-main)' }}
+            >
+              {worktrees.map(wt => <option key={wt.path} value={wt.path}>{wt.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
 

@@ -721,6 +721,23 @@ fn check_agent_clis_running() -> std::collections::HashMap<String, bool> {
     status
 }
 
+fn run_git_cmd(args: &[&str], current_dir: &Path) -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    let mut cmd = Command::new("git");
+    cmd.args(args).current_dir(current_dir);
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
 #[tauri::command]
 fn select_directory() -> Result<String, String> {
     let result = rfd::FileDialog::new()
@@ -735,39 +752,21 @@ fn select_directory() -> Result<String, String> {
 
 #[tauri::command]
 fn get_git_commits(repo_path: String) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(&["log", "-n", "50", "--pretty=format:%H|%an|%ad|%s", "--date=short"])
-        .current_dir(Path::new(&repo_path))
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    run_git_cmd(
+        &["log", "-n", "50", "--pretty=format:%H|%an|%ad|%s", "--date=short"],
+        Path::new(&repo_path),
+    )
 }
 
 #[tauri::command]
 fn get_git_diff(repo_path: String) -> Result<String, String> {
     let mut diff_str = String::new();
-    
-    let output1 = Command::new("git")
-        .args(&["diff"])
-        .current_dir(Path::new(&repo_path))
-        .output()
-        .map_err(|e| e.to_string())?;
-    if output1.status.success() {
-        diff_str.push_str(&String::from_utf8_lossy(&output1.stdout));
+    let path = Path::new(&repo_path);
+    if let Ok(out1) = run_git_cmd(&["diff"], path) {
+        diff_str.push_str(&out1);
     }
-
-    let output2 = Command::new("git")
-        .args(&["diff", "--cached"])
-        .current_dir(Path::new(&repo_path))
-        .output()
-        .map_err(|e| e.to_string())?;
-    if output2.status.success() {
-        diff_str.push_str(&String::from_utf8_lossy(&output2.stdout));
+    if let Ok(out2) = run_git_cmd(&["diff", "--cached"], path) {
+        diff_str.push_str(&out2);
     }
     
     if diff_str.is_empty() {
@@ -779,32 +778,12 @@ fn get_git_diff(repo_path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn list_git_worktrees(repo_path: String) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(&["worktree", "list"])
-        .current_dir(Path::new(&repo_path))
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    run_git_cmd(&["worktree", "list"], Path::new(&repo_path))
 }
 
 #[tauri::command]
 fn read_dir_recursive(path: String) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(&["ls-tree", "-r", "--name-only", "HEAD"])
-        .current_dir(Path::new(&path))
-        .output()
-        .map_err(|e| e.to_string())?;
-        
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    run_git_cmd(&["ls-tree", "-r", "--name-only", "HEAD"], Path::new(&path))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -829,13 +808,8 @@ fn get_path_metadata(path: String) -> Result<PathMeta, String> {
         })
         .unwrap_or_else(|_| "Unknown".to_string());
         
-    let output = Command::new("git")
-        .args(&["status", "--porcelain"])
-        .current_dir(path_obj)
-        .output();
-        
-    let is_clean = match output {
-        Ok(out) => out.status.success() && out.stdout.is_empty(),
+    let is_clean = match run_git_cmd(&["status", "--porcelain"], path_obj) {
+        Ok(out) => out.trim().is_empty(),
         Err(_) => true,
     };
     
@@ -863,46 +837,32 @@ fn get_git_diagnostics(repo_path: String) -> Result<GitDiagnostics, String> {
 
     // 1. Get sync_status
     let mut sync_status = "未知 (Unknown)".to_string();
-    if let Ok(out) = Command::new("git")
-        .args(&["status", "-sb"])
-        .current_dir(repo_path_obj)
-        .output()
-    {
-        if out.status.success() {
-            let stdout_str = String::from_utf8_lossy(&out.stdout);
-            let first_line = stdout_str.lines().next().unwrap_or("").trim();
-            if first_line.starts_with("##") {
-                let branch_info = &first_line[2..].trim();
-                if branch_info.contains("...") {
-                    if branch_info.contains("[ahead") && branch_info.contains("behind") {
-                        sync_status = "本地与远程分支冲突 (Diverged)".to_string();
-                    } else if branch_info.contains("[ahead") {
-                        sync_status = "本地有未推送的提交 (Ahead)".to_string();
-                    } else if branch_info.contains("behind") {
-                        sync_status = "落后于远程分支，请拉取 (Behind)".to_string();
-                    } else {
-                        sync_status = format!("与远程同步 ({})", branch_info.split("...").next().unwrap_or(""));
-                    }
+    if let Ok(out_str) = run_git_cmd(&["status", "-sb"], repo_path_obj) {
+        let first_line = out_str.lines().next().unwrap_or("").trim();
+        if first_line.starts_with("##") {
+            let branch_info = &first_line[2..].trim();
+            if branch_info.contains("...") {
+                if branch_info.contains("[ahead") && branch_info.contains("behind") {
+                    sync_status = "本地与远程分支冲突 (Diverged)".to_string();
+                } else if branch_info.contains("[ahead") {
+                    sync_status = "本地有未推送的提交 (Ahead)".to_string();
+                } else if branch_info.contains("behind") {
+                    sync_status = "落后于远程分支，请拉取 (Behind)".to_string();
                 } else {
-                    sync_status = format!("本地分支 ({})，无关联的远程分支", branch_info);
+                    sync_status = format!("与远程同步 ({})", branch_info.split("...").next().unwrap_or(""));
                 }
+            } else {
+                sync_status = format!("本地分支 ({})，无关联的远程分支", branch_info);
             }
         }
     }
 
     // 2. Count untracked files
     let mut untracked_count = 0;
-    if let Ok(out) = Command::new("git")
-        .args(&["status", "--porcelain"])
-        .current_dir(repo_path_obj)
-        .output()
-    {
-        if out.status.success() {
-            let stdout_str = String::from_utf8_lossy(&out.stdout);
-            untracked_count = stdout_str.lines()
-                .filter(|line| line.starts_with("??"))
-                .count();
-        }
+    if let Ok(out_str) = run_git_cmd(&["status", "--porcelain"], repo_path_obj) {
+        untracked_count = out_str.lines()
+            .filter(|line| line.starts_with("??"))
+            .count();
     }
 
     // 3. Count gitignore rules
@@ -919,22 +879,15 @@ fn get_git_diagnostics(repo_path: String) -> Result<GitDiagnostics, String> {
     // 4. Count loose objects and pack files
     let mut loose_objects = 0;
     let mut pack_files = 0;
-    if let Ok(out) = Command::new("git")
-        .args(&["count-objects", "-v"])
-        .current_dir(repo_path_obj)
-        .output()
-    {
-        if out.status.success() {
-            let stdout_str = String::from_utf8_lossy(&out.stdout);
-            for line in stdout_str.lines() {
-                if line.starts_with("count:") {
-                    if let Some(val_str) = line.split(':').nth(1) {
-                        loose_objects = val_str.trim().parse().unwrap_or(0);
-                    }
-                } else if line.starts_with("packs:") {
-                    if let Some(val_str) = line.split(':').nth(1) {
-                        pack_files = val_str.trim().parse().unwrap_or(0);
-                    }
+    if let Ok(out_str) = run_git_cmd(&["count-objects", "-v"], repo_path_obj) {
+        for line in out_str.lines() {
+            if line.starts_with("count:") {
+                if let Some(val_str) = line.split(':').nth(1) {
+                    loose_objects = val_str.trim().parse().unwrap_or(0);
+                }
+            } else if line.starts_with("packs:") {
+                if let Some(val_str) = line.split(':').nth(1) {
+                    pack_files = val_str.trim().parse().unwrap_or(0);
                 }
             }
         }
@@ -951,17 +904,7 @@ fn get_git_diagnostics(repo_path: String) -> Result<GitDiagnostics, String> {
 
 #[tauri::command]
 fn get_git_status(repo_path: String) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(&["status", "--porcelain"])
-        .current_dir(Path::new(&repo_path))
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    run_git_cmd(&["status", "--porcelain"], Path::new(&repo_path))
 }
 
 #[tauri::command]
@@ -1024,6 +967,375 @@ fn write_file_content(path: String, content: String) -> Result<(), String> {
     std::fs::write(p, content).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn get_node_version() -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    let mut cmd = Command::new("node");
+    cmd.args(&["--version"]);
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = cmd.output().map_err(|e| format!("Node.js not found: {}", e))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err("Node.js is not installed or not in PATH".to_string())
+    }
+}
+
+#[tauri::command]
+fn run_shell_command(command: String, cwd: String) -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    let mut cmd = Command::new("cmd");
+    cmd.args(&["/C", &command]).current_dir(&cwd);
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Ok(format!("{}{}", stdout, stderr))
+    }
+}
+
+#[tauri::command]
+async fn proxy_post_request(url: String, api_key: String, body: String) -> Result<String, String> {
+    use std::io::Write;
+    
+    #[cfg(windows)]
+    let mut cmd = Command::new("curl.exe");
+    #[cfg(not(windows))]
+    let mut cmd = Command::new("curl");
+    
+    cmd.args(&[
+        "-s",
+        "-X", "POST",
+        &url,
+        "-H", &format!("Authorization: Bearer {}", api_key),
+        "-H", "Content-Type: application/json",
+        "-d", "@-",
+    ]);
+    
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    
+    cmd.stdin(Stdio::piped());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn curl: {}", e))?;
+    
+    {
+        let mut stdin = child.stdin.take().ok_or("Failed to open stdin")?;
+        stdin.write_all(body.as_bytes()).map_err(|e| format!("Failed to write to stdin: {}", e))?;
+    }
+    
+    let output = child.wait_with_output().map_err(|e| format!("Failed to wait for output: {}", e))?;
+    
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+fn running_agents() -> &'static std::sync::Mutex<std::collections::HashMap<String, u32>> {
+    static RUNNING_AGENTS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, u32>>> = std::sync::OnceLock::new();
+    RUNNING_AGENTS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn strip_cursor_controls(s: &str) -> String {
+    let mut result = String::new();
+    let chars = s.chars().collect::<Vec<_>>();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '\x1b' && i + 1 < chars.len() && chars[i+1] == '[' {
+            let start = i;
+            i += 2;
+            let mut digits = String::new();
+            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == ';' || chars[i] == '?') {
+                digits.push(chars[i]);
+                i += 1;
+            }
+            if i < chars.len() {
+                let action = chars[i];
+                i += 1;
+                if action == 'm' {
+                    result.push_str(&chars[start..i].iter().collect::<String>());
+                }
+            } else {
+                result.push_str(&chars[start..].iter().collect::<String>());
+                break;
+            }
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+    result
+}
+
+fn clean_ansi_output(input: &str) -> String {
+    let mut cleaned_lines = Vec::new();
+    for line in input.lines() {
+        let mut final_segment = "";
+        for segment in line.split('\r') {
+            let trimmed = segment.trim_matches('\0');
+            if !trimmed.is_empty() {
+                final_segment = segment;
+            }
+        }
+        
+        if final_segment.is_empty() && !line.is_empty() {
+            final_segment = line;
+        }
+
+        let mut cleaned_segment = final_segment.to_string();
+        
+        let patterns = [
+            "\x1b[2K", "\x1b[K", "\x1b[?25h", "\x1b[?25l", 
+            "\x1b[2J", "\x1b[H", "\x1b[?1049h", "\x1b[?1049l"
+        ];
+        for pat in &patterns {
+            cleaned_segment = cleaned_segment.replace(pat, "");
+        }
+        
+        cleaned_segment = strip_cursor_controls(&cleaned_segment);
+        cleaned_lines.push(cleaned_segment);
+    }
+    cleaned_lines.join("\n")
+}
+
+#[tauri::command]
+async fn run_agent_cli(
+    cli_name: String,
+    project_path: String,
+    task_id: Option<String>,
+    prompt: String,
+) -> Result<String, String> {
+    let repo_dir = Path::new(&project_path);
+    let mut run_dir = repo_dir.to_path_buf();
+    if let Some(ref tid) = task_id {
+        if let Some(parent) = repo_dir.parent() {
+            let worktree_dir = parent.join("mimicode_worktrees").join(tid.to_uppercase());
+            if worktree_dir.exists() {
+                run_dir = worktree_dir;
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    let (exe, args) = match cli_name.as_str() {
+        "hermes" => (
+            "C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe",
+            vec!["-z".to_string(), prompt],
+        ),
+        "antigravity" => (
+            "D:\\npm_global\\gemini.cmd",
+            vec!["-p".to_string(), prompt, "-y".to_string()],
+        ),
+        "codex" => (
+            "D:\\npm_global\\codex.cmd",
+            vec![
+                "exec".to_string(),
+                prompt,
+                "--dangerously-bypass-approvals-and-sandbox".to_string(),
+            ],
+        ),
+        "claudecode" => (
+            "D:\\npm_global\\claude.cmd",
+            vec![
+                "-p".to_string(),
+                prompt,
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+            ],
+        ),
+        "opencode" => (
+            "D:\\npm_global\\opencode.cmd",
+            vec![
+                "run".to_string(),
+                prompt,
+                "--dangerously-skip-permissions".to_string(),
+            ],
+        ),
+        _ => return Err("Unknown CLI name".to_string()),
+    };
+
+    #[cfg(not(windows))]
+    let (exe, args) = match cli_name.as_str() {
+        "hermes" => (
+            "hermes",
+            vec!["-z".to_string(), prompt],
+        ),
+        "antigravity" => (
+            "gemini",
+            vec!["-p".to_string(), prompt, "-y".to_string()],
+        ),
+        "codex" => (
+            "codex",
+            vec![
+                "exec".to_string(),
+                prompt,
+                "--dangerously-bypass-approvals-and-sandbox".to_string(),
+            ],
+        ),
+        "claudecode" => (
+            "claude",
+            vec![
+                "-p".to_string(),
+                prompt,
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+            ],
+        ),
+        "opencode" => (
+            "opencode",
+            vec![
+                "run".to_string(),
+                prompt,
+                "--dangerously-skip-permissions".to_string(),
+            ],
+        ),
+        _ => return Err("Unknown CLI name".to_string()),
+    };
+
+    let mut cmd = Command::new(exe);
+    cmd.args(&args)
+       .current_dir(&run_dir)
+       .stdout(Stdio::piped())
+       .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let child = cmd.spawn().map_err(|e| format!("Failed to spawn CLI process: {}", e))?;
+    let pid = child.id();
+    let map_key = format!("{}_{}", project_path, cli_name);
+
+    {
+        let mut map = running_agents().lock().map_err(|e| e.to_string())?;
+        map.insert(map_key.clone(), pid);
+    }
+
+    let output = child.wait_with_output();
+
+    {
+        if let Ok(mut map) = running_agents().lock() {
+            map.remove(&map_key);
+        }
+    }
+
+    let output = output.map_err(|e| format!("Failed to wait for CLI execution: {}", e))?;
+
+    let stdout_str = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
+    let combined = format!("{}{}", stdout_str, stderr_str);
+
+    let cleaned = clean_ansi_output(&combined);
+
+    if output.status.success() {
+        Ok(cleaned)
+    } else {
+        Err(cleaned)
+    }
+}
+
+#[tauri::command]
+async fn stop_agent_cli(cli_name: String, project_path: String) -> Result<(), String> {
+    let map_key = format!("{}_{}", project_path, cli_name);
+    let pid_opt = {
+        let mut map = running_agents().lock().map_err(|e| e.to_string())?;
+        map.remove(&map_key)
+    };
+
+    if let Some(pid) = pid_opt {
+        #[cfg(windows)]
+        {
+            let mut cmd = Command::new("taskkill");
+            cmd.args(&["/F", "/PID", &pid.to_string(), "/T"]);
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            let _ = cmd.output();
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = Command::new("kill").args(&["-9", &pid.to_string()]).output();
+        }
+        Ok(())
+    } else {
+        Err("No running process found for this agent".to_string())
+    }
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let name = entry.file_name();
+        if ty.is_dir() {
+            if name == "venv" || name == "__pycache__" || name == "logs" {
+                continue;
+            }
+            copy_dir_all(&entry.path(), &dst.join(name))?;
+        } else {
+            if name == "tasks.db" {
+                continue;
+            }
+            fs::copy(entry.path(), dst.join(name))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn initialize_project(project_path: String) -> Result<String, String> {
+    let target_agentflow = Path::new(&project_path).join(".agentflow");
+    
+    if !target_agentflow.exists() {
+        let source_agentflow = Path::new("d:\\agentcode").join(".agentflow");
+        if source_agentflow.exists() {
+            copy_dir_all(&source_agentflow, &target_agentflow)
+                .map_err(|e| format!("Failed to copy .agentflow templates: {}", e))?;
+        } else {
+            return Err("Template .agentflow directory not found in d:\\agentcode".to_string());
+        }
+    }
+    
+    let tasks_dir = target_agentflow.join("tasks");
+    fs::create_dir_all(&tasks_dir).map_err(|e| e.to_string())?;
+    
+    let logs_dir = target_agentflow.join("logs");
+    fs::create_dir_all(&logs_dir).map_err(|e| e.to_string())?;
+
+    let venv_path = target_agentflow.join("venv");
+    let has_venv = venv_path.exists() && 
+        (venv_path.join("Scripts").join("python.exe").exists() || 
+         venv_path.join("bin").join("python").exists());
+         
+    if !has_venv {
+        setup_environment(project_path.clone())?;
+    }
+    
+    let _ = run_agentflow_cmd(project_path, vec!["sync".to_string()]);
+    
+    Ok("Project initialized successfully".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1053,7 +1365,13 @@ pub fn run() {
             get_path_metadata,
             get_git_diagnostics,
             read_file_content,
-            write_file_content
+            write_file_content,
+            get_node_version,
+            run_shell_command,
+            proxy_post_request,
+            initialize_project,
+            run_agent_cli,
+            stop_agent_cli
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -115,6 +115,7 @@ const parseAnsiWithLinks = (text: string) => {
     let pLastIndex = 0;
     let pMatch;
     const partText = part.text;
+    linkRegex.lastIndex = 0; // Reset RegExp search position for this string segment
     
     while ((pMatch = linkRegex.exec(partText)) !== null) {
       const before = partText.substring(pLastIndex, pMatch.index);
@@ -313,6 +314,38 @@ const getAgentInitials = (author: string) => {
   return author.charAt(0).toUpperCase();
 };
 
+const buildMdContent = (taskData: any, selectedTask: any, commentsList: any[]) => {
+  const updatedTaskData = { ...taskData, comments: commentsList };
+  const metadataStr = JSON.stringify(updatedTaskData, null, 2);
+  
+  let mdContent = `<!-- agentflow\n${metadataStr}\n-->\n\n# ${updatedTaskData.id}: ${updatedTaskData.title}\n\n## 任务描述\n${selectedTask.description || ''}\n\n## 涉及文件\n`;
+  if (updatedTaskData.affected_files && updatedTaskData.affected_files.length > 0) {
+    updatedTaskData.affected_files.forEach((f: string) => {
+      mdContent += `- \`${f}\`\n`;
+    });
+  } else {
+    mdContent += "无\n";
+  }
+  
+  mdContent += "\n## 审查意见与修复记录\n";
+  if (updatedTaskData.comments && updatedTaskData.comments.length > 0) {
+    updatedTaskData.comments.forEach((c: any) => {
+      const commentClean = c.comment.replace(/\n/g, '\n    ');
+      mdContent += `- **${c.author}** (${c.time.substring(0, 16)}):\n    ${commentClean}\n`;
+    });
+  } else {
+    mdContent += "无\n";
+  }
+  
+  mdContent += "\n## 状态变更历史\n";
+  if (updatedTaskData.history) {
+    updatedTaskData.history.forEach((h: any) => {
+      mdContent += `- \`${h.time.substring(0, 16)}\` | **${h.operator}** | 将状态从 \`[${h.from}]\` 变更为 \`[${h.to}]\` | 备注: ${h.message || '无'}\n`;
+    });
+  }
+  return mdContent;
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({
   projectPath,
   selectedTask,
@@ -329,9 +362,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingAgent, setThinkingAgent] = useState('MIMIcode');
   const [localComments, setLocalComments] = useState<Comment[]>([]);
+  const [liveLogContent, setLiveLogContent] = useState('');
   const mentionRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const liveTerminalRef = useRef<HTMLDivElement>(null);
 
   // Sync localComments when selectedTask changes
   useEffect(() => {
@@ -341,6 +376,174 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setLocalComments([]);
     }
   }, [selectedTask]);
+
+  // Live log polling for ChatView daemon agent session
+  useEffect(() => {
+    if (!isThinking || thinkingAgent === 'MIMIcode' || !projectPath) {
+      setLiveLogContent('');
+      return;
+    }
+
+    let activeAgentFile = '';
+    const taLower = thinkingAgent.toLowerCase();
+    if (taLower.includes('hermes')) activeAgentFile = 'hermes';
+    else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
+    else if (taLower.includes('codex')) activeAgentFile = 'codex';
+    else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
+    else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
+
+    if (!activeAgentFile) return;
+
+    const logFilename = selectedTask 
+      ? `chat_${activeAgentFile}_${selectedTask.id.toLowerCase()}.log`
+      : `chat_${activeAgentFile}_general.log`;
+
+    const separator = projectPath.includes('/') ? '/' : '\\';
+    const logFilePath = `${projectPath}${separator}.agentflow${separator}logs${separator}${logFilename}`;
+
+    const pollLogs = async () => {
+      try {
+        const content = await invoke<string | null>('read_file_content', { path: logFilePath });
+        if (content) {
+          setLiveLogContent(content);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    pollLogs();
+    const interval = setInterval(pollLogs, 1000);
+    return () => clearInterval(interval);
+  }, [isThinking, thinkingAgent, projectPath, selectedTask]);
+
+  // Auto scroll live terminal to bottom when content changes
+  useEffect(() => {
+    if (liveTerminalRef.current) {
+      liveTerminalRef.current.scrollTop = liveTerminalRef.current.scrollHeight;
+    }
+  }, [liveLogContent]);
+
+  const handleSendInteractiveInput = async () => {
+    const cmd = chatInputText.trim();
+    if (!cmd) return;
+
+    setChatInputText('');
+
+    let activeAgentFile = '';
+    const taLower = thinkingAgent.toLowerCase();
+    if (taLower.includes('hermes')) activeAgentFile = 'hermes';
+    else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
+    else if (taLower.includes('codex')) activeAgentFile = 'codex';
+    else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
+    else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
+
+    if (!activeAgentFile) return;
+
+    try {
+      await invoke('send_agent_chat_stdin', {
+        cliName: activeAgentFile,
+        projectPath,
+        taskId: selectedTask ? selectedTask.id : null,
+        input: cmd
+      });
+    } catch (err) {
+      console.error("Failed to send interactive stdin:", err);
+    }
+  };
+
+  const handleFinishChatSession = async () => {
+    if (!selectedTask || !projectPath) {
+      setIsThinking(false);
+      setThinkingAgent('MIMIcode');
+      return;
+    }
+
+    let activeAgentFile = '';
+    const taLower = thinkingAgent.toLowerCase();
+    if (taLower.includes('hermes')) activeAgentFile = 'hermes';
+    else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
+    else if (taLower.includes('codex')) activeAgentFile = 'codex';
+    else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
+    else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
+
+    if (!activeAgentFile) return;
+
+    try {
+      const timestamp = new Date().toISOString().replace(/[-:T]/g, '_').substring(0, 19);
+      const logFileName = `cli_${activeAgentFile}_${timestamp}.log`;
+      const separator = projectPath.includes('/') ? '/' : '\\';
+      const logsDir = `${projectPath}${separator}.agentflow${separator}logs`;
+      const logFilePath = `${logsDir}${separator}${logFileName}`;
+
+      await invoke('run_shell_command', { 
+        command: `mkdir "${logsDir}"`, 
+        cwd: projectPath 
+      }).catch(() => {});
+
+      await invoke('write_file_content', { path: logFilePath, content: liveLogContent });
+
+      const lines = liveLogContent.split('\n');
+      let summary = lines.slice(0, 100).join('\n');
+      if (lines.length > 100) {
+        summary += '\n\n... (终端日志已被部分截断，完整日志请查看下方链接) ...';
+      }
+
+      const cleanLogPath = logFilePath.replace(/\\/g, '/');
+      const relativeLogLink = `\n\n[查看完整执行终端日志](file:///${cleanLogPath})`;
+      const commentContent = summary + relativeLogLink;
+
+      const assistantComment = {
+        time: new Date().toISOString(),
+        author: thinkingAgent,
+        comment: commentContent
+      };
+
+      const taskFilePath = `${projectPath}${separator}.agentflow${separator}tasks${separator}${selectedTask.id}.md`;
+      const fileContent: string | null = await invoke('read_file_content', { path: taskFilePath });
+      if (fileContent) {
+        const startIdx = fileContent.indexOf('<!-- agentflow');
+        const endIdx = fileContent.indexOf('-->', startIdx);
+        if (startIdx !== -1 && endIdx !== -1) {
+          const jsonStr = fileContent.substring(startIdx + '<!-- agentflow'.length, endIdx).trim();
+          const taskData = JSON.parse(jsonStr);
+          if (!taskData.comments) taskData.comments = [];
+          taskData.comments.push(assistantComment);
+
+          await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) });
+          await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
+          setLocalComments([...taskData.comments]);
+        }
+      }
+      
+      if (fetchTasks) fetchTasks();
+    } catch (err) {
+      console.error("Failed to finish chat session:", err);
+    } finally {
+      setIsThinking(false);
+      setThinkingAgent('MIMIcode');
+    }
+  };
+
+  const handleStopChatSession = async () => {
+    let activeAgentFile = '';
+    const taLower = thinkingAgent.toLowerCase();
+    if (taLower.includes('hermes')) activeAgentFile = 'hermes';
+    else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
+    else if (taLower.includes('codex')) activeAgentFile = 'codex';
+    else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
+    else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
+
+    if (activeAgentFile) {
+      try {
+        await invoke('stop_agent_cli', { cliName: activeAgentFile, projectPath });
+      } catch (err) {
+        console.error("Failed to stop CLI:", err);
+      }
+    }
+    setIsThinking(false);
+    setThinkingAgent('MIMIcode');
+  };
 
   // Auto scroll to bottom
   const scrollToBottom = () => {
@@ -445,45 +648,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
         if (!taskData.comments) taskData.comments = [];
         taskData.comments.push(newComment);
         
-        // Helper to format/serialize task markdown
-        const buildMdContent = (commentsList: any[]) => {
-          const updatedTaskData = { ...taskData, comments: commentsList };
-          const metadataStr = JSON.stringify(updatedTaskData, null, 2);
-          
-          let mdContent = `<!-- agentflow\n${metadataStr}\n-->\n\n# ${updatedTaskData.id}: ${updatedTaskData.title}\n\n## 任务描述\n${selectedTask.description || ''}\n\n## 涉及文件\n`;
-          if (updatedTaskData.affected_files && updatedTaskData.affected_files.length > 0) {
-            updatedTaskData.affected_files.forEach((f: string) => {
-              mdContent += `- \`${f}\`\n`;
-            });
-          } else {
-            mdContent += "无\n";
-          }
-          
-          mdContent += "\n## 审查意见与修复记录\n";
-          if (updatedTaskData.comments && updatedTaskData.comments.length > 0) {
-            updatedTaskData.comments.forEach((c: any) => {
-              const commentClean = c.comment.replace(/\n/g, '\n    ');
-              mdContent += `- **${c.author}** (${c.time.substring(0, 16)}):\n    ${commentClean}\n`;
-            });
-          } else {
-            mdContent += "无\n";
-          }
-          
-          mdContent += "\n## 状态变更历史\n";
-          if (updatedTaskData.history) {
-            updatedTaskData.history.forEach((h: any) => {
-              mdContent += `- \`${h.time.substring(0, 16)}\` | **${h.operator}** | 将状态从 \`[${h.from}]\` 变更为 \`[${h.to}]\` | 备注: ${h.message || '无'}\n`;
-            });
-          }
-          return mdContent;
-        };
-
         // Optimistic UI Update: update local state instantly
         setLocalComments([...taskData.comments]);
         setChatInputText('');
 
         // Trigger background write & sync for user comment
-        invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) })
+        invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) })
           .then(() => invoke('run_agentflow_cmd', { projectPath, args: ['sync'] }))
           .then(() => { if (fetchTasks) fetchTasks(); })
           .catch(err => console.error("Background sync error (user comment):", err));
@@ -592,7 +762,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             setIsThinking(false);
 
             // Save and sync
-            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) });
+            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) });
             await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
             if (fetchTasks) fetchTasks();
           } catch (err: any) {
@@ -607,7 +777,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             setLocalComments([...taskData.comments]);
             setIsThinking(false);
 
-            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) });
+            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) });
             await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
             if (fetchTasks) fetchTasks();
           }
@@ -645,7 +815,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      handleSubmit();
+      e.preventDefault();
+      if (isThinking && thinkingAgent !== 'MIMIcode') {
+        handleSendInteractiveInput();
+      } else {
+        handleSubmit();
+      }
     }
   };
 
@@ -827,46 +1002,47 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {getAgentInitials(thinkingAgent)}
                 </div>
                 <span className="message-sender">{thinkingAgent}</span>
-                <span className="message-time">思考中...</span>
+                <span className="message-time">{thinkingAgent === 'MIMIcode' ? '思考中...' : '交互会话中...'}</span>
               </div>
-              <div className="message-body" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                  {thinkingAgent === 'MIMIcode' ? '正在生成回答...' : '正在执行 CLI，请稍候...'}
-                </span>
-                {thinkingAgent !== 'MIMIcode' && (
-                  <button 
-                    onClick={async () => {
-                      try {
-                        let activeAgentFile = '';
-                        const taLower = thinkingAgent.toLowerCase();
-                        if (taLower.includes('hermes')) activeAgentFile = 'hermes';
-                        else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
-                        else if (taLower.includes('codex')) activeAgentFile = 'codex';
-                        else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
-                        else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
-                        
-                        if (activeAgentFile) {
-                          await invoke('stop_agent_cli', { cliName: activeAgentFile, projectPath });
-                        }
-                      } catch (err) {
-                        console.error("Failed to stop CLI:", err);
-                      }
-                    }}
-                    style={{
-                      padding: '4px 10px',
-                      fontSize: '11px',
-                      color: '#ef4444',
-                      border: '1px solid #fca5a5',
-                      borderRadius: '4px',
-                      backgroundColor: 'transparent',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-panel)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    中止运行
-                  </button>
+              <div className="message-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {thinkingAgent === 'MIMIcode' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                      正在生成回答...
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontSize: '13px' }}>
+                      正在执行 CLI，你可以直接在下方输入框中向智能体发送交互命令：
+                    </span>
+                    
+                    <div className="chat-live-terminal">
+                      <div className="chat-live-terminal-header">
+                        <div className="chat-live-terminal-title">
+                          <Icons.Terminal style={{ width: '14px', height: '14px', marginRight: '6px' }} />
+                          {thinkingAgent} 终端交互面板
+                        </div>
+                        <div className="chat-live-terminal-status">
+                          <span className="chat-live-terminal-status-dot" />
+                          活动中
+                        </div>
+                      </div>
+                      
+                      <div className="chat-live-terminal-body" ref={liveTerminalRef}>
+                        {liveLogContent ? liveLogContent : "等待终端输出...\n➜ "}
+                      </div>
+                      
+                      <div className="chat-live-terminal-actions">
+                        <button className="btn-terminal-save" onClick={handleFinishChatSession}>
+                          结束并保存会话
+                        </button>
+                        <button className="btn-terminal-stop" onClick={handleStopChatSession}>
+                          强制中断
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -887,11 +1063,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <input 
             type="text" 
             className="chat-input-field" 
-            placeholder="Ask anything or @agent..." 
+            placeholder={isThinking && thinkingAgent !== 'MIMIcode' ? `输入指令给 ${thinkingAgent}...` : "Ask anything or @agent..."}
             value={chatInputText}
             onChange={(e) => setChatInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isSubmitting}
+            disabled={isSubmitting && !(isThinking && thinkingAgent !== 'MIMIcode')}
             ref={inputRef}
           />
           <div style={{ position: 'relative', zIndex: 10 }} ref={mentionRef}>

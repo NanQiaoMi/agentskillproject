@@ -73,15 +73,25 @@ export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs })
     if (!projectPath || !selectedAgentId) return;
 
     try {
-      // Try reading task log using the agent id as task identifier
-      const content = await invoke<string>('read_task_log', {
-        projectPath,
-        taskId: selectedAgentId,
-      });
-      setLogContent(content);
-    } catch {
-      // If no specific log exists, show the passed-in terminal logs
-      setLogContent(terminalLogs || `No log file found for agent "${selectedAgentId}".\nWaiting for agent activity...`);
+      const separator = projectPath.includes('/') ? '/' : '\\';
+      const logFilePath = `${projectPath}${separator}.agentflow${separator}logs${separator}agent_${selectedAgentId}.log`;
+      const content = await invoke<string | null>('read_file_content', { path: logFilePath });
+      if (content) {
+        setLogContent(content);
+      } else {
+        // Fallback to task log if daemon log doesn't exist yet
+        try {
+          const taskLog = await invoke<string>('read_task_log', {
+            projectPath,
+            taskId: selectedAgentId,
+          });
+          setLogContent(taskLog);
+        } catch {
+          setLogContent(terminalLogs || `Agent "${selectedAgentId}" started. Waiting for command input...`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to read logs:', err);
     }
   }, [projectPath, selectedAgentId, terminalLogs]);
 
@@ -96,12 +106,17 @@ export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs })
     return () => clearInterval(timer);
   }, [fetchAgentList]);
 
-  // Fetch logs when selected agent changes & poll
+  // Ensure daemon runs & Fetch logs periodically
   useEffect(() => {
+    if (projectPath && selectedAgentId) {
+      invoke('ensure_agent_daemon', { cliName: selectedAgentId, projectPath })
+        .catch(err => console.error('Failed to ensure agent daemon:', err));
+    }
+
     fetchLogs();
-    const timer = setInterval(fetchLogs, 3000);
+    const timer = setInterval(fetchLogs, 1500); // 1.5s interval for interactive responsiveness
     return () => clearInterval(timer);
-  }, [fetchLogs]);
+  }, [fetchLogs, projectPath, selectedAgentId]);
 
   // Auto-scroll to bottom when log content updates
   useEffect(() => {
@@ -113,6 +128,9 @@ export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs })
   // Handle reconnect
   const handleReconnect = async () => {
     setIsRefreshing(true);
+    if (projectPath && selectedAgentId) {
+      await invoke('ensure_agent_daemon', { cliName: selectedAgentId, projectPath }).catch(() => {});
+    }
     await fetchAgentList();
     await fetchLogs();
     setIsRefreshing(false);
@@ -130,7 +148,6 @@ export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs })
     if (!cmd) return;
 
     setInputText('');
-    setCommandHistory((prev) => [...prev, `> ${cmd}`]);
 
     if (!projectPath) {
       setCommandHistory((prev) => [...prev, '[Error] No project path set. Please select a project first.']);
@@ -138,13 +155,15 @@ export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs })
     }
 
     try {
-      const output = await invoke<string>('run_shell_command', {
-        command: cmd,
-        cwd: projectPath,
-      });
-      setCommandHistory((prev) => [...prev, output]);
+      if (selectedAgentId) {
+        await invoke('send_agent_stdin', {
+          cliName: selectedAgentId,
+          projectPath,
+          input: cmd,
+        });
+      }
     } catch (err: any) {
-      setCommandHistory((prev) => [...prev, `[Error] ${err?.toString() || 'Command execution failed'}`]);
+      setCommandHistory((prev) => [...prev, `[Error] ${err?.toString() || 'Failed to send command'}`]);
     }
   };
 

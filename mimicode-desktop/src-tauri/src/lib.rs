@@ -32,6 +32,37 @@ pub struct TaskProcessInfo {
 // ----------------------------------------------------
 // 1. Helper Functions
 // ----------------------------------------------------
+fn generate_deterministic_uuid(input: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher1 = DefaultHasher::new();
+    input.hash(&mut hasher1);
+    let h1 = hasher1.finish();
+
+    let mut hasher2 = DefaultHasher::new();
+    (input.to_owned() + "_salt").hash(&mut hasher2);
+    let h2 = hasher2.finish();
+
+    let mut bytes = [0u8; 16];
+    bytes[0..8].copy_from_slice(&h1.to_be_bytes());
+    bytes[8..16].copy_from_slice(&h2.to_be_bytes());
+
+    // Set version to 4
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    // Set variant to RFC 4122
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0], bytes[1], bytes[2], bytes[3],
+        bytes[4], bytes[5],
+        bytes[6], bytes[7],
+        bytes[8], bytes[9],
+        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+    )
+}
+
 fn get_command_version(cmd: &str, args: &[&str]) -> String {
     #[cfg(windows)]
     let mut command = Command::new("cmd");
@@ -396,6 +427,8 @@ fn start_agent_task(
     cmd.stderr(Stdio::from(log_file_err));
     cmd.current_dir(repo_dir);
 
+    inject_gemini_env(&mut cmd);
+
     let child = cmd.spawn().map_err(|e| format!("Failed to spawn child: {}", e))?;
     let pid = child.id();
 
@@ -520,35 +553,39 @@ fn launch_external_cli(cli_name: String, project_path: String) -> Result<String,
     // 先将专属提示词写入系统剪贴板
     inject_prompt_to_clipboard(&project_path, &cli_name);
 
-    let status = match cli_name.as_str() {
-        "claude" => Command::new("cmd").args(&[
+    let mut command = Command::new("cmd");
+    let args = match cli_name.as_str() {
+        "claude" => &[
             "/C", "start", "Claude Code", "cmd", "/k",
-            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Claude Code: 审查审计规程] && echo ==================================================== && echo. && claude"
-        ]).current_dir(repo_dir).spawn(),
-        "codex" => Command::new("cmd").args(&[
+            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Claude Code: 审查审计规程] && echo ==================================================== && echo. && D:\\npm_global\\claude.cmd"
+        ],
+        "codex" => &[
             "/C", "start", "Codex CLI", "cmd", "/k",
-            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Codex: 后端规程] && echo ==================================================== && echo. && codex"
-        ]).current_dir(repo_dir).spawn(),
-        "gemini" => Command::new("cmd").args(&[
+            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Codex: 后端规程] && echo ==================================================== && echo. && D:\\npm_global\\codex.cmd"
+        ],
+        "gemini" => &[
             "/C", "start", "Gemini CLI", "cmd", "/k",
-            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Antigravity: 前端规程] && echo ==================================================== && echo. && gemini"
-        ]).current_dir(repo_dir).spawn(),
-        "opencode" => Command::new("cmd").args(&[
+            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Antigravity: 前端规程] && echo ==================================================== && echo. && D:\\npm_global\\gemini.cmd"
+        ],
+        "opencode" => &[
             "/C", "start", "OpenCode CLI", "cmd", "/k",
-            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [OpenCode: 全局重构规程] && echo ==================================================== && echo. && opencode"
-        ]).current_dir(repo_dir).spawn(),
-        "hermes_agent" => Command::new("cmd").args(&[
+            "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [OpenCode: 全局重构规程] && echo ==================================================== && echo. && D:\\npm_global\\opencode.cmd"
+        ],
+        "hermes_agent" => &[
             "/C", "start", "Hermes Agent", "cmd", "/k",
             "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Hermes: 总规划师规程] && echo ==================================================== && echo. && C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe"
-        ]).current_dir(repo_dir).spawn(),
-        "hermes_dashboard" => Command::new("cmd").args(&[
+        ],
+        "hermes_dashboard" => &[
             "/C", "start", "Hermes Dashboard", "cmd", "/k",
             "color 0a && echo ==================================================== && echo [AgentFlow] 提示词已自动复制到您的剪贴板！ && echo 请直接在此处 Ctrl+V 粘贴并回车以注入 [Hermes: Dashboard] && echo ==================================================== && echo. && C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe dashboard"
-        ]).current_dir(repo_dir).spawn(),
+        ],
         _ => return Err("Unknown CLI name".to_string()),
     };
+
+    command.args(args).current_dir(repo_dir);
+    inject_gemini_env(&mut command);
     
-    match status {
+    match command.spawn() {
         Ok(_) => Ok(format!("Successfully launched {}", cli_name)),
         Err(e) => Err(format!("Failed to launch {}: {}", cli_name, e)),
     }
@@ -567,6 +604,25 @@ fn get_home_dir() -> PathBuf {
         PathBuf::from(home)
     } else {
         PathBuf::from("C:\\Users\\Legion")
+    }
+}
+
+fn inject_gemini_env(cmd: &mut Command) {
+    let env_path = get_home_dir().join(".gemini").join(".env");
+    if env_path.exists() {
+        if let Ok(content) = fs::read_to_string(env_path) {
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some(pos) = line.find('=') {
+                    let key = line[..pos].trim();
+                    let val = line[pos + 1..].trim();
+                    cmd.env(key, val);
+                }
+            }
+        }
     }
 }
 
@@ -1116,13 +1172,22 @@ fn clean_ansi_output(input: &str) -> String {
     cleaned_lines.join("\n")
 }
 
+fn chat_daemons() -> &'static std::sync::Mutex<std::collections::HashMap<String, std::process::Child>> {
+    static CHAT_DAEMONS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, std::process::Child>>> = std::sync::OnceLock::new();
+    CHAT_DAEMONS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn chat_stdins() -> &'static std::sync::Mutex<std::collections::HashMap<String, std::process::ChildStdin>> {
+    static CHAT_STDINS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, std::process::ChildStdin>>> = std::sync::OnceLock::new();
+    CHAT_STDINS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
 #[tauri::command]
-async fn run_agent_cli(
+async fn ensure_agent_chat_daemon(
     cli_name: String,
     project_path: String,
     task_id: Option<String>,
-    prompt: String,
-) -> Result<String, String> {
+) -> Result<(), String> {
     let repo_dir = Path::new(&project_path);
     let mut run_dir = repo_dir.to_path_buf();
     if let Some(ref tid) = task_id {
@@ -1134,29 +1199,61 @@ async fn run_agent_cli(
         }
     }
 
+    let map_key = if let Some(ref tid) = task_id {
+        format!("{}_{}_{}", project_path, cli_name, tid)
+    } else {
+        format!("{}_{}_general", project_path, cli_name)
+    };
+    
+    let mut daemons = chat_daemons().lock().map_err(|e| e.to_string())?;
+    let mut stdins = chat_stdins().lock().map_err(|e| e.to_string())?;
+    
+    let is_running = if let Some(child) = daemons.get_mut(&map_key) {
+        match child.try_wait() {
+            Ok(None) => true,
+            _ => false,
+        }
+    } else {
+        false
+    };
+    
+    if is_running {
+        return Ok(());
+    }
+    
+    daemons.remove(&map_key);
+    stdins.remove(&map_key);
+    
+    let session_key = if let Some(ref tid) = task_id {
+        format!("{}_{}_{}", project_path, cli_name, tid)
+    } else {
+        format!("{}_{}_general", project_path, cli_name)
+    };
+    let uuid = generate_deterministic_uuid(&session_key);
+    
     #[cfg(windows)]
     let (exe, args) = match cli_name.as_str() {
         "hermes" => (
             "C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe",
-            vec!["-z".to_string(), prompt],
+            vec!["--resume".to_string(), uuid.clone()],
         ),
         "antigravity" => (
             "D:\\npm_global\\gemini.cmd",
-            vec!["-p".to_string(), prompt, "-y".to_string()],
+            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
         ),
         "codex" => (
             "D:\\npm_global\\codex.cmd",
             vec![
-                "exec".to_string(),
-                prompt,
+                "--session-id".to_string(),
+                uuid.clone(),
                 "--dangerously-bypass-approvals-and-sandbox".to_string(),
             ],
         ),
         "claudecode" => (
             "D:\\npm_global\\claude.cmd",
             vec![
-                "-p".to_string(),
-                prompt,
+                "--session-id".to_string(),
+                uuid.clone(),
                 "--permission-mode".to_string(),
                 "bypassPermissions".to_string(),
             ],
@@ -1164,8 +1261,8 @@ async fn run_agent_cli(
         "opencode" => (
             "D:\\npm_global\\opencode.cmd",
             vec![
-                "run".to_string(),
-                prompt,
+                "--session".to_string(),
+                uuid.clone(),
                 "--dangerously-skip-permissions".to_string(),
             ],
         ),
@@ -1176,25 +1273,25 @@ async fn run_agent_cli(
     let (exe, args) = match cli_name.as_str() {
         "hermes" => (
             "hermes",
-            vec!["-z".to_string(), prompt],
+            vec!["--resume".to_string(), uuid.clone()],
         ),
         "antigravity" => (
             "gemini",
-            vec!["-p".to_string(), prompt, "-y".to_string()],
+            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
         ),
         "codex" => (
             "codex",
             vec![
-                "exec".to_string(),
-                prompt,
+                "--session-id".to_string(),
+                uuid.clone(),
                 "--dangerously-bypass-approvals-and-sandbox".to_string(),
             ],
         ),
         "claudecode" => (
             "claude",
             vec![
-                "-p".to_string(),
-                prompt,
+                "--session-id".to_string(),
+                uuid.clone(),
                 "--permission-mode".to_string(),
                 "bypassPermissions".to_string(),
             ],
@@ -1202,8 +1299,8 @@ async fn run_agent_cli(
         "opencode" => (
             "opencode",
             vec![
-                "run".to_string(),
-                prompt,
+                "--session".to_string(),
+                uuid.clone(),
                 "--dangerously-skip-permissions".to_string(),
             ],
         ),
@@ -1220,9 +1317,12 @@ async fn run_agent_cli(
     #[cfg(not(windows))]
     cmd.args(&args);
 
-    cmd.current_dir(&run_dir)
+    cmd.current_dir(run_dir)
+       .stdin(Stdio::piped())
        .stdout(Stdio::piped())
        .stderr(Stdio::piped());
+
+    inject_gemini_env(&mut cmd);
 
     #[cfg(windows)]
     {
@@ -1230,35 +1330,406 @@ async fn run_agent_cli(
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let child = cmd.spawn().map_err(|e| format!("Failed to spawn CLI process: {}", e))?;
-    let pid = child.id();
-    let map_key = format!("{}_{}", project_path, cli_name);
-
-    {
-        let mut map = running_agents().lock().map_err(|e| e.to_string())?;
-        map.insert(map_key.clone(), pid);
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn chat daemon process: {}", e))?;
+    
+    let log_filename = if let Some(ref tid) = task_id {
+        format!("chat_{}_{}.log", cli_name, tid.to_lowercase())
+    } else {
+        format!("chat_{}_general.log", cli_name)
+    };
+    
+    let log_path = Path::new(&project_path).join(".agentflow").join("logs").join(&log_filename);
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
+    
+    let _ = std::fs::File::create(&log_path);
 
-    let output = child.wait_with_output();
+    let mut stdout = child.stdout.take().ok_or("Failed to get stdout pipe")?;
+    let log_path_clone = log_path.clone();
+    std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        let mut buffer = [0u8; 1024];
+        while let Ok(n) = stdout.read(&mut buffer) {
+            if n == 0 { break; }
+            if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path_clone) {
+                file.write_all(&buffer[..n]).ok();
+            }
+        }
+    });
+
+    let mut stderr = child.stderr.take().ok_or("Failed to get stderr pipe")?;
+    let log_path_clone2 = log_path.clone();
+    std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        let mut buffer = [0u8; 1024];
+        while let Ok(n) = stderr.read(&mut buffer) {
+            if n == 0 { break; }
+            if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path_clone2) {
+                file.write_all(&buffer[..n]).ok();
+            }
+        }
+    });
+
+    let stdin = child.stdin.take().ok_or("Failed to get stdin pipe")?;
+    
+    daemons.insert(map_key.clone(), child);
+    stdins.insert(map_key, stdin);
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn send_agent_chat_stdin(
+    cli_name: String,
+    project_path: String,
+    task_id: Option<String>,
+    input: String,
+) -> Result<(), String> {
+    let map_key = if let Some(ref tid) = task_id {
+        format!("{}_{}_{}", project_path, cli_name, tid)
+    } else {
+        format!("{}_{}_general", project_path, cli_name)
+    };
+    
+    let mut stdins = chat_stdins().lock().map_err(|e| e.to_string())?;
+    if let Some(stdin) = stdins.get_mut(&map_key) {
+        use std::io::Write;
+        let data = format!("{}\n", input);
+        stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+        stdin.flush().map_err(|e| e.to_string())?;
+        
+        let log_filename = if let Some(ref tid) = task_id {
+            format!("chat_{}_{}.log", cli_name, tid.to_lowercase())
+        } else {
+            format!("chat_{}_general.log", cli_name)
+        };
+        let log_path = Path::new(&project_path).join(".agentflow").join("logs").join(&log_filename);
+        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path) {
+            let echo = format!("\n➜ {}\n", input);
+            file.write_all(echo.as_bytes()).ok();
+        }
+        
+        Ok(())
+    } else {
+        Err("Agent chat daemon stdin not found. Please ensure agent chat is running.".to_string())
+    }
+}
+
+#[tauri::command]
+async fn run_agent_cli(
+    cli_name: String,
+    project_path: String,
+    task_id: Option<String>,
+    prompt: String,
+) -> Result<String, String> {
+    ensure_agent_chat_daemon(cli_name.clone(), project_path.clone(), task_id.clone()).await?;
+
+    let map_key = if let Some(ref tid) = task_id {
+        format!("{}_{}_{}", project_path, cli_name, tid)
+    } else {
+        format!("{}_{}_general", project_path, cli_name)
+    };
+
+    let log_filename = if let Some(ref tid) = task_id {
+        format!("chat_{}_{}.log", cli_name, tid.to_lowercase())
+    } else {
+        format!("chat_{}_general.log", cli_name)
+    };
+    
+    let log_path = Path::new(&project_path).join(".agentflow").join("logs").join(&log_filename);
+
+    let start_offset = if log_path.exists() {
+        std::fs::metadata(&log_path).map(|m| m.len()).unwrap_or(0)
+    } else {
+        0
+    };
 
     {
-        if let Ok(mut map) = running_agents().lock() {
-            map.remove(&map_key);
+        let mut stdins = chat_stdins().lock().map_err(|e| e.to_string())?;
+        if let Some(stdin) = stdins.get_mut(&map_key) {
+            use std::io::Write;
+            let data = format!("{}\n", prompt);
+            stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+            stdin.flush().map_err(|e| e.to_string())?;
+        } else {
+            return Err("Failed to find stdin for chat daemon".to_string());
         }
     }
 
-    let output = output.map_err(|e| format!("Failed to wait for CLI execution: {}", e))?;
+    let start_time = std::time::Instant::now();
+    let mut last_size = start_offset;
+    let mut last_change_time = std::time::Instant::now();
 
-    let stdout_str = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
-    let combined = format!("{}{}", stdout_str, stderr_str);
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(200));
 
-    let cleaned = clean_ansi_output(&combined);
+        let current_size = if log_path.exists() {
+            std::fs::metadata(&log_path).map(|m| m.len()).unwrap_or(0)
+        } else {
+            0
+        };
 
-    if output.status.success() {
-        Ok(cleaned)
+        if current_size > last_size {
+            last_size = current_size;
+            last_change_time = std::time::Instant::now();
+        }
+
+        let elapsed_since_last_change = last_change_time.elapsed().as_millis();
+        let total_elapsed = start_time.elapsed().as_secs();
+
+        if total_elapsed >= 180 {
+            break;
+        }
+
+        if current_size > start_offset {
+            if let Ok(content) = std::fs::read(&log_path) {
+                let new_bytes = &content[start_offset as usize..];
+                let new_text = String::from_utf8_lossy(new_bytes);
+                let cleaned = clean_ansi_output(&new_text);
+                let trimmed = cleaned.trim();
+
+                if elapsed_since_last_change >= 500 {
+                    if trimmed.ends_with('>') || trimmed.ends_with('$') || trimmed.ends_with('#') || trimmed.ends_with('?') {
+                        break;
+                    }
+                }
+
+                if elapsed_since_last_change >= 3000 {
+                    break;
+                }
+            }
+        } else {
+            if total_elapsed >= 5 {
+                break;
+            }
+        }
+    }
+
+    if log_path.exists() {
+        if let Ok(content) = std::fs::read(&log_path) {
+            if (content.len() as u64) > start_offset {
+                let new_bytes = &content[start_offset as usize..];
+                let new_text = String::from_utf8_lossy(new_bytes).to_string();
+                
+                let cleaned = clean_ansi_output(&new_text);
+                
+                let mut lines: Vec<&str> = cleaned.lines().collect();
+                if let Some(last_line) = lines.last() {
+                    let last_trimmed = last_line.trim();
+                    if last_trimmed.ends_with('>') || last_trimmed.ends_with('$') || last_trimmed.ends_with('#') || last_trimmed.ends_with('?') {
+                        lines.pop();
+                    }
+                }
+                
+                return Ok(lines.join("\n"));
+            }
+        }
+    }
+
+    Ok("Done".to_string())
+}
+
+fn agent_daemons() -> &'static std::sync::Mutex<std::collections::HashMap<String, std::process::Child>> {
+    static AGENT_DAEMONS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, std::process::Child>>> = std::sync::OnceLock::new();
+    AGENT_DAEMONS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn agent_stdins() -> &'static std::sync::Mutex<std::collections::HashMap<String, std::process::ChildStdin>> {
+    static AGENT_STDINS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, std::process::ChildStdin>>> = std::sync::OnceLock::new();
+    AGENT_STDINS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+#[tauri::command]
+async fn ensure_agent_daemon(cli_name: String, project_path: String) -> Result<(), String> {
+    let map_key = format!("{}_{}", project_path, cli_name);
+    
+    let mut daemons = agent_daemons().lock().map_err(|e| e.to_string())?;
+    let mut stdins = agent_stdins().lock().map_err(|e| e.to_string())?;
+    
+    let is_running = if let Some(child) = daemons.get_mut(&map_key) {
+        match child.try_wait() {
+            Ok(None) => true,
+            _ => false,
+        }
     } else {
-        Err(cleaned)
+        false
+    };
+    
+    if is_running {
+        return Ok(());
+    }
+    
+    daemons.remove(&map_key);
+    stdins.remove(&map_key);
+    
+    let session_key = format!("{}_{}_daemon", project_path, cli_name);
+    let uuid = generate_deterministic_uuid(&session_key);
+    
+    let repo_dir = Path::new(&project_path);
+    
+    #[cfg(windows)]
+    let (exe, args) = match cli_name.as_str() {
+        "hermes" => (
+            "C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe",
+            vec!["--resume".to_string(), uuid.clone()],
+        ),
+        "antigravity" => (
+            "D:\\npm_global\\gemini.cmd",
+            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
+        ),
+        "codex" => (
+            "D:\\npm_global\\codex.cmd",
+            vec![
+                "--session-id".to_string(),
+                uuid.clone(),
+                "--dangerously-bypass-approvals-and-sandbox".to_string(),
+            ],
+        ),
+        "claudecode" => (
+            "D:\\npm_global\\claude.cmd",
+            vec![
+                "--session-id".to_string(),
+                uuid.clone(),
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+            ],
+        ),
+        "opencode" => (
+            "D:\\npm_global\\opencode.cmd",
+            vec![
+                "--session".to_string(),
+                uuid.clone(),
+                "--dangerously-skip-permissions".to_string(),
+            ],
+        ),
+        _ => return Err("Unknown CLI name".to_string()),
+    };
+
+    #[cfg(not(windows))]
+    let (exe, args) = match cli_name.as_str() {
+        "hermes" => (
+            "hermes",
+            vec!["--resume".to_string(), uuid.clone()],
+        ),
+        "antigravity" => (
+            "gemini",
+            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
+        ),
+        "codex" => (
+            "codex",
+            vec![
+                "--session-id".to_string(),
+                uuid.clone(),
+                "--dangerously-bypass-approvals-and-sandbox".to_string(),
+            ],
+        ),
+        "claudecode" => (
+            "claude",
+            vec![
+                "--session-id".to_string(),
+                uuid.clone(),
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+            ],
+        ),
+        "opencode" => (
+            "opencode",
+            vec![
+                "--session".to_string(),
+                uuid.clone(),
+                "--dangerously-skip-permissions".to_string(),
+            ],
+        ),
+        _ => return Err("Unknown CLI name".to_string()),
+    };
+
+    #[cfg(windows)]
+    let mut cmd = Command::new("cmd");
+    #[cfg(windows)]
+    cmd.arg("/C").arg(exe).args(&args);
+
+    #[cfg(not(windows))]
+    let mut cmd = Command::new(exe);
+    #[cfg(not(windows))]
+    cmd.args(&args);
+
+    cmd.current_dir(repo_dir)
+       .stdin(Stdio::piped())
+       .stdout(Stdio::piped())
+       .stderr(Stdio::piped());
+
+    inject_gemini_env(&mut cmd);
+
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn daemon process: {}", e))?;
+    
+    let log_path = Path::new(&project_path).join(".agentflow").join("logs").join(format!("agent_{}.log", cli_name));
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    
+    let _ = std::fs::File::create(&log_path);
+
+    let mut stdout = child.stdout.take().ok_or("Failed to get stdout pipe")?;
+    let log_path_clone = log_path.clone();
+    std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        let mut buffer = [0u8; 1024];
+        while let Ok(n) = stdout.read(&mut buffer) {
+            if n == 0 { break; }
+            if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path_clone) {
+                file.write_all(&buffer[..n]).ok();
+            }
+        }
+    });
+
+    let mut stderr = child.stderr.take().ok_or("Failed to get stderr pipe")?;
+    let log_path_clone2 = log_path.clone();
+    std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        let mut buffer = [0u8; 1024];
+        while let Ok(n) = stderr.read(&mut buffer) {
+            if n == 0 { break; }
+            if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path_clone2) {
+                file.write_all(&buffer[..n]).ok();
+            }
+        }
+    });
+
+    let stdin = child.stdin.take().ok_or("Failed to get stdin pipe")?;
+    
+    daemons.insert(map_key.clone(), child);
+    stdins.insert(map_key, stdin);
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn send_agent_stdin(cli_name: String, project_path: String, input: String) -> Result<(), String> {
+    let map_key = format!("{}_{}", project_path, cli_name);
+    
+    let mut stdins = agent_stdins().lock().map_err(|e| e.to_string())?;
+    if let Some(stdin) = stdins.get_mut(&map_key) {
+        use std::io::Write;
+        let data = format!("{}\n", input);
+        stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+        stdin.flush().map_err(|e| e.to_string())?;
+        
+        let log_path = Path::new(&project_path).join(".agentflow").join("logs").join(format!("agent_{}.log", cli_name));
+        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_path) {
+            let echo = format!("\n➜ {}\n", input);
+            file.write_all(echo.as_bytes()).ok();
+        }
+        
+        Ok(())
+    } else {
+        Err("Agent daemon stdin not found. Please ensure agent is running.".to_string())
     }
 }
 
@@ -1379,7 +1850,11 @@ pub fn run() {
             proxy_post_request,
             initialize_project,
             run_agent_cli,
-            stop_agent_cli
+            stop_agent_cli,
+            ensure_agent_daemon,
+            send_agent_stdin,
+            ensure_agent_chat_daemon,
+            send_agent_chat_stdin
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

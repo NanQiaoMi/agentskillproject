@@ -486,8 +486,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
         invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) })
           .then(() => invoke('run_agentflow_cmd', { projectPath, args: ['sync'] }))
           .then(() => { if (fetchTasks) fetchTasks(); })
-          .catch(err => console.error("Background sync error (user comment):", err));        // Determine active agent using getActiveAgent helper
-        const activeAgent = getActiveAgent(chatInputText, taskData.comments, selectedTask.assignee);
+          .catch(err => console.error("Background sync error (user comment):", err));
+        let activeAgent = getActiveAgent(chatInputText, taskData.comments, selectedTask.assignee);
+        if (!activeAgent.file) {
+          activeAgent = { name: 'Antigravity', file: 'antigravity' };
+        }
         
         // Automatic backend task state & git worktree transitions based on chat context
         if (selectedTask.status === 'todo' && activeAgent.name !== 'MIMIcode') {
@@ -543,173 +546,72 @@ export const ChatView: React.FC<ChatViewProps> = ({
         setThinkingAgent(activeAgent.name);
         setIsThinking(true);
 
-        if (activeAgent.file) {
-          // --- CLI AGENT RUN FLOW ---
-          (async () => {
-            try {
-              const replyText = await invoke<string>('run_agent_cli', {
-                cliName: activeAgent.file,
-                projectPath,
-                taskId: selectedTask ? selectedTask.id : null,
-                prompt: userMsg
-              });
+        // --- CLI AGENT RUN FLOW ---
+        (async () => {
+          try {
+            const replyText = await invoke<string>('run_agent_cli', {
+              cliName: activeAgent.file,
+              projectPath,
+              taskId: selectedTask ? selectedTask.id : null,
+              prompt: userMsg
+            });
 
-              // Write complete output to physical log file
-              const timestamp = new Date().toISOString().replace(/[-:T]/g, '_').substring(0, 19);
-              const logFileName = `cli_${activeAgent.file}_${timestamp}.log`;
-              const separator = projectPath.includes('/') ? '/' : '\\';
-              const logsDir = `${projectPath}${separator}.agentflow${separator}logs`;
-              const logFilePath = `${logsDir}${separator}${logFileName}`;
+            // Write complete output to physical log file
+            const timestamp = new Date().toISOString().replace(/[-:T]/g, '_').substring(0, 19);
+            const logFileName = `cli_${activeAgent.file}_${timestamp}.log`;
+            const separator = projectPath.includes('/') ? '/' : '\\';
+            const logsDir = `${projectPath}${separator}.agentflow${separator}logs`;
+            const logFilePath = `${logsDir}${separator}${logFileName}`;
 
-              // Ensure logs directory exists
-              await invoke('run_shell_command', { 
-                command: `mkdir "${logsDir}"`, 
-                cwd: projectPath 
-              }).catch(() => {});
+            // Ensure logs directory exists
+            await invoke('run_shell_command', { 
+              command: `mkdir "${logsDir}"`, 
+              cwd: projectPath 
+            }).catch(() => {});
 
-              await invoke('write_file_content', { path: logFilePath, content: replyText });
+            await invoke('write_file_content', { path: logFilePath, content: replyText });
 
-              // Build comment: summary (first 100 lines) + link
-              const lines = replyText.split('\n');
-              let summary = lines.slice(0, 100).join('\n');
-              if (lines.length > 100) {
-                summary += '\n\n... (终端日志已被部分截断，完整日志请查看下方链接) ...';
-              }
-
-              const cleanLogPath = logFilePath.replace(/\\/g, '/');
-              const relativeLogLink = `\n\n[查看完整执行终端日志](file:///${cleanLogPath})`;
-              const commentContent = summary + relativeLogLink;
-
-              const assistantComment = {
-                time: new Date().toISOString(),
-                author: activeAgent.name,
-                comment: commentContent
-              };
-              taskData.comments.push(assistantComment);
-              setLocalComments([...taskData.comments]);
-              setIsThinking(false);
-
-              // Save and sync
-              await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) });
-              await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
-              if (fetchTasks) fetchTasks();
-            } catch (err: any) {
-              console.error("CLI Execution failed or aborted:", err);
-              const errorMsg = typeof err === 'string' ? err : String(err);
-              const assistantComment = {
-                time: new Date().toISOString(),
-                author: activeAgent.name,
-                comment: `❌ 执行失败或已被用户中止。\n\n终端输出：\n\`\`\`\n${errorMsg}\n\`\`\``
-              };
-              taskData.comments.push(assistantComment);
-              setLocalComments([...taskData.comments]);
-              setIsThinking(false);
-
-              await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) });
-              await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
-              if (fetchTasks) fetchTasks();
+            // Build comment: summary (first 100 lines) + link
+            const lines = replyText.split('\n');
+            let summary = lines.slice(0, 100).join('\n');
+            if (lines.length > 100) {
+              summary += '\n\n... (终端日志已被部分截断，完整日志请查看下方链接) ...';
             }
-          })();
-        } else {
-          // --- MIMIcode / Sensenova LLM FALLBACK FLOW ---
-          (async () => {
-            try {
-              let systemPrompt = `你现在是 MIMIcode Studio（本地多智能体协同开发工作区）的 **全栈架构与协同导师 (Full-Stack Architect & Orchestration Guide)**。
-你当前的任务是扮演核心架构师，统揽全局，全方位指导并协同用户推进完成开发卡片任务：【Task ${selectedTask.id}: "${selectedTask.title}"】。
-任务描述：${selectedTask.description || '暂无描述'}
 
-你不仅是一个技术协调员，更是连接前端 React TS、后端 Rust Tauri、数据库设计、智能体 CLI 和版本控制的**全栈技术大脑**。你的职责和指导行为准则如下：
+            const cleanLogPath = logFilePath.replace(/\\/g, '/');
+            const relativeLogLink = `\n\n[查看完整执行终端日志](file:///${cleanLogPath})`;
+            const commentContent = summary + relativeLogLink;
 
-1. 🌐 **全栈技术架构与实施指导**：
-   - **前端层 (React + TypeScript + CSS)**：对前端设计进行结构化指导。根据任务需求，提供合理的组件拆分方案、React 状态管理建议、组件 Props 接口定义，并配合 @Antigravity 落地视觉和交互。
-   - **后端层 (Rust + Tauri + CLI)**：针对需要与系统底层或外部命令交互的需求，给出 Rust 端 Tauri command 接口设计（如 \`#[tauri::command]\` 签名）和安全性建议。
-   - **数据持久化层 (SQLite + File System)**：根据任务逻辑，给出数据库 schema设计或文件存储方案建议。
-   - **版本控制与工作空间 (Git Worktrees)**：在多人或多任务并行时，指导用户利用 Git 工作区隔离开发，预防分支冲突。
+            const assistantComment = {
+              time: new Date().toISOString(),
+              author: activeAgent.name,
+              comment: commentContent
+            };
+            taskData.comments.push(assistantComment);
+            setLocalComments([...taskData.comments]);
+            setIsThinking(false);
 
-2. 🤖 **全局协同与分工调度 (Agent Command & Control)**：
-   你应清晰指出在任务的生命周期中，如何调度各个本地专用 Agent（使用聊天框 @ 唤起），并建议具体的操作指令：
-   - **@Hermes (总规划师 / Planner)**：当进行架构设计、编写 PRD 需求清单、细化任务看板步骤时，建议调用 Hermes。
-   - **@Antigravity (前端设计官 / Frontend)**：当进入 UI 布局编写、React 状态逻辑或 CSS 变量调试时，建议调用 Antigravity。
-   - **@Codex (后端构建官 / Backend)**：当需要编写 Rust 核心服务、Tauri命令、外壳脚本执行或数据接口时，建议调用 Codex。
-   - **@OpenCode (重构官 / Refactorer)**：当需要进行代码精简、类型安全性检查、性能优化或架构重构时，建议调用 OpenCode。
-   - **@ClaudeCode (审计官 / Auditor)**：当需要编写单元测试、执行静态代码扫描、审查安全隐患时，建议调用 Claude Code。
+            // Save and sync
+            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) });
+            await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
+            if (fetchTasks) fetchTasks();
+          } catch (err: any) {
+            console.error("CLI Execution failed or aborted:", err);
+            const errorMsg = typeof err === 'string' ? err : String(err);
+            const assistantComment = {
+              time: new Date().toISOString(),
+              author: activeAgent.name,
+              comment: `❌ 执行失败或已被用户中止。\n\n终端输出：\n\`\`\`\n${errorMsg}\n\`\`\``
+            };
+            taskData.comments.push(assistantComment);
+            setLocalComments([...taskData.comments]);
+            setIsThinking(false);
 
-3. 🔍 **环境诊断与调试辅助**：
-   - 当遇到环境依赖问题时，主动引导用户前往 Diagnostics（诊断）视图，提示使用 "Run Full Check" 刷新或 "Repair Environment"自愈。
-   - 引导用户分析 Logs（日志）或任务终端中的 pytest/git 输出，帮助其找出报错的底层根源。
-
-4. ✍️ **回答风格与指导深度**：
-   - **系统化思考**：给出的方案必须是前后端协同的完整全栈方案（例如：前端如何调用 -> 后端如何响应 -> 状态如何持久化）。
-   - **细节与专业性**：提供具体的接口定义、架构图表 (Markdown / Mermaid)、文件存放路径规划。
-   - **行动导向**：指导要清晰、步骤分明，使初学者到高级开发人员都能获得实质性帮助。`;
-
-              const apiMessages = [
-                {
-                  role: "system",
-                  content: systemPrompt
-                },
-                ...taskData.comments.map((c: any) => ({
-                  role: c.author === 'user' ? 'user' : 'assistant',
-                  content: c.comment
-                }))
-              ];
-
-              let replyContent = '';
-              let success = false;
-              
-              const keys = [
-                'sk-YTrTyea99VLT1ur2qAfHYLaoLZldCNOk',
-                'sk-sbSUsNQGxFYF58i2iojHKNtd8chEv8Nd'
-              ];
-              
-              for (const key of keys) {
-                try {
-                  const responseText: string = await invoke('proxy_post_request', {
-                    url: 'https://token.sensenova.cn/v1/chat/completions',
-                    apiKey: key,
-                    body: JSON.stringify({
-                      model: 'deepseek-v4-flash',
-                      messages: apiMessages,
-                      temperature: 0.7
-                    })
-                  });
-                  
-                  const data = JSON.parse(responseText);
-                  if (data.choices && data.choices[0] && data.choices[0].message) {
-                    replyContent = data.choices[0].message.content;
-                    success = true;
-                    break;
-                  } else if (data.error) {
-                    console.error('LLM API error response:', data.error);
-                  }
-                } catch (err) {
-                  console.error('LLM Fetch error with key:', err);
-                }
-              }
-
-              if (!success) {
-                replyContent = "抱歉，MIMIcode 目前无法连接 to AI 大模型服务。请检查网络。";
-              }
-
-              const assistantComment = {
-                time: new Date().toISOString(),
-                author: 'MIMIcode',
-                comment: replyContent
-              };
-              taskData.comments.push(assistantComment);
-
-              setLocalComments([...taskData.comments]);
-              setIsThinking(false);
-
-              await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) });
-              await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
-              if (fetchTasks) fetchTasks();
-            } catch (err) {
-              console.error('Failed to get LLM response:', err);
-              setIsThinking(false);
-            }
-          })();
-        }
+            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData.comments) });
+            await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
+            if (fetchTasks) fetchTasks();
+          }
+        })();
       } else {
         // Clean title (remove mentions for clean display)
         let cleanedTitle = chatInputText;

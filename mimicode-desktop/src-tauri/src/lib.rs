@@ -1210,9 +1210,17 @@ async fn run_agent_cli(
         _ => return Err("Unknown CLI name".to_string()),
     };
 
+    #[cfg(windows)]
+    let mut cmd = Command::new("cmd");
+    #[cfg(windows)]
+    cmd.arg("/C").arg(exe).args(&args);
+
+    #[cfg(not(windows))]
     let mut cmd = Command::new(exe);
-    cmd.args(&args)
-       .current_dir(&run_dir)
+    #[cfg(not(windows))]
+    cmd.args(&args);
+
+    cmd.current_dir(&run_dir)
        .stdout(Stdio::piped())
        .stderr(Stdio::piped());
 

@@ -1,17 +1,38 @@
-# 真实 CLI 智能体后端接入设计规程
+# 真实 CLI 智能体后端集成与生命周期控制设计规程
 
-本文档设计了将真实 CLI 智能体（Hermes, Antigravity/Gemini, Codex, Claude Code, OpenCode）通过 Rust 后端无窗口静默启动并捕获输出，在 MIMIcode Studio 软件前端聊天对话框中直接展示的集成方案。
+本文档详细规范了将真实本地 CLI 智能体（Hermes, Antigravity/Gemini, Codex, Claude Code, OpenCode）接入 MIMIcode Studio 对话框的架构设计、数据流、异常边界与生命周期管理机制。
 
-## 1. 目标与背景
+## 1. 架构目标
 
-当前 MIMIcode Studio 的聊天界面在输入 `@Antigravity` 等特定 Agent 时，仅在前端模拟了大模型的对话回复（调用了云端的 Sensenova DeepSeek-V4-Flash 模型），并未真正启动本地底层的 CLI 智能体去修改代码、执行测试或重构项目。
-本设计将替换这一模拟对话逻辑：当用户在聊天对话框中激活或 @ 提及某个智能体时，直接在 Rust 后端以非交互模式启动其本地 CLI 工具，在任务指定的 Git 工作区或项目路径下自动运行，并将执行后的终端详细日志/答复返回，作为该 Agent 的正式对话回复显示在前端聊天界面中。
+彻底替换聊天对话框的模拟 AI 回复（云端 LLM 直连），使其直接绑定本地 CLI。当在聊天中激活某个智能体（如 `@Antigravity` 或指派智能体）时，在后台以无窗口、非交互模式（One-shot/Headless）启动该智能体对应的本地命令行程序。执行结束后，将其终端输出渲染至聊天对话框中，并同步记录到对应的任务 Markdown 文档中。
+
+---
 
 ## 2. 后端设计 (Rust Tauri Command)
 
-在 `mimicode-desktop/src-tauri/src/lib.rs` 中新增一个 Tauri 命令 `run_agent_cli`：
+后端主要新增两个核心命令：`run_agent_cli` 用于运行 CLI，`stop_agent_cli` 用于中止当前正在运行的进程。
 
-### 2.1 函数签名
+### 2.1 进程与生命周期管理
+
+后端在 Rust 中引入一个线程安全的全局进程管理器（使用 `std::sync::Mutex` 或 `lazy_static` 包装的 `HashMap<String, u32>`），用来存储当前正在运行的任务或 CLI 名称与其进程 ID (PID) 的映射关系。
+
+```rust
+use std::collections::HashMap;
+use std::sync::Mutex;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref RUNNING_AGENTS: Mutex<HashMap<String, u32>> = Mutex::new(HashMap::new());
+}
+```
+
+- **任务注册**：当启动一个 CLI 进程时，将其 PID 注册进 `RUNNING_AGENTS`（Key 可使用 `format!("{}_{}", project_path, cli_name)`）。
+- **任务注销**：进程运行正常结束或被中止时，将其从 Map 中移除。
+- **中止机制 (`stop_agent_cli`)**：前端点击中止时，Rust 后端根据 Key 查找到 PID，调用系统指令（Windows 下使用 `taskkill /F /PID <pid> /T` 强杀子进程树），以释放文件锁并立即释放资源。
+
+### 2.2 Tauri 命令签名
+
+#### 1. 运行 CLI 智能体
 ```rust
 #[tauri::command]
 pub async fn run_agent_cli(
@@ -22,67 +43,60 @@ pub async fn run_agent_cli(
 ) -> Result<String, String>;
 ```
 
-### 2.2 工作目录解析规则
-1. 如果 `task_id` 存在（如 `TASK-101`），则检测位于项目父级目录的 Git 工作区：
-   `let worktree_dir = parent_dir.join("mimicode_worktrees").join(task_id.to_uppercase());`
-2. 如果该工作区目录存在，则将执行的当前工作目录 (`current_dir`) 设置为该工作区目录。
-3. 否则，默认在 `project_path`（主项目目录）中运行。
+- **执行路径解析与自动降级**：
+  1. 如果存在 `task_id`，且项目父级目录的 Git 工作区目录 `parent_dir.join("mimicode_worktrees").join(task_id.to_uppercase())` 存在，则将执行的 `current_dir` 设为该工作区。
+  2. 若该工作区目录不存在，则自动降级回退到 `project_path`（主项目路径）中执行。
+- **环境变量**：不主动注入凭证密钥，由进程继承操作系统环境变量（用户需自己在 Windows 系统级配置好如 `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` 等环境变量）。
+- **CLI 映射与非交互式命令组合**：
+  - **hermes**: `"C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe"` | 参数：`["-z", prompt]`
+  - **antigravity**: `"D:\\npm_global\\gemini.cmd"` | 参数：`["-p", prompt, "-y"]`
+  - **codex**: `"D:\\npm_global\\codex.cmd"` | 参数：`["exec", prompt, "--dangerously-bypass-approvals-and-sandbox"]`
+  - **claudecode**: `"D:\\npm_global\\claude.cmd"` | 参数：`["-p", prompt, "--permission-mode", "bypassPermissions"]`
+  - **opencode**: `"D:\\npm_global\\opencode.cmd"` | 参数：`["run", prompt, "--dangerously-skip-permissions"]`
 
-### 2.3 智能体 CLI 可执行文件及参数映射
-不同智能体 CLI 的无提示、非交互式一键运行配置参数如下：
-- **hermes**:
-  - 路径：`C:\Users\Legion\AppData\Local\hermes\hermes-agent\venv\Scripts\hermes.exe`
-  - 参数：`["-z", prompt]`
-- **antigravity**:
-  - 路径：`D:\npm_global\gemini.cmd`
-  - 参数：`["-p", prompt, "-y"]`
-- **codex**:
-  - 路径：`D:\npm_global\codex.cmd`
-  - 参数：`["exec", prompt, "--dangerously-bypass-approvals-and-sandbox"]`
-- **claudecode**:
-  - 路径：`D:\npm_global\claude.cmd`
-  - 参数：`["-p", prompt, "--permission-mode", "bypassPermissions"]`
-- **opencode**:
-  - 路径：`D:\npm_global\opencode.cmd`
-  - 参数：`["run", prompt, "--dangerously-skip-permissions"]`
+#### 2. 中止 CLI 智能体
+```rust
+#[tauri::command]
+pub async fn stop_agent_cli(cli_name: String, project_path: String) -> Result<(), String>;
+```
+- 根据 `project_path` 与 `cli_name` 拼接 key 查找到正在运行进程的 PID。
+- 使用强杀子进程树命令结束进程：`Command::new("taskkill").args(&["/F", "/PID", &pid.to_string(), "/T"]).output()`。
 
-### 2.4 进程执行与捕获
-使用 Rust 的 `std::process::Command` 启动可执行文件，隐藏命令行窗口（Windows 下设置 `CREATE_NO_WINDOW = 0x08000000`），将标准输出 `stdout` 与标准错误 `stderr` 统一捕获，并作为 `String` 返回给前端。如果进程返回非 0 退出状态，也将详细错误捕获并返回。
+### 2.3 终端输出控制字符的过滤（清洗）
+
+从 stdout/stderr 捕获的文本需要经过清洗才可记录，清洗逻辑包含：
+- **后端清洗**：使用正则表达式过滤掉终端动态刷新序列，例如 `\r` (回车退格)、`\x1b[K` (清除行)、退格键控制符、重复的进度条重画码以及光标移动码。
+- 保留静态 ANSI 彩色/字形样式代码（如 `\x1b[32m` 绿色、`\x1b[1m` 粗体），交由前端解析。
 
 ---
 
 ## 3. 前端设计 (React ChatView.tsx)
 
-在 `mimicode-desktop/src/views/ChatView.tsx` 中修改 `handleSubmit` 逻辑：
+前端重点负责**思考与中止状态控制**、**终端颜色样式渲染**以及**大体积日志的归档链接处理**。
 
-### 3.1 激活的智能体判定
-利用已有的 `getActiveAgent` 解析当前对话的智能体信息（根据 `@` 提及、上下文上一次回复或任务默认指派人）：
-- 如果 `activeAgent.file` 为 `null`（代表统筹大脑 `MIMIcode`），继续走原有的云端大模型回复机制。
-- 如果 `activeAgent.file` 不为 `null`（值为 `'hermes'`, `'antigravity'`, `'codex'`, `'claudecode'`, `'opencode'` 之一），则触发本地 CLI 执行。
+### 3.1 界面交互流与生命周期控制
+- **发送消息**：用户在输入框发送 Prompt，消息推入 `localComments`，清空并禁用输入框与发送按钮。
+- **运行态呈现**：将 `thinkingAgent` 设为对应 Agent（如 Antigravity），设置 `isThinking(true)`。
+- **中止按钮**：在“思考中...”消息框右侧呈现“中止运行”的红色按钮。点击时，调用后端 `invoke('stop_agent_cli', { cliName, projectPath })`，前端取消等待，并向聊天流追加“任务已被用户强制中止”的本地系统消息。
+- **结束复原**：不论成功、失败或被强杀，执行结束后均恢复输入框可用状态。
 
-### 3.2 对话框执行与状态展示
-当需要触发本地 CLI 时：
-1. 前端向界面实时渲染一条用户输入的消息，并将聊天输入框清空、禁用以防重复提交。
-2. 将 `thinkingAgent` 设置为当前 Agent 的姓名，设置 `isThinking(true)`，展示“思考中...”状态。
-3. 调用 Tauri 命令：
-   ```typescript
-   const replyText = await invoke<string>('run_agent_cli', {
-     cliName: activeAgent.file,
-     projectPath,
-     taskId: selectedTask ? selectedTask.id : null,
-     prompt: userMsg
-   });
-   ```
-4. 将捕获的终端返回文本（`replyText`）构造为一条新的 comment，作者 (`author`) 设为该智能体名（例如 `"Antigravity"`），保存写入 markdown 文件并触发 `sync` 同步，最后在聊天框界面渲染出来。
-5. 关闭 `isThinking` 状态，恢复输入框可用状态。
+### 3.2 控制字符的 ANSI 渲染
+- 对话框中，对于由 CLI 返回的终端文本，不采用常规的 Markdown 文本显示，而是提供一个类似黑底终端面板的容器（如 `className="cli-terminal-log"`）。
+- 使用 ANSI-to-React/HTML 工具（或前端正则解析器），将保留的 `\x1b[3x` 彩色代码转换成对应的 CSS 行内样式（如蓝色、绿色、黄色高亮），将 ANSI 的格式完美还原，并正确保留文本换行。
+
+### 3.3 日志外置与关联同步 (Markdown)
+当 CLI 执行结束获得完整输出（假设为 `fullTerminalOutput`）后：
+1. **生成物理日志文件**：
+   在项目路径下的 `.agentflow/logs/` 目录中，生成一个独立的时间戳日志文件，例如 `cli_antigravity_20260603_153000.log`，将 `fullTerminalOutput` 写入其中。
+2. **截断与 Markdown 同步**：
+   在任务对应的评论 Markdown 文件（如 `.agentflow/tasks/TASK-101.md`）中，仅记录经过清洗后的前 100 行输出日志（防止 Markdown 文件过大导致软件卡顿），并在文末附带上此日志文件的本地路径链接：
+   `[查看完整执行终端日志](file:///<project_path>/.agentflow/logs/cli_antigravity_20260603_153000.log)`
+3. **前端渲染逻辑**：
+   前端渲染时，若检测到该 comment 含有本地日志链接，额外显示一个“打开完整日志文件”的按钮，调用 `open_in_explorer` 或直接在软件内部面板展示。
 
 ---
 
-## 4. 验证计划
+## 4. 边界场景与冲突处理
 
-1. **自动编译测试**：执行 `cargo check` 和 `npm run build` 确保 Rust 后端和 React 前端编译成功，没有类型错误。
-2. **人工测试**：
-   - 启动软件，打开一个任务卡片（例如包含 Git 工作区的任务）。
-   - 在聊天栏输入 `@Antigravity 创建一个 hello_world.html` 并回车。
-   - 验证后台是否自动调用 `gemini.cmd` 并在该任务的 Git 工作区目录下成功创建了该文件。
-   - 验证对话框是否成功显示了 `Antigravity` 真实终端输出日志，且没有报错。
+1. **Git 并发锁（`index.lock`）**：本版本不做全局独占式 Git 锁干预。若后台 CLI 与前端定时诊断/状态轮询发生 index.lock 并发冲突，终端会直接输出 Git 锁报错，用户点击重新执行即可。
+2. **全局环境继承**：若用户未在 Windows 环境变量中配置 API Key 导致 CLI 启动后模型报错，错误信息会完整捕获在终端日志中展示（如 "API key not found" 或 "HTTP 404 Model Not Found"），用户看到后只需前往系统配置环境变量并重启 MIMIcode 即可。

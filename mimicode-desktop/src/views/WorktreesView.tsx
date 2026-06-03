@@ -91,89 +91,110 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
     const loadWtDetails = async () => {
       setLoadingDetails(true);
       try {
-        // 1. 获取路径元数据（创建时间，is_clean）
-        const meta = await invoke<any>("get_path_metadata", { path: selectedWt.path });
-        setWtMeta(meta);
+        // Run all Git loading calls in parallel
+        const [metaRes, commitsRes, statusRes, filesRes, diagRes] = await Promise.allSettled([
+          invoke<any>("get_path_metadata", { path: selectedWt.path }),
+          invoke<string>("get_git_commits", { repoPath: selectedWt.path }),
+          invoke<string>("get_git_status", { repoPath: selectedWt.path }),
+          invoke<string>("read_dir_recursive", { path: selectedWt.path }),
+          invoke<any>("get_git_diagnostics", { repoPath: selectedWt.path })
+        ]);
 
-        // 2. 获取最近 100 条 Commit 用于更精准的热力图统计
-        const commitsStr = await invoke<string>("get_git_commits", { repoPath: selectedWt.path });
-        const parsedCommits = commitsStr.split('\n').filter(Boolean).map(line => {
-          const [hash, author, date, subject] = line.split('|');
-          return { hash, author, date: date ? date.trim() : '', subject };
-        });
-        setCommits(parsedCommits);
+        // 1. Process metadata
+        if (metaRes.status === 'fulfilled') {
+          setWtMeta(metaRes.value);
+        } else {
+          console.error("加载元数据失败:", metaRes.reason);
+        }
 
-        // 3. 获取文件变动
-        const statusStr = await invoke<string>("get_git_status", { repoPath: selectedWt.path });
-        const parsedChanges = statusStr.split('\n').filter(Boolean).map(line => {
-          const status = line.substring(0, 2).trim();
-          const file = line.substring(3).trim().replace(/"/g, '');
-          return { status, file };
-        });
-        setFileChanges(parsedChanges);
+        // 2. Process commits
+        if (commitsRes.status === 'fulfilled') {
+          const parsedCommits = commitsRes.value.split('\n').filter(Boolean).map(line => {
+            const [hash, author, date, subject] = line.split('|');
+            return { hash, author, date: date ? date.trim() : '', subject };
+          });
+          setCommits(parsedCommits);
+        } else {
+          console.error("加载提交记录失败:", commitsRes.reason);
+        }
 
-        // 4. 获取文件列表并进行动态文件后缀统计
-        try {
-          const filesStr = await invoke<string>("read_dir_recursive", { path: selectedWt.path });
-          const files = filesStr.split('\n').filter(Boolean);
-          
-          const counts: Record<string, number> = {};
-          files.forEach(f => {
-            const ext = f.split('.').pop()?.toLowerCase() || 'other';
-            counts[ext] = (counts[ext] || 0) + 1;
+        // 3. Process file changes
+        if (statusRes.status === 'fulfilled') {
+          const parsedChanges = statusRes.value.split('\n').filter(Boolean).map(line => {
+            const status = line.substring(0, 2).trim();
+            const file = line.substring(3).trim().replace(/"/g, '');
+            return { status, file };
           });
-          
-          const langMap: Record<string, { label: string; color: string; count: number }> = {
-            ts: { label: 'TypeScript', color: '#3178c6', count: 0 },
-            tsx: { label: 'TypeScript', color: '#3178c6', count: 0 },
-            rs: { label: 'Rust', color: '#deb887', count: 0 },
-            py: { label: 'Python', color: '#3572A5', count: 0 },
-            css: { label: 'CSS/HTML', color: '#563d7c', count: 0 },
-            html: { label: 'CSS/HTML', color: '#563d7c', count: 0 },
-            json: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
-            toml: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
-            yaml: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
-            yml: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
-            md: { label: 'Markdown', color: '#083fa1', count: 0 },
-          };
-          
-          let otherCount = 0;
-          Object.keys(counts).forEach(ext => {
-            if (langMap[ext]) {
-              langMap[ext].count += counts[ext];
-            } else {
-              otherCount += counts[ext];
-            }
-          });
-          
-          const grouped: Record<string, { label: string; color: string; count: number }> = {};
-          Object.values(langMap).forEach(item => {
-            if (item.count > 0) {
-              if (grouped[item.label]) {
-                grouped[item.label].count += item.count;
-              } else {
-                grouped[item.label] = { ...item };
-              }
-            }
-          });
-          
-          if (otherCount > 0) {
-            grouped['Other'] = { label: 'Other', color: '#8e8e8e', count: otherCount };
-          }
-          
-          const totalFiles = Object.values(grouped).reduce((sum, item) => sum + item.count, 0);
-          const statsList = Object.values(grouped)
-            .map(item => ({
-              label: item.label,
-              color: item.color,
-              count: item.count,
-              percent: totalFiles > 0 ? Math.round((item.count / totalFiles) * 100) : 0
-            }))
-            .sort((a, b) => b.count - a.count);
+          setFileChanges(parsedChanges);
+        } else {
+          console.error("加载文件变动失败:", statusRes.reason);
+        }
+
+        // 4. Process codebase file composition stats
+        if (filesRes.status === 'fulfilled') {
+          try {
+            const files = filesRes.value.split('\n').filter(Boolean);
+            const counts: Record<string, number> = {};
+            files.forEach(f => {
+              const ext = f.split('.').pop()?.toLowerCase() || 'other';
+              counts[ext] = (counts[ext] || 0) + 1;
+            });
             
-          setFileStats(statsList);
-        } catch (fileErr) {
-          console.error("加载文件统计失败:", fileErr);
+            const langMap: Record<string, { label: string; color: string; count: number }> = {
+              ts: { label: 'TypeScript', color: '#3178c6', count: 0 },
+              tsx: { label: 'TypeScript', color: '#3178c6', count: 0 },
+              rs: { label: 'Rust', color: '#deb887', count: 0 },
+              py: { label: 'Python', color: '#3572A5', count: 0 },
+              css: { label: 'CSS/HTML', color: '#563d7c', count: 0 },
+              html: { label: 'CSS/HTML', color: '#563d7c', count: 0 },
+              json: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
+              toml: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
+              yaml: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
+              yml: { label: 'JSON/Config', color: '#f1e05a', count: 0 },
+              md: { label: 'Markdown', color: '#083fa1', count: 0 },
+            };
+            
+            let otherCount = 0;
+            Object.keys(counts).forEach(ext => {
+              if (langMap[ext]) {
+                langMap[ext].count += counts[ext];
+              } else {
+                otherCount += counts[ext];
+              }
+            });
+            
+            const grouped: Record<string, { label: string; color: string; count: number }> = {};
+            Object.values(langMap).forEach(item => {
+              if (item.count > 0) {
+                if (grouped[item.label]) {
+                  grouped[item.label].count += item.count;
+                } else {
+                  grouped[item.label] = { ...item };
+                }
+              }
+            });
+            
+            if (otherCount > 0) {
+              grouped['Other'] = { label: 'Other', color: '#8e8e8e', count: otherCount };
+            }
+            
+            const totalFiles = Object.values(grouped).reduce((sum, item) => sum + item.count, 0);
+            const statsList = Object.values(grouped)
+              .map(item => ({
+                label: item.label,
+                color: item.color,
+                count: item.count,
+                percent: totalFiles > 0 ? Math.round((item.count / totalFiles) * 100) : 0
+              }))
+              .sort((a, b) => b.count - a.count);
+              
+            setFileStats(statsList);
+          } catch (fileErr) {
+            console.error("加载文件统计失败:", fileErr);
+            setFileStats([]);
+          }
+        } else {
+          console.error("加载文件列表失败:", filesRes.reason);
           setFileStats([
             { label: 'TypeScript', color: '#3178c6', count: 45, percent: 45 },
             { label: 'Rust', color: '#deb887', count: 30, percent: 30 },
@@ -182,12 +203,11 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
           ]);
         }
 
-        // 5. 获取 Git 诊断信息 (同步状态、打包文件数等)
-        try {
-          const diag = await invoke<any>("get_git_diagnostics", { repoPath: selectedWt.path });
-          setGitDiagnostics(diag);
-        } catch (diagErr) {
-          console.error("加载 Git 诊断失败:", diagErr);
+        // 5. Process Git diagnostics
+        if (diagRes.status === 'fulfilled') {
+          setGitDiagnostics(diagRes.value);
+        } else {
+          console.error("加载 Git 诊断失败:", diagRes.reason);
           setGitDiagnostics({
             sync_status: "未知 (Unknown)",
             untracked_count: 0,
@@ -692,11 +712,14 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
         .wt-details-card {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           border: 1px solid var(--color-border);
+          border-radius: 12px;
+          background-color: var(--bg-main);
+          box-shadow: 0 4px 20px -2px rgba(17, 24, 39, 0.02), 0 2px 6px -1px rgba(17, 24, 39, 0.01);
         }
         .wt-details-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 24px rgba(0,0,0,0.04);
-          border-color: var(--color-primary-orange) !important;
+          transform: translateY(-3px);
+          box-shadow: 0 12px 28px rgba(232, 104, 74, 0.08), 0 4px 12px rgba(0, 0, 0, 0.02);
+          border-color: rgba(232, 104, 74, 0.4) !important;
         }
         .wt-btn-action {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -772,20 +795,20 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
       </div>
 
       {/* Viewport-fitting Content Area */}
-      <div className="view-content" style={{ flex: 1, padding: '24px 32px 32px 32px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: 0, overflow: 'hidden' }}>
+      <div className="view-content" style={{ flex: 1, padding: '28px 32px 32px 32px', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-muted)', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <Icons.RefreshCw style={{ width: '24px', height: '24px', animation: 'spin 1s linear infinite', marginBottom: '12px', alignSelf: 'center' }} />
             <div>正在加载 Worktree 环境列表...</div>
           </div>
         ) : selectedWt ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, minHeight: 0 }}>
             
             {/* Top Grid - Stretches vertically to fill upper part */}
-            <div className="worktree-split-container" style={{ padding: 0, flex: 1, display: 'grid', gridTemplateColumns: '260px 1fr 1.2fr', gap: '20px', minHeight: 0, overflow: 'hidden' }}>
+            <div className="worktree-split-container" style={{ padding: 0, flex: 1, display: 'grid', gridTemplateColumns: '260px 1fr 1.2fr', gap: '24px', minHeight: 0, overflow: 'hidden' }}>
               
               {/* Column 1 - Worktrees Sidebar */}
-              <div className="wt-details-card" style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-main)', height: '100%', overflow: 'hidden', padding: '22px 18px' }}>
+              <div className="wt-details-card" style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-main)', height: '100%', overflow: 'hidden', padding: '24px 20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '0 4px' }}>
                   <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     开发隔离环境 ({worktrees.length})
@@ -998,7 +1021,7 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
               </div>
 
               {/* Column 3 - File Changes & Timeline */}
-              <div className="worktree-details-right" style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', minHeight: 0 }}>
+              <div className="worktree-details-right" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0 }}>
                 
                 {/* File Changes List */}
                 <div className="changes-box wt-details-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, backgroundColor: 'var(--bg-main)', minHeight: 0, padding: '24px' }}>
@@ -1121,7 +1144,7 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
             </div>
 
             {/* Bottom Row - Heatmap Split with Data Badges */}
-            <div className="heatmap-box wt-details-card" style={{ backgroundColor: 'var(--bg-main)', padding: '14px 20px', display: 'grid', gridTemplateColumns: '3.2fr 1.2fr', gap: '20px', flexShrink: 0, height: '154px', minHeight: 0 }}>
+            <div className="heatmap-box wt-details-card" style={{ backgroundColor: 'var(--bg-main)', padding: '16px 24px', display: 'grid', gridTemplateColumns: '3.2fr 1.2fr', gap: '24px', flexShrink: 0, height: '154px', minHeight: 0 }}>
               
               {/* Left Side: Contribution Heatmap */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>

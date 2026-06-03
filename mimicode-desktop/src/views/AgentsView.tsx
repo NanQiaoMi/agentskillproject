@@ -4,6 +4,7 @@ import { Icons } from '../components/Icons';
 
 interface AgentsViewProps {
   projectPath: string;
+  onNavigate?: (nav: string) => void;
 }
 
 interface AgentConfig {
@@ -64,7 +65,7 @@ const defaultAgents: AgentConfig[] = [
   },
 ];
 
-export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath }) => {
+export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath, onNavigate }) => {
   const [agents, setAgents] = useState<AgentConfig[]>(defaultAgents);
   const [launchingId, setLaunchingId] = useState<string | null>(null);
   const [runningAgents, setRunningAgents] = useState<Record<string, boolean>>({});
@@ -161,8 +162,36 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath }) => {
   };
 
   const updateAgentSetting = (agentId: string, key: keyof AgentConfig, value: any) => {
-    setAgents(prev => prev.map(a => a.id === agentId ? { ...a, [key]: value } : a));
+    setAgents(prev => {
+      const updated = prev.map(a => a.id === agentId ? { ...a, [key]: value } : a);
+      // Persist to localStorage
+      try {
+        const settingsMap: Record<string, any> = JSON.parse(localStorage.getItem('mimi-agent-settings') || '{}');
+        const agent = updated.find(a => a.id === agentId);
+        if (agent) {
+          settingsMap[agentId] = { model: agent.model, maxTokens: agent.maxTokens, autoApprove: agent.autoApprove };
+        }
+        localStorage.setItem('mimi-agent-settings', JSON.stringify(settingsMap));
+      } catch { /* ignore */ }
+      return updated;
+    });
   };
+
+  // Load persisted agent settings on mount
+  useEffect(() => {
+    try {
+      const settingsMap = JSON.parse(localStorage.getItem('mimi-agent-settings') || '{}');
+      if (Object.keys(settingsMap).length > 0) {
+        setAgents(prev => prev.map(a => {
+          const saved = settingsMap[a.id];
+          if (saved) {
+            return { ...a, model: saved.model || a.model, maxTokens: saved.maxTokens || a.maxTokens, autoApprove: saved.autoApprove ?? a.autoApprove };
+          }
+          return a;
+        }));
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const settingsAgent = agents.find(a => a.id === settingsAgentId);
 
@@ -282,7 +311,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath }) => {
                       <div
                         className="dropdown-item"
                         style={dropdownItemStyle}
-                        onClick={() => { setOpenMenuId(null); }}
+                        onClick={() => { 
+                          setOpenMenuId(null);
+                          if (onNavigate) onNavigate('Logs');
+                        }}
                         onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
                         onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
@@ -293,8 +325,15 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath }) => {
                       <div
                         className="dropdown-item"
                         style={dropdownItemStyle}
-                        onClick={() => {
+                        onClick={async () => {
                           if (isRunning) {
+                            try {
+                              // Find PID — we'll attempt to stop by agent id
+                              // The check_agent_clis_running returns a map; we need PID from process
+                              await invoke('run_shell_command', { command: `taskkill /IM ${agent.cliCommand}.exe /F`, cwd: projectPath });
+                            } catch (err) {
+                              console.error('Failed to stop agent:', err);
+                            }
                             setRunningAgents(prev => ({ ...prev, [agent.id]: false }));
                           }
                           setOpenMenuId(null);
@@ -470,7 +509,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath }) => {
               <button
                 onClick={() => {
                   setSettingsAgentId(null);
-                  // Settings are already saved in state; in production you'd persist to disk here
+                  // Settings are persisted to localStorage via updateAgentSetting
                 }}
                 style={{
                   padding: '8px 20px', borderRadius: '8px', border: 'none',

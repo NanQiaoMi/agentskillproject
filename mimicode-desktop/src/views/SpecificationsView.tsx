@@ -106,9 +106,21 @@ const TEMPLATES: Record<string, string> = {
 
   Architecture: `# 系统架构设计说明
 
-## 1. 架构与组件
+## 系统架构总览 System Overview
 <!-- architecture_diagram -->
-设计系统的物理与逻辑拓扑结构。`
+设计系统的物理与逻辑拓扑结构。
+
+## 模块设计 Modules
+主要模块及其职责定义。
+
+## 数据模型 Data Models
+核心数据结构与实体模型设计。
+
+## 技术栈 Tech Stack
+项目所采用的编程语言、框架及中间件。
+
+## 部署架构 Deployment
+系统部署拓扑及生产环境要求。`
 };
 
 const parseMarkdown = (md: string): string => {
@@ -181,6 +193,14 @@ const parseMarkdown = (md: string): string => {
   return html;
 };
 
+const SECTIONS = [
+  { title: '系统架构总览', subtitle: 'System Overview' },
+  { title: '模块设计', subtitle: 'Modules' },
+  { title: '数据模型', subtitle: 'Data Models' },
+  { title: '技术栈', subtitle: 'Tech Stack' },
+  { title: '部署架构', subtitle: 'Deployment' },
+];
+
 interface SpecificationsViewProps {
   projectPath: string;
 }
@@ -195,6 +215,78 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   const [nodes, setNodes] = useState<ArchNode[]>(defaultNodes);
   const [editingNode, setEditingNode] = useState<ArchNode | null>(null);
   const [hasJsonError, setHasJsonError] = useState(false);
+  const [activeSection, setActiveSection] = useState('系统架构总览');
+
+  const handleSectionClick = (title: string) => {
+    setActiveSection(title);
+
+    const container = document.querySelector('.spec-content');
+    if (!container) return;
+
+    const headings = Array.from(container.querySelectorAll('h1, h2, h3'));
+    const targetHeading = headings.find(h => {
+      const text = h.textContent || '';
+      return text.includes(title);
+    });
+
+    if (targetHeading) {
+      // Disable scroll spy during smooth scroll
+      (window as any).specManualScrolling = true;
+      targetHeading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // Re-enable scroll spy after smooth scroll finishes (roughly 800ms)
+      setTimeout(() => {
+        (window as any).specManualScrolling = false;
+      }, 800);
+    }
+  };
+
+  // Scroll event handler for Scroll Spy
+  useEffect(() => {
+    if (activeTab !== 'Architecture' || isEditing || !content) return;
+
+    const container = document.querySelector('.spec-content');
+    if (!container) return;
+
+    const handleScroll = () => {
+      if ((window as any).specManualScrolling) return;
+
+      const headings = Array.from(container.querySelectorAll('h1, h2, h3'));
+      const containerRect = container.getBoundingClientRect();
+
+      let activeSec = '系统架构总览';
+      let minDistance = Infinity;
+
+      for (const heading of headings) {
+        const text = heading.textContent || '';
+        const section = SECTIONS.find(sec => text.includes(sec.title));
+        if (!section) continue;
+
+        const headingRect = heading.getBoundingClientRect();
+        const distance = headingRect.top - containerRect.top;
+
+        if (distance >= -50 && distance < 200) {
+          if (distance < minDistance) {
+            minDistance = distance;
+            activeSec = section.title;
+          }
+        } else if (distance < -50) {
+          activeSec = section.title;
+        }
+      }
+
+      setActiveSection(activeSec);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    // Run once on load/render
+    handleScroll();
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [activeTab, isEditing, content]);
+
 
   // Modal local states
   const [modalTitle, setModalTitle] = useState('');
@@ -535,26 +627,16 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
           <div style={{ display: 'flex', width: '100%', height: '100%' }}>
             {showSidebar && (
               <div className="spec-sidebar">
-                <div className="spec-nav-item active">
-                  <div className="spec-nav-title">系统架构总览</div>
-                  <div className="spec-nav-subtitle">System Overview</div>
-                </div>
-                <div className="spec-nav-item">
-                  <div className="spec-nav-title">模块设计</div>
-                  <div className="spec-nav-subtitle">Modules</div>
-                </div>
-                <div className="spec-nav-item">
-                  <div className="spec-nav-title">数据模型</div>
-                  <div className="spec-nav-subtitle">Data Models</div>
-                </div>
-                <div className="spec-nav-item">
-                  <div className="spec-nav-title">技术栈</div>
-                  <div className="spec-nav-subtitle">Tech Stack</div>
-                </div>
-                <div className="spec-nav-item">
-                  <div className="spec-nav-title">部署架构</div>
-                  <div className="spec-nav-subtitle">Deployment</div>
-                </div>
+                {SECTIONS.map(sec => (
+                  <div 
+                    key={sec.title} 
+                    className={`spec-nav-item ${activeSection === sec.title ? 'active' : ''}`}
+                    onClick={() => handleSectionClick(sec.title)}
+                  >
+                    <div className="spec-nav-title">{sec.title}</div>
+                    <div className="spec-nav-subtitle">{sec.subtitle}</div>
+                  </div>
+                ))}
               </div>
             )}
             

@@ -40,7 +40,10 @@ function App() {
   async function handleSelectDirectory() {
     try {
       const selected: string = await invoke("select_directory");
-      setProjectPath(selected);
+      if (selected) {
+        await invoke("initialize_project", { projectPath: selected });
+        setProjectPath(selected);
+      }
     } catch (err) {
       if (err !== "Operation cancelled by user") {
         alert("Error: " + err);
@@ -93,6 +96,7 @@ function App() {
           setChatInputText={setChatInputText}
           handleSelectDirectory={handleSelectDirectory}
           fetchTasks={fetchTasks}
+          onNavigate={(nav) => setActiveNav(nav)}
         />
       );
     } else if (activeNav === 'Tasks') {
@@ -118,15 +122,15 @@ function App() {
         />
       );
     } else if (activeNav === 'Agents') {
-      return <AgentsView projectPath={projectPath} />;
+      return <AgentsView projectPath={projectPath} onNavigate={(nav) => setActiveNav(nav)} />;
     } else if (activeNav === 'Worktrees') {
       return <WorktreesView projectPath={projectPath} />;
     } else if (activeNav === 'Specifications') {
       return <SpecificationsView projectPath={projectPath} />;
     } else if (activeNav === 'Diagnostics') {
-      return <DiagnosticsView envStatus={envStatus} />;
+      return <DiagnosticsView envStatus={envStatus} projectPath={projectPath} />;
     } else if (activeNav === 'Settings') {
-      return <SettingsView />;
+      return <SettingsView projectPath={projectPath} />;
     }
     return <div className="view-container">Not Implemented</div>;
   };

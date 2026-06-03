@@ -1,18 +1,162 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
 
 interface LogsViewProps {
+  projectPath: string;
   terminalLogs: string;
 }
 
-export const LogsView: React.FC<LogsViewProps> = ({ terminalLogs }) => {
+interface AgentInfo {
+  id: string;
+  name: string;
+  running: boolean;
+}
+
+// Map agent IDs to display-friendly icons
+const agentIconMap: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {
+  codex: Icons.Code,
+  antigravity: Icons.Zap,
+  claudecode: Icons.Shield,
+  opencode: Icons.Activity,
+  hermes: Icons.Users,
+};
+
+export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs }) => {
   const consoleBottomRef = useRef<HTMLDivElement>(null);
 
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [logContent, setLogContent] = useState<string>(terminalLogs);
+  const [inputText, setInputText] = useState('');
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fetch the agent list and their running states from the backend
+  const fetchAgentList = useCallback(async () => {
+    try {
+      const [configs, runningStates] = await Promise.all([
+        invoke<Record<string, { model: string; config_path: string }>>('read_agent_configs'),
+        invoke<Record<string, boolean>>('check_agent_clis_running'),
+      ]);
+
+      const agentNames: Record<string, string> = {
+        hermes: 'Hermes Agent',
+        antigravity: 'Antigravity',
+        codex: 'Codex',
+        claudecode: 'Claude Code',
+        opencode: 'OpenCode CLI',
+      };
+
+      const agentList: AgentInfo[] = Object.keys(configs).map((id) => ({
+        id,
+        name: agentNames[id] || id,
+        running: runningStates[id] ?? false,
+      }));
+
+      // Sort so running agents come first
+      agentList.sort((a, b) => (b.running ? 1 : 0) - (a.running ? 1 : 0));
+
+      setAgents(agentList);
+
+      // Auto-select the first agent if none is selected yet
+      if (!selectedAgentId && agentList.length > 0) {
+        setSelectedAgentId(agentList[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch agent list:', err);
+    }
+  }, [selectedAgentId]);
+
+  // Fetch log content for the selected agent
+  const fetchLogs = useCallback(async () => {
+    if (!projectPath || !selectedAgentId) return;
+
+    try {
+      // Try reading task log using the agent id as task identifier
+      const content = await invoke<string>('read_task_log', {
+        projectPath,
+        taskId: selectedAgentId,
+      });
+      setLogContent(content);
+    } catch {
+      // If no specific log exists, show the passed-in terminal logs
+      setLogContent(terminalLogs || `No log file found for agent "${selectedAgentId}".\nWaiting for agent activity...`);
+    }
+  }, [projectPath, selectedAgentId, terminalLogs]);
+
+  // Initial load
+  useEffect(() => {
+    fetchAgentList();
+  }, [fetchAgentList]);
+
+  // Poll running states periodically
+  useEffect(() => {
+    const timer = setInterval(fetchAgentList, 5000);
+    return () => clearInterval(timer);
+  }, [fetchAgentList]);
+
+  // Fetch logs when selected agent changes & poll
+  useEffect(() => {
+    fetchLogs();
+    const timer = setInterval(fetchLogs, 3000);
+    return () => clearInterval(timer);
+  }, [fetchLogs]);
+
+  // Auto-scroll to bottom when log content updates
   useEffect(() => {
     if (consoleBottomRef.current) {
       consoleBottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [terminalLogs]);
+  }, [logContent, commandHistory]);
+
+  // Handle reconnect
+  const handleReconnect = async () => {
+    setIsRefreshing(true);
+    await fetchAgentList();
+    await fetchLogs();
+    setIsRefreshing(false);
+  };
+
+  // Handle selecting an agent
+  const handleSelectAgent = (agentId: string) => {
+    setSelectedAgentId(agentId);
+    setCommandHistory([]);
+  };
+
+  // Handle terminal command execution
+  const handleCommandSubmit = async () => {
+    const cmd = inputText.trim();
+    if (!cmd) return;
+
+    setInputText('');
+    setCommandHistory((prev) => [...prev, `> ${cmd}`]);
+
+    if (!projectPath) {
+      setCommandHistory((prev) => [...prev, '[Error] No project path set. Please select a project first.']);
+      return;
+    }
+
+    try {
+      const output = await invoke<string>('run_shell_command', {
+        command: cmd,
+        cwd: projectPath,
+      });
+      setCommandHistory((prev) => [...prev, output]);
+    } catch (err: any) {
+      setCommandHistory((prev) => [...prev, `[Error] ${err?.toString() || 'Command execution failed'}`]);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCommandSubmit();
+    }
+  };
+
+  // Combine log content and command history for display
+  const displayContent = logContent + (commandHistory.length > 0 ? '\n' + commandHistory.join('\n') : '');
 
   return (
     <div className="view-container bg-panel">
@@ -22,35 +166,63 @@ export const LogsView: React.FC<LogsViewProps> = ({ terminalLogs }) => {
             <h1 className="view-title">Logs</h1>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '4px' }}>实时日志与终端输出</p>
           </div>
-          <button className="btn btn-ghost">
-            <Icons.RefreshCw style={{ width: '14px', height: '14px' }} /> Reconnect
+          <button
+            className="btn btn-ghost"
+            onClick={handleReconnect}
+            disabled={isRefreshing}
+          >
+            <Icons.RefreshCw style={{
+              width: '14px',
+              height: '14px',
+              animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+            }} /> Reconnect
           </button>
         </div>
       </div>
 
       <div className="view-content" style={{ display: 'flex', gap: '16px', padding: '24px' }}>
         <div className="logs-sidebar">
-          <div className="logs-agent-item active">
-            <Icons.Code className="logs-icon" /> Codex (PID: 16432)
-            <Icons.MoreHorizontal className="logs-more" />
-          </div>
-          <div className="logs-agent-item">
-            <Icons.Zap className="logs-icon" /> Antigravity (PID: 16433)
-          </div>
-          <div className="logs-agent-item">
-            <Icons.Shield className="logs-icon" /> Claudecode (PID: 16434)
-          </div>
-          <div className="logs-agent-item">
-            <Icons.Activity className="logs-icon" /> OpenCode CLI (PID: 16435)
-          </div>
-          <div className="logs-agent-item">
-            <Icons.Users className="logs-icon" /> Hermes Agent (PID: 16436)
-          </div>
+          {agents.length === 0 ? (
+            <div className="logs-agent-item" style={{ opacity: 0.5, justifyContent: 'center' }}>
+              <Icons.RefreshCw className="logs-icon" style={{ animation: 'spin 1s linear infinite' }} />
+              Loading...
+            </div>
+          ) : (
+            agents.map((agent) => {
+              const IconComponent = agentIconMap[agent.id] || Icons.Activity;
+              const isSelected = selectedAgentId === agent.id;
+              return (
+                <div
+                  key={agent.id}
+                  className={`logs-agent-item ${isSelected ? 'active' : ''}`}
+                  onClick={() => handleSelectAgent(agent.id)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <IconComponent className="logs-icon" />
+                  <span style={{ flex: 1 }}>
+                    {agent.name}
+                    {agent.running && (
+                      <span style={{
+                        display: 'inline-block',
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: '#10B981',
+                        marginLeft: '6px',
+                        verticalAlign: 'middle',
+                      }} />
+                    )}
+                  </span>
+                  {isSelected && <Icons.MoreHorizontal className="logs-more" />}
+                </div>
+              );
+            })
+          )}
         </div>
         
         <div className="logs-terminal-container">
           <div className="rp-terminal-logs">
-            {terminalLogs.split('\n').map((line, index) => {
+            {displayContent.split('\n').map((line, index) => {
               if (!line.trim()) return null;
               
               const match = line.match(/^(\d{2}:\d{2}:\d{2})\s+\[([A-Z]+)\]\s+(.*)$/);
@@ -80,8 +252,14 @@ export const LogsView: React.FC<LogsViewProps> = ({ terminalLogs }) => {
               type="text" 
               className="rp-term-input-field" 
               placeholder="Type a command..." 
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
-            <Icons.Send style={{ color: 'var(--color-text-muted)', cursor: 'pointer' }} />
+            <Icons.Send
+              style={{ color: 'var(--color-text-muted)', cursor: 'pointer' }}
+              onClick={handleCommandSubmit}
+            />
           </div>
         </div>
       </div>

@@ -294,7 +294,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
                 
                 <div className="kanban-column-content">
                   {colTasks.map(t => {
-                    const pri = t.id === 'TASK-142' ? 'High' : 'Medium';
+                    const pri = t.priority || 'Medium';
                     const priStyle = getPriorityStyle(pri);
                     return (
                       <div key={t.id} className="kanban-card" onClick={() => onSelectTask(t.id)}>

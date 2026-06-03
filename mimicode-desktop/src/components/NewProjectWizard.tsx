@@ -13,6 +13,8 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({ onClose, onC
   const [description, setDescription] = useState('前置引导智能体开发工程');
   const [location, setLocation] = useState('D:\\agentcode\\my-awesome-project');
   const [initGit, setInitGit] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   const steps = ['Project Info', 'Template', 'Environment', 'Agents Setup', 'Review'];
 
@@ -25,21 +27,39 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({ onClose, onC
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (activeStep === 'Project Info') {
       setActiveStep('Review'); // skip template/env configuration for quick setup demo
     } else if (activeStep === 'Review') {
-      onCreated(location);
-      onClose();
+      setIsCreating(true);
+      setCreateError('');
+      try {
+        // Create directory via shell command. Double quote location path to handle space.
+        const createCmd = `if not exist "${location}" mkdir "${location}"`;
+        await invoke('run_shell_command', { command: createCmd, cwd: 'C:\\' });
+
+        if (initGit) {
+          await invoke('run_shell_command', { command: 'git init', cwd: location });
+        }
+        
+        await invoke("initialize_project", { projectPath: location });
+        
+        onCreated(location);
+        onClose();
+      } catch (err: any) {
+        setCreateError(err.toString());
+      } finally {
+        setIsCreating(false);
+      }
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !isCreating) onClose(); }} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}>
       <div className="modal-card" style={{ width: '700px', height: '480px', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-header">
           <div className="modal-title" style={{ fontSize: '15px', fontWeight: 600 }}>New Project Wizard</div>
-          <button className="btn-icon-ghost" style={{ border: 'none' }} onClick={onClose}><Icons.Plus style={{ transform: 'rotate(45deg)' }}/></button>
+          <button className="btn-icon-ghost" style={{ border: 'none' }} onClick={onClose} disabled={isCreating}><Icons.Plus style={{ transform: 'rotate(45deg)' }}/></button>
         </div>
         
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -89,14 +109,21 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({ onClose, onC
                 <div><strong>Location:</strong> {location}</div>
                 <div><strong>Initialize Git:</strong> {initGit ? 'Yes' : 'No'}</div>
                 <div><strong>Configured Agents:</strong> Hermes, Codex, Antigravity, Claudecode</div>
+                {createError && (
+                  <div style={{ color: 'var(--color-destructive)', marginTop: '8px', padding: '8px', border: '1px solid var(--color-destructive)', borderRadius: '4px', backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
+                    Failed to create project: {createError}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
         <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid var(--color-border)', justifyContent: 'flex-end', gap: '12px' }}>
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleNext}>{activeStep === 'Review' ? 'Create Project' : 'Next'}</button>
+          <button className="btn" onClick={onClose} disabled={isCreating}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleNext} disabled={isCreating}>
+            {activeStep === 'Review' ? (isCreating ? 'Creating...' : 'Create Project') : 'Next'}
+          </button>
         </div>
       </div>
     </div>

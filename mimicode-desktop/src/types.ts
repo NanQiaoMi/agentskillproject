@@ -9,6 +9,9 @@ export interface Task {
   affected_files: string[];
   comments: Comment[];
   history: HistoryItem[];
+  priority?: string;
+  due_date?: string;
+  tags?: string[];
 }
 
 export interface Comment {

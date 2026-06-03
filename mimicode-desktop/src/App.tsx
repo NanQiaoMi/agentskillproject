@@ -13,7 +13,45 @@ import { WorktreesView } from "./views/WorktreesView";
 import { DiagnosticsView } from "./views/DiagnosticsView";
 import { SettingsView } from "./views/SettingsView";
 import { SpecificationsView } from "./views/SpecificationsView";
+import { PromptsView } from "./views/PromptsView";
 import { NewProjectWizard } from "./components/NewProjectWizard";
+import { AgentTerminalPanel } from "./components/AgentTerminalPanel";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+
+const appTranslations = {
+  'English': {
+    brandSubtitle: 'AI-Native Vibe Coding Studio',
+    nav: {
+      Chat: 'Chat',
+      Tasks: 'Tasks',
+      Agents: 'Agents',
+      Worktrees: 'Worktrees',
+      Specifications: 'Specifications',
+      Prompts: 'Prompts',
+      Diagnostics: 'Diagnostics',
+      Settings: 'Settings'
+    },
+    activeTasks: 'ACTIVE TASKS',
+    noTasks: 'No tasks found in project.',
+    newProject: 'New Project Wizard'
+  },
+  '简体中文': {
+    brandSubtitle: 'AI原生共振编程工作室',
+    nav: {
+      Chat: '对话',
+      Tasks: '任务中心',
+      Agents: '智能体',
+      Worktrees: '工作区',
+      Specifications: '需求规格',
+      Prompts: '提示词',
+      Diagnostics: '系统诊断',
+      Settings: '系统设置'
+    },
+    activeTasks: '进行中的任务',
+    noTasks: '当前项目中没有找到任何任务。',
+    newProject: '新建项目向导'
+  }
+};
 
 function App() {
   const DEFAULT_PROJECT_PATH = "d:\\agentcode";
@@ -24,13 +62,41 @@ function App() {
   const [activeNav, setActiveNav] = useState("Chat");
   const [viewState, setViewState] = useState<'list' | 'detail'>('list');
   const [chatInputText, setChatInputText] = useState("");
+  interface ToastItem {
+    id: number;
+    message: string;
+    type: 'success' | 'error' | 'info';
+  }
+
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [showInterceptionModal, setShowInterceptionModal] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  
+  const [language, setLanguage] = useState(() => {
+    try { return localStorage.getItem('mimi-language') || '简体中文'; } catch { return '简体中文'; }
+  });
+  const t = appTranslations[language as keyof typeof appTranslations] || appTranslations['English'];
+
+  useEffect(() => {
+    const handleLangChange = (e: any) => {
+      setLanguage(e.detail);
+    };
+    window.addEventListener('mimi-language-changed', handleLangChange);
+    return () => window.removeEventListener('mimi-language-changed', handleLangChange);
+  }, []);
 
   useEffect(() => {
     (window as any).setShowInterceptionModal = setShowInterceptionModal;
+    (window as any).showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+      const id = Date.now() + Math.random();
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, 4000);
+    };
   }, []);
+
 
   useEffect(() => {
     loadEnvironment();
@@ -46,7 +112,7 @@ function App() {
       }
     } catch (err) {
       if (err !== "Operation cancelled by user") {
-        alert("Error: " + err);
+        (window as any).showToast("选择目录失败: " + err, "error");
       }
     }
   }
@@ -79,7 +145,7 @@ function App() {
       }
     } catch (err) {
       console.error(err);
-      alert("MIMIcode 无法加载任务列表！\n\n具体错误信息:\n" + String(err));
+      (window as any).showToast("MIMIcode 无法加载任务列表！" + String(err), "error");
       setTasks([]);
     }
   }
@@ -92,6 +158,8 @@ function App() {
         <ChatView 
           projectPath={projectPath}
           selectedTask={selectedTask}
+          tasks={tasks}
+          setSelectedTaskId={setSelectedTaskId}
           chatInputText={chatInputText}
           setChatInputText={setChatInputText}
           handleSelectDirectory={handleSelectDirectory}
@@ -127,6 +195,8 @@ function App() {
       return <WorktreesView projectPath={projectPath} />;
     } else if (activeNav === 'Specifications') {
       return <SpecificationsView projectPath={projectPath} />;
+    } else if (activeNav === 'Prompts') {
+      return <PromptsView projectPath={projectPath} />;
     } else if (activeNav === 'Diagnostics') {
       return <DiagnosticsView envStatus={envStatus} projectPath={projectPath} />;
     } else if (activeNav === 'Settings') {
@@ -142,38 +212,41 @@ function App() {
           <div className="brand-logo-container">M</div>
           <div className="brand-text">
             <span className="brand-title">MIMIcode Studio</span>
-            <span className="brand-subtitle">AI-Native Vibe Coding Studio</span>
+            <span className="brand-subtitle">{t.brandSubtitle}</span>
           </div>
         </div>
         
         <div className="sidebar-scrollable">
           <div className="nav-section">
             <a href="#" className={`nav-item ${activeNav === 'Chat' ? 'active' : ''}`} onClick={() => { setActiveNav('Chat'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.MessageSquare className="nav-icon" /><span>Chat</span></div>
+              <div className="nav-item-left"><Icons.MessageSquare className="nav-icon" /><span>{t.nav.Chat}</span></div>
             </a>
             <a href="#" className={`nav-item ${activeNav === 'Tasks' ? 'active' : ''}`} onClick={() => { setActiveNav('Tasks'); setViewState('list'); fetchTasks(); }}>
-              <div className="nav-item-left"><Icons.CheckSquare className="nav-icon" /><span>Tasks</span></div>
+              <div className="nav-item-left"><Icons.CheckSquare className="nav-icon" /><span>{t.nav.Tasks}</span></div>
             </a>
             <a href="#" className={`nav-item ${activeNav === 'Agents' ? 'active' : ''}`} onClick={() => { setActiveNav('Agents'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.Users className="nav-icon" /><span>Agents</span></div>
+              <div className="nav-item-left"><Icons.Users className="nav-icon" /><span>{t.nav.Agents}</span></div>
             </a>
             <a href="#" className={`nav-item ${activeNav === 'Worktrees' ? 'active' : ''}`} onClick={() => { setActiveNav('Worktrees'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.GitBranch className="nav-icon" /><span>Worktrees</span></div>
+              <div className="nav-item-left"><Icons.GitBranch className="nav-icon" /><span>{t.nav.Worktrees}</span></div>
             </a>
             <a href="#" className={`nav-item ${activeNav === 'Specifications' ? 'active' : ''}`} onClick={() => { setActiveNav('Specifications'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.BookOpen className="nav-icon" /><span>Specifications</span></div>
+              <div className="nav-item-left"><Icons.BookOpen className="nav-icon" /><span>{t.nav.Specifications}</span></div>
+            </a>
+            <a href="#" className={`nav-item ${activeNav === 'Prompts' ? 'active' : ''}`} onClick={() => { setActiveNav('Prompts'); setViewState('list'); }}>
+              <div className="nav-item-left"><Icons.FileText className="nav-icon" /><span>{t.nav.Prompts}</span></div>
             </a>
             <a href="#" className={`nav-item ${activeNav === 'Diagnostics' ? 'active' : ''}`} onClick={() => { setActiveNav('Diagnostics'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.Activity className="nav-icon" /><span>Diagnostics</span></div>
+              <div className="nav-item-left"><Icons.Activity className="nav-icon" /><span>{t.nav.Diagnostics}</span></div>
             </a>
             <a href="#" className={`nav-item ${activeNav === 'Settings' ? 'active' : ''}`} onClick={() => { setActiveNav('Settings'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.Settings className="nav-icon" /><span>Settings</span></div>
+              <div className="nav-item-left"><Icons.Settings className="nav-icon" /><span>{t.nav.Settings}</span></div>
             </a>
           </div>
 
           <div className="nav-section" style={{ marginTop: '12px' }}>
             <div className="section-header">
-              <span className="section-title">ACTIVE TASKS</span>
+              <span className="section-title">{t.activeTasks}</span>
               <button className="btn-icon-ghost" title="New Task" onClick={() => setShowNewTaskModal(true)}>
                 <Icons.Plus />
               </button>
@@ -181,7 +254,7 @@ function App() {
             
             {tasks.length === 0 ? (
                <div style={{ padding: '12px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                 No tasks found in project.
+                 {t.noTasks}
                </div>
             ) : tasks.map((task) => (
               <div 
@@ -208,7 +281,7 @@ function App() {
         {/* Global trigger wizard in sidebar footer */}
         <div className="sidebar-footer">
           <button className="btn w-full" style={{ padding: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} onClick={() => setShowWizard(true)}>
-            <Icons.Plus style={{ width: '12px', height: '12px' }}/> New Project Wizard
+            <Icons.Plus style={{ width: '12px', height: '12px' }}/> {t.newProject}
           </button>
         </div>
       </aside>
@@ -217,12 +290,16 @@ function App() {
         {renderMainContent()}
       </main>
 
+      <ErrorBoundary>
+        <AgentTerminalPanel projectPath={projectPath} />
+      </ErrorBoundary>
+
       {showWizard && (
         <NewProjectWizard 
           onClose={() => setShowWizard(false)} 
           onCreated={(path) => {
             setProjectPath(path);
-            alert(`Project created at ${path}`);
+            (window as any).showToast(`项目成功创建于: ${path}`, "success");
           }} 
         />
       )}
@@ -238,34 +315,64 @@ function App() {
             <div className="modal-body">
               <div className="form-group">
                 <label className="form-label">Task Title</label>
-                <input type="text" className="intercept-input" placeholder="输入任务标题..." />
+                <input 
+                  type="text" 
+                  className="intercept-input" 
+                  placeholder="输入任务标题..." 
+                  id="newTaskTitleInput"
+                />
               </div>
               <div className="form-group" style={{ marginTop: '8px' }}>
                 <label className="form-label">Description</label>
-                <textarea className="intercept-input" rows={4} placeholder="描述任务的详细信息..."></textarea>
+                <textarea 
+                  className="intercept-input" 
+                  rows={4} 
+                  placeholder="描述任务的详细信息..."
+                  id="newTaskDescInput"
+                ></textarea>
               </div>
               <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
                 <div className="form-group" style={{ flex: 1 }}>
                   <label className="form-label">Assign to Agent</label>
-                  <select className="form-select">
-                    <option>选择智能体...</option>
-                    <option>Codex (Backend)</option>
-                    <option>Antigravity (Frontend)</option>
+                  <select className="form-select" id="newTaskAssigneeInput">
+                    <option value="antigravity">Antigravity (前端专家)</option>
+                    <option value="codex">Codex (后端专家)</option>
+                    <option value="hermes">Hermes (规划专家)</option>
+                    <option value="opencode">OpenCode (重构专家)</option>
+                    <option value="claudecode">Claude Code (审计专家)</option>
+                    <option value="user">User (我来处理)</option>
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
                   <label className="form-label">Priority</label>
-                  <select className="form-select">
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Low</option>
+                  <select className="form-select" id="newTaskPriorityInput">
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Low">Low</option>
                   </select>
                 </div>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={() => setShowNewTaskModal(false)}>Cancel</button>
-              <button className="btn btn-primary">Create Task</button>
+              <button className="btn btn-primary" onClick={async () => {
+                const title = (document.getElementById('newTaskTitleInput') as HTMLInputElement).value;
+                const desc = (document.getElementById('newTaskDescInput') as HTMLTextAreaElement).value;
+                const assignee = (document.getElementById('newTaskAssigneeInput') as HTMLSelectElement).value;
+                if (!title.trim()) {
+                  alert("请输入任务标题");
+                  return;
+                }
+                try {
+                  const args = ["add", "--title", title, "--assignee", assignee];
+                  if (desc.trim()) args.push("--desc", desc);
+                  await invoke("run_agentflow_cmd", { projectPath, args });
+                  setShowNewTaskModal(false);
+                  fetchTasks();
+                } catch (err: any) {
+                  alert("创建任务失败: " + err.toString());
+                }
+              }}>Create Task</button>
             </div>
           </div>
         </div>
@@ -318,6 +425,31 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Toast Notification Container */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast-card toast-${toast.type}`}>
+            <span className="toast-icon">
+              {toast.type === 'success' && (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              )}
+              {toast.type === 'error' && (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              )}
+              {toast.type === 'info' && (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              )}
+            </span>
+            <div className="toast-message">{toast.message}</div>
+            <button className="toast-close-btn" onClick={() => {
+              setToasts(prev => prev.filter(t => t.id !== toast.id));
+            }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

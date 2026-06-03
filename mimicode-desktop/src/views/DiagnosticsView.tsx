@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Icons } from '../components/Icons';
 import { EnvStatus } from '../types';
 import { invoke } from '@tauri-apps/api/core';
@@ -7,6 +7,71 @@ interface DiagnosticsViewProps {
   envStatus: EnvStatus | null;
   projectPath: string;
 }
+
+const translations = {
+  English: {
+    diagAndLogs: 'Diagnostics & Logs',
+    systemDiag: 'System Diagnostics',
+    logs: 'Logs',
+    notDetected: 'Not Detected',
+    detecting: 'Detecting...',
+    healthy: 'Healthy',
+    error: 'Error',
+    git: 'Git',
+    pythonEnv: 'Python Environment',
+    uvPkg: 'uv Package Manager',
+    node: 'Node.js',
+    agentsServices: 'Agents Services',
+    quickActions: 'Quick Actions',
+    checking: 'Checking...',
+    runFullCheck: 'Run Full Check',
+    repairing: 'Repairing...',
+    repairEnv: 'Repair Environment',
+    unableToDetect: 'Unable to detect',
+    noAgentsRunning: 'No agents running',
+    allAgentsOnline: 'All agents are online',
+    agentsRunning: 'agents running',
+    allAgents: 'All Agents',
+    allLevels: 'All Levels',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    searchLogs: 'Search logs...',
+    autoScroll: 'Auto scroll',
+    clear: 'Clear',
+    export: 'Export'
+  },
+  '简体中文': {
+    diagAndLogs: '诊断与日志',
+    systemDiag: '系统诊断',
+    logs: '日志',
+    notDetected: '未检测到',
+    detecting: '检测中...',
+    healthy: '正常',
+    error: '异常',
+    git: 'Git',
+    pythonEnv: 'Python 环境',
+    uvPkg: 'uv 包管理器',
+    node: 'Node.js',
+    agentsServices: '智能体服务',
+    quickActions: '快捷操作',
+    checking: '检查中...',
+    runFullCheck: '运行完整检查',
+    repairing: '修复中...',
+    repairEnv: '修复环境',
+    unableToDetect: '无法检测',
+    noAgentsRunning: '无智能体运行',
+    allAgentsOnline: '所有智能体运行中',
+    agentsRunning: '个智能体运行中',
+    allAgents: '全部智能体',
+    allLevels: '全部级别',
+    today: '今天',
+    yesterday: '昨天',
+    searchLogs: '搜索日志...',
+    autoScroll: '自动滚动',
+    clear: '清空',
+    export: '导出'
+  }
+};
 
 export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, projectPath }) => {
   const [activeTab, setActiveTab] = useState('System Diagnostics');
@@ -24,6 +89,20 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
   const [searchText, setSearchText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  // Language setup
+  const lsGet = (key: string, def: string) => {
+    const val = localStorage.getItem(key);
+    return val ? val : def;
+  };
+  const [language, setLanguage] = useState(() => lsGet('mimi-language', '简体中文'));
+  const t = useMemo(() => translations[language as keyof typeof translations] || translations['English'], [language]);
+
+  useEffect(() => {
+    const handleLang = (e: any) => setLanguage(e.detail);
+    window.addEventListener('mimi-language-changed', handleLang);
+    return () => window.removeEventListener('mimi-language-changed', handleLang);
+  }, []);
 
   // Fetch Node.js version on mount
   useEffect(() => {
@@ -60,12 +139,12 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
 
   const getAgentSummary = (): { text: string; healthy: boolean } => {
     const entries = Object.entries(agentStatus);
-    if (entries.length === 0) return { text: 'Unable to detect', healthy: false };
+    if (entries.length === 0) return { text: t.unableToDetect, healthy: false };
     const runningCount = entries.filter(([, v]) => v).length;
     const totalCount = entries.length;
-    if (runningCount === 0) return { text: 'No agents running', healthy: false };
-    if (runningCount === totalCount) return { text: 'All agents are online', healthy: true };
-    return { text: `${runningCount}/${totalCount} agents running`, healthy: false };
+    if (runningCount === 0) return { text: t.noAgentsRunning, healthy: false };
+    if (runningCount === totalCount) return { text: t.allAgentsOnline, healthy: true };
+    return { text: `${runningCount}/${totalCount} ${t.agentsRunning}`, healthy: false };
   };
 
   const handleRunFullCheck = async () => {
@@ -166,18 +245,18 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     <div className="view-container bg-panel">
       <div className="view-header" style={{ paddingBottom: 0 }}>
         <div className="view-title-row">
-          <h1 className="view-title">Diagnostics & Logs</h1>
+          <h1 className="view-title">{t.diagAndLogs}</h1>
         </div>
         
         <div className="view-tabs-row" style={{ marginTop: '16px' }}>
           <div className="view-tabs">
-            {['System Diagnostics', 'Logs'].map(tab => (
+            {[{key: 'System Diagnostics', label: t.systemDiag}, {key: 'Logs', label: t.logs}].map(tab => (
               <div 
-                key={tab} 
-                className={`view-tab ${activeTab === tab ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab)}
+                key={tab.key} 
+                className={`view-tab ${activeTab === tab.key ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.key)}
               >
-                {tab}
+                {tab.label}
               </div>
             ))}
           </div>
@@ -191,57 +270,57 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
               <div className="diag-item">
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.GitBranch /></div>
                 <div className="diag-info">
-                  <div className="diag-name font-semibold">Git</div>
-                  <div className="diag-desc text-muted">{envStatus?.git_version || 'Not Detected'}</div>
+                  <div className="diag-name font-semibold">{t.git}</div>
+                  <div className="diag-desc text-muted">{envStatus?.git_version || t.notDetected}</div>
                 </div>
                 <div className={`diag-status ${envStatus?.git_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.git_installed ? 'Healthy' : 'Error'}
+                  {envStatus?.git_installed ? t.healthy : t.error}
                 </div>
               </div>
               <div className="diag-item">
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Code /></div>
                 <div className="diag-info">
-                  <div className="diag-name font-semibold">Python Environment</div>
-                  <div className="diag-desc text-muted">{envStatus?.python_version || 'Not Detected'}</div>
+                  <div className="diag-name font-semibold">{t.pythonEnv}</div>
+                  <div className="diag-desc text-muted">{envStatus?.python_version || t.notDetected}</div>
                 </div>
                 <div className={`diag-status ${envStatus?.python_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.python_installed ? 'Healthy' : 'Error'}
+                  {envStatus?.python_installed ? t.healthy : t.error}
                 </div>
               </div>
               <div className="diag-item">
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Zap /></div>
                 <div className="diag-info">
-                  <div className="diag-name font-semibold">uv Package Manager</div>
-                  <div className="diag-desc text-muted">{envStatus?.uv_version || 'Not Detected'}</div>
+                  <div className="diag-name font-semibold">{t.uvPkg}</div>
+                  <div className="diag-desc text-muted">{envStatus?.uv_version || t.notDetected}</div>
                 </div>
                 <div className={`diag-status ${envStatus?.uv_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.uv_installed ? 'Healthy' : 'Error'}
+                  {envStatus?.uv_installed ? t.healthy : t.error}
                 </div>
               </div>
               <div className="diag-item">
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Box /></div>
                 <div className="diag-info">
-                  <div className="diag-name font-semibold">Node.js</div>
-                  <div className="diag-desc text-muted">{nodeVersion || 'Detecting...'}</div>
+                  <div className="diag-name font-semibold">{t.node}</div>
+                  <div className="diag-desc text-muted">{nodeVersion === 'Not Detected' ? t.notDetected : (nodeVersion || t.detecting)}</div>
                 </div>
                 <div className={`diag-status ${nodeHealthy ? 'text-success' : 'text-destructive'}`}>
-                  {nodeHealthy ? 'Healthy' : 'Error'}
+                  {nodeHealthy ? t.healthy : t.error}
                 </div>
               </div>
               <div className="diag-item">
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
                 <div className="diag-info">
-                  <div className="diag-name font-semibold">Agents Services</div>
+                  <div className="diag-name font-semibold">{t.agentsServices}</div>
                   <div className="diag-desc text-muted">{agentSummary.text}</div>
                 </div>
                 <div className={`diag-status ${agentSummary.healthy ? 'text-success' : 'text-destructive'}`}>
-                  {agentSummary.healthy ? 'Healthy' : 'Error'}
+                  {agentSummary.healthy ? t.healthy : t.error}
                 </div>
               </div>
             </div>
             
             <div className="diag-sidebar" style={{ width: '240px' }}>
-              <h3 className="section-title text-main font-semibold" style={{ marginBottom: '16px', fontSize: '14px', textTransform: 'none', letterSpacing: 'normal' }}>Quick Actions</h3>
+              <h3 className="section-title text-main font-semibold" style={{ marginBottom: '16px', fontSize: '14px', textTransform: 'none', letterSpacing: 'normal' }}>{t.quickActions}</h3>
               <button
                 className="btn w-full"
                 style={{ justifyContent: 'flex-start', padding: '10px 14px', backgroundColor: 'var(--bg-main)', marginBottom: '8px' }}
@@ -249,7 +328,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                 disabled={isRunningCheck}
               >
                 <Icons.RefreshCw style={{ width: '16px', height: '16px', marginRight: '8px', animation: isRunningCheck ? 'spin 1s linear infinite' : undefined }}/>
-                {isRunningCheck ? 'Checking...' : 'Run Full Check'}
+                {isRunningCheck ? t.checking : t.runFullCheck}
               </button>
               <button
                 className="btn w-full"
@@ -258,7 +337,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                 disabled={isRepairing}
               >
                 <Icons.Settings style={{ width: '16px', height: '16px', marginRight: '8px', animation: isRepairing ? 'spin 1s linear infinite' : undefined }}/>
-                {isRepairing ? 'Repairing...' : 'Repair Environment'}
+                {isRepairing ? t.repairing : t.repairEnv}
               </button>
             </div>
           </div>
@@ -274,9 +353,9 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   value={agentFilter}
                   onChange={(e) => setAgentFilter(e.target.value)}
                 >
-                  <option>All Agents</option>
-                  <option>Codex</option>
-                  <option>Antigravity</option>
+                  <option value="All Agents">{t.allAgents}</option>
+                  <option value="Codex">Codex</option>
+                  <option value="Antigravity">Antigravity</option>
                 </select>
                 <select
                   className="form-select"
@@ -284,9 +363,9 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   value={levelFilter}
                   onChange={(e) => setLevelFilter(e.target.value)}
                 >
-                  <option>All Levels</option>
-                  <option>INFO</option>
-                  <option>ERROR</option>
+                  <option value="All Levels">{t.allLevels}</option>
+                  <option value="INFO">INFO</option>
+                  <option value="ERROR">ERROR</option>
                 </select>
                 <select
                   className="form-select"
@@ -294,15 +373,15 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
                 >
-                  <option>Today</option>
-                  <option>Yesterday</option>
+                  <option value="Today">{t.today}</option>
+                  <option value="Yesterday">{t.yesterday}</option>
                 </select>
               </div>
               <input
                 type="text"
                 className="form-select"
                 style={{ width: '200px', padding: '6px 12px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--color-text-main)' }}
-                placeholder="Search logs..."
+                placeholder={t.searchLogs}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
               />
@@ -325,11 +404,11 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   type="checkbox"
                   checked={autoScroll}
                   onChange={(e) => setAutoScroll(e.target.checked)}
-                /> Auto scroll
+                /> {t.autoScroll}
               </label>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setLogs('')}>Clear</button>
-                <button className="btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={handleExport}>Export</button>
+                <button className="btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setLogs('')}>{t.clear}</button>
+                <button className="btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={handleExport}>{t.export}</button>
               </div>
             </div>
           </div>

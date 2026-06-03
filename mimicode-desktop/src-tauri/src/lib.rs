@@ -2,8 +2,10 @@
 use std::process::{Command, Stdio};
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::io::Read;
 use keyring::Entry;
 use chrono::Local;
+use tauri::Emitter;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -1070,14 +1072,29 @@ async fn proxy_post_request(url: String, api_key: String, body: String) -> Resul
     #[cfg(not(windows))]
     let mut cmd = Command::new("curl");
     
-    cmd.args(&[
-        "-s",
-        "-X", "POST",
-        &url,
-        "-H", &format!("Authorization: Bearer {}", api_key),
-        "-H", "Content-Type: application/json",
-        "-d", "@-",
-    ]);
+    let mut args = vec![
+        "-s".to_string(),
+        "-X".to_string(),
+        "POST".to_string(),
+        url.clone(),
+        "-H".to_string(),
+        "Content-Type: application/json".to_string(),
+    ];
+    
+    if url.contains("anthropic.com") {
+        args.push("-H".to_string());
+        args.push(format!("x-api-key: {}", api_key));
+        args.push("-H".to_string());
+        args.push("anthropic-version: 2023-06-01".to_string());
+    } else {
+        args.push("-H".to_string());
+        args.push(format!("Authorization: Bearer {}", api_key));
+    }
+    
+    args.push("-d".to_string());
+    args.push("@-".to_string());
+    
+    cmd.args(&args);
     
     #[cfg(windows)]
     {
@@ -1182,6 +1199,196 @@ fn chat_stdins() -> &'static std::sync::Mutex<std::collections::HashMap<String, 
     CHAT_STDINS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
+// ============================================================
+// PTY (Pseudo-Terminal) Management for Agent TUI Panel
+// ============================================================
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+
+// We store the writer and master PTY separately because portable-pty's
+// MasterPty trait does not implement Send in all cases uniformly.
+// The writer (Box<dyn Write + Send>) is used for input, and the
+// master is used for resize operations.
+struct PtySessionWriter {
+    writer: Box<dyn std::io::Write + Send>,
+}
+
+fn pty_writers() -> &'static std::sync::Mutex<std::collections::HashMap<String, PtySessionWriter>> {
+    static PTY_WRITERS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, PtySessionWriter>>> = std::sync::OnceLock::new();
+    PTY_WRITERS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn pty_masters() -> &'static std::sync::Mutex<std::collections::HashMap<String, Box<dyn portable_pty::MasterPty + Send>>> {
+    static PTY_MASTERS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Box<dyn portable_pty::MasterPty + Send>>>> = std::sync::OnceLock::new();
+    PTY_MASTERS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn pty_children() -> &'static std::sync::Mutex<std::collections::HashMap<String, Box<dyn portable_pty::Child + Send + Sync>>> {
+    static PTY_CHILDREN: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Box<dyn portable_pty::Child + Send + Sync>>>> = std::sync::OnceLock::new();
+    PTY_CHILDREN.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+#[derive(serde::Serialize, Clone)]
+struct PtyDataEvent {
+    session_key: String,
+    data: String,
+}
+
+#[tauri::command]
+async fn spawn_agent_pty(
+    app: tauri::AppHandle,
+    cli_name: String,
+    project_path: String,
+    cols: u16,
+    rows: u16,
+) -> Result<String, String> {
+    let session_key = format!("pty_{}_{}", cli_name, chrono::Local::now().timestamp_millis());
+
+    // Determine executable and args for each agent
+    #[cfg(windows)]
+    let (exe, args): (&str, Vec<&str>) = match cli_name.as_str() {
+        "claudecode" => ("D:\\npm_global\\claude.cmd", vec!["--permission-mode", "bypassPermissions"]),
+        "antigravity" => ("D:\\npm_global\\gemini.cmd", vec!["-y"]),
+        "codex" => ("D:\\npm_global\\codex.cmd", vec!["--dangerously-bypass-approvals-and-sandbox"]),
+        "opencode" => ("D:\\npm_global\\opencode.cmd", vec![]),
+        "hermes" => ("C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe", vec![]),
+        _ => return Err(format!("Unknown agent: {}", cli_name)),
+    };
+
+    #[cfg(not(windows))]
+    let (exe, args): (&str, Vec<&str>) = match cli_name.as_str() {
+        "claudecode" => ("claude", vec!["--permission-mode", "bypassPermissions"]),
+        "antigravity" => ("gemini", vec!["-y"]),
+        "codex" => ("codex", vec!["--dangerously-bypass-approvals-and-sandbox"]),
+        "opencode" => ("opencode", vec![]),
+        "hermes" => ("hermes", vec![]),
+        _ => return Err(format!("Unknown agent: {}", cli_name)),
+    };
+
+    // Create PTY pair
+    let pty_system = native_pty_system();
+    let pair = pty_system.openpty(PtySize {
+        rows,
+        cols,
+        pixel_width: 0,
+        pixel_height: 0,
+    }).map_err(|e| format!("Failed to open PTY: {}", e))?;
+
+    // Build command
+    let mut cmd = CommandBuilder::new(exe);
+    for arg in &args {
+        cmd.arg(*arg);
+    }
+    cmd.cwd(&project_path);
+
+    // Inject environment variables (same as inject_gemini_env)
+    cmd.env("GEMINI_API_KEY", std::env::var("GEMINI_API_KEY").unwrap_or_default());
+    cmd.env("GOOGLE_API_KEY", std::env::var("GOOGLE_API_KEY").unwrap_or_default());
+
+    // Spawn the child process in the PTY slave
+    let child = pair.slave.spawn_command(cmd)
+        .map_err(|e| format!("Failed to spawn agent in PTY: {}", e))?;
+
+    // Drop slave - we only need the master side
+    drop(pair.slave);
+
+    // Get writer for sending input
+    let writer = pair.master.take_writer()
+        .map_err(|e| format!("Failed to get PTY writer: {}", e))?;
+
+    // Get reader for receiving output
+    let mut reader = pair.master.try_clone_reader()
+        .map_err(|e| format!("Failed to clone PTY reader: {}", e))?;
+
+    // Store the writer, master (for resize), and child
+    {
+        let mut writers = pty_writers().lock().map_err(|e| e.to_string())?;
+        writers.insert(session_key.clone(), PtySessionWriter { writer });
+    }
+    {
+        let mut masters = pty_masters().lock().map_err(|e| e.to_string())?;
+        masters.insert(session_key.clone(), pair.master);
+    }
+    {
+        let mut children = pty_children().lock().map_err(|e| e.to_string())?;
+        children.insert(session_key.clone(), child);
+    }
+
+    // Spawn background thread to read PTY output and emit events to frontend
+    let sk = session_key.clone();
+    std::thread::spawn(move || {
+        let mut buffer = [0u8; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break, // EOF
+                Ok(n) => {
+                    let data = String::from_utf8_lossy(&buffer[..n]).to_string();
+                    let event = PtyDataEvent {
+                        session_key: sk.clone(),
+                        data,
+                    };
+                    let _ = app.emit("pty-data", event);
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = app.emit("pty-exit", PtyDataEvent {
+            session_key: sk.clone(),
+            data: "".to_string(),
+        });
+    });
+
+    Ok(session_key)
+}
+
+#[tauri::command]
+async fn write_to_pty(session_key: String, data: String) -> Result<(), String> {
+    let mut writers = pty_writers().lock().map_err(|e| e.to_string())?;
+    if let Some(session) = writers.get_mut(&session_key) {
+        use std::io::Write;
+        session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+        session.writer.flush().map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("PTY session not found".to_string())
+    }
+}
+
+#[tauri::command]
+async fn resize_pty(session_key: String, cols: u16, rows: u16) -> Result<(), String> {
+    let mut masters = pty_masters().lock().map_err(|e| e.to_string())?;
+    if let Some(master) = masters.get_mut(&session_key) {
+        master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        }).map_err(|e| format!("Failed to resize PTY: {}", e))?;
+        Ok(())
+    } else {
+        Err("PTY session not found".to_string())
+    }
+}
+
+#[tauri::command]
+async fn kill_pty(session_key: String) -> Result<(), String> {
+    // Kill child process
+    if let Ok(mut children) = pty_children().lock() {
+        if let Some(mut child) = children.remove(&session_key) {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+    // Remove writer
+    if let Ok(mut writers) = pty_writers().lock() {
+        writers.remove(&session_key);
+    }
+    // Remove master
+    if let Ok(mut masters) = pty_masters().lock() {
+        masters.remove(&session_key);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 async fn ensure_agent_chat_daemon(
     cli_name: String,
@@ -1223,37 +1430,51 @@ async fn ensure_agent_chat_daemon(
     
     daemons.remove(&map_key);
     stdins.remove(&map_key);
+
+    // Claude Code is a TUI app that doesn't work with piped stdin/stdout.
+    // Instead of spawning a persistent daemon, we just create the log file.
+    // Each message will be sent via one-shot `claude -p` processes in send_agent_chat_stdin.
+    if cli_name == "claudecode" {
+        let log_filename = if let Some(ref tid) = task_id {
+            format!("chat_{}_{}.log", cli_name, tid.to_lowercase())
+        } else {
+            format!("chat_{}_general.log", cli_name)
+        };
+        let log_path = Path::new(&project_path).join(".agentflow").join("logs").join(&log_filename);
+        if let Some(parent) = log_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        // Create or truncate the log file
+        let _ = std::fs::File::create(&log_path);
+        return Ok(());
+    }
     
     let session_key = if let Some(ref tid) = task_id {
         format!("{}_{}_{}", project_path, cli_name, tid)
     } else {
         format!("{}_{}_general", project_path, cli_name)
     };
-    let uuid = generate_deterministic_uuid(&session_key);
+    let _uuid = generate_deterministic_uuid(&session_key);
     
     #[cfg(windows)]
     let (exe, args) = match cli_name.as_str() {
         "hermes" => (
             "C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe",
-            vec!["--resume".to_string(), uuid.clone()],
+            vec![],
         ),
         "antigravity" => (
             "D:\\npm_global\\gemini.cmd",
-            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
+            vec!["-y".to_string()],
         ),
         "codex" => (
             "D:\\npm_global\\codex.cmd",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--dangerously-bypass-approvals-and-sandbox".to_string(),
             ],
         ),
         "claudecode" => (
             "D:\\npm_global\\claude.cmd",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--permission-mode".to_string(),
                 "bypassPermissions".to_string(),
             ],
@@ -1261,8 +1482,6 @@ async fn ensure_agent_chat_daemon(
         "opencode" => (
             "D:\\npm_global\\opencode.cmd",
             vec![
-                "--session".to_string(),
-                uuid.clone(),
                 "--dangerously-skip-permissions".to_string(),
             ],
         ),
@@ -1273,25 +1492,21 @@ async fn ensure_agent_chat_daemon(
     let (exe, args) = match cli_name.as_str() {
         "hermes" => (
             "hermes",
-            vec!["--resume".to_string(), uuid.clone()],
+            vec![],
         ),
         "antigravity" => (
             "gemini",
-            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
+            vec!["-y".to_string()],
         ),
         "codex" => (
             "codex",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--dangerously-bypass-approvals-and-sandbox".to_string(),
             ],
         ),
         "claudecode" => (
             "claude",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--permission-mode".to_string(),
                 "bypassPermissions".to_string(),
             ],
@@ -1299,8 +1514,6 @@ async fn ensure_agent_chat_daemon(
         "opencode" => (
             "opencode",
             vec![
-                "--session".to_string(),
-                uuid.clone(),
                 "--dangerously-skip-permissions".to_string(),
             ],
         ),
@@ -1412,6 +1625,120 @@ async fn send_agent_chat_stdin(
         
         Ok(())
     } else {
+        // Claude Code uses one-shot -p mode instead of persistent daemon.
+        // Spawn a new process for each message.
+        if cli_name == "claudecode" {
+            drop(stdins); // Release the lock first
+
+            let log_filename = if let Some(ref tid) = task_id {
+                format!("chat_{}_{}.log", cli_name, tid.to_lowercase())
+            } else {
+                format!("chat_{}_general.log", cli_name)
+            };
+            let log_path = Path::new(&project_path).join(".agentflow").join("logs").join(&log_filename);
+
+            // Echo user input to log file
+            if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+                use std::io::Write;
+                let echo = format!("\n➜ {}\n", input);
+                file.write_all(echo.as_bytes()).ok();
+            }
+
+            // Determine worktree directory for cwd
+            let repo_dir = Path::new(&project_path);
+            let mut run_dir = repo_dir.to_path_buf();
+            if let Some(ref tid) = task_id {
+                if let Some(parent) = repo_dir.parent() {
+                    let wt = parent.join("mimicode_worktrees").join(tid.to_uppercase());
+                    if wt.exists() {
+                        run_dir = wt;
+                    }
+                }
+            }
+
+            // Build one-shot claude -p command
+            #[cfg(windows)]
+            let mut cmd = {
+                let mut c = Command::new("cmd");
+                c.arg("/C")
+                 .arg("D:\\npm_global\\claude.cmd")
+                 .arg("-p")
+                 .arg(&input)
+                 .arg("--continue")
+                 .arg("--output-format")
+                 .arg("text")
+                 .arg("--permission-mode")
+                 .arg("bypassPermissions");
+                c
+            };
+
+            #[cfg(not(windows))]
+            let mut cmd = {
+                let mut c = Command::new("claude");
+                c.arg("-p")
+                 .arg(&input)
+                 .arg("--continue")
+                 .arg("--output-format")
+                 .arg("text")
+                 .arg("--permission-mode")
+                 .arg("bypassPermissions");
+                c
+            };
+
+            cmd.current_dir(&run_dir)
+               .stdin(Stdio::null())
+               .stdout(Stdio::piped())
+               .stderr(Stdio::piped());
+
+            #[cfg(windows)]
+            {
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+
+            let mut child = cmd.spawn()
+                .map_err(|e| format!("Failed to spawn claude -p process: {}", e))?;
+
+            // Stream stdout to log file in background thread
+            let log_out = log_path.clone();
+            if let Some(mut stdout) = child.stdout.take() {
+                std::thread::spawn(move || {
+                    use std::io::{Read, Write};
+                    let mut buffer = [0u8; 2048];
+                    while let Ok(n) = stdout.read(&mut buffer) {
+                        if n == 0 { break; }
+                        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_out) {
+                            file.write_all(&buffer[..n]).ok();
+                        }
+                    }
+                });
+            }
+
+            // Stream stderr to log file in background thread
+            let log_err = log_path.clone();
+            if let Some(mut stderr) = child.stderr.take() {
+                std::thread::spawn(move || {
+                    use std::io::{Read, Write};
+                    let mut buffer = [0u8; 2048];
+                    while let Ok(n) = stderr.read(&mut buffer) {
+                        if n == 0 { break; }
+                        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&log_err) {
+                            file.write_all(&buffer[..n]).ok();
+                        }
+                    }
+                });
+            }
+
+            // Don't wait for the child - it will run in the background and write to the log.
+            // Store it so it's not dropped immediately (dropping would kill the process).
+            // Use the map_key to track it in daemons.
+            if let Ok(mut daemons) = chat_daemons().lock() {
+                daemons.insert(map_key, child);
+            }
+
+            return Ok(());
+        }
+
         Err("Agent chat daemon stdin not found. Please ensure agent chat is running.".to_string())
     }
 }
@@ -1564,7 +1891,7 @@ async fn ensure_agent_daemon(cli_name: String, project_path: String) -> Result<(
     stdins.remove(&map_key);
     
     let session_key = format!("{}_{}_daemon", project_path, cli_name);
-    let uuid = generate_deterministic_uuid(&session_key);
+    let _uuid = generate_deterministic_uuid(&session_key);
     
     let repo_dir = Path::new(&project_path);
     
@@ -1572,25 +1899,21 @@ async fn ensure_agent_daemon(cli_name: String, project_path: String) -> Result<(
     let (exe, args) = match cli_name.as_str() {
         "hermes" => (
             "C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe",
-            vec!["--resume".to_string(), uuid.clone()],
+            vec![],
         ),
         "antigravity" => (
             "D:\\npm_global\\gemini.cmd",
-            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
+            vec!["-y".to_string()],
         ),
         "codex" => (
             "D:\\npm_global\\codex.cmd",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--dangerously-bypass-approvals-and-sandbox".to_string(),
             ],
         ),
         "claudecode" => (
             "D:\\npm_global\\claude.cmd",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--permission-mode".to_string(),
                 "bypassPermissions".to_string(),
             ],
@@ -1598,8 +1921,6 @@ async fn ensure_agent_daemon(cli_name: String, project_path: String) -> Result<(
         "opencode" => (
             "D:\\npm_global\\opencode.cmd",
             vec![
-                "--session".to_string(),
-                uuid.clone(),
                 "--dangerously-skip-permissions".to_string(),
             ],
         ),
@@ -1610,25 +1931,21 @@ async fn ensure_agent_daemon(cli_name: String, project_path: String) -> Result<(
     let (exe, args) = match cli_name.as_str() {
         "hermes" => (
             "hermes",
-            vec!["--resume".to_string(), uuid.clone()],
+            vec![],
         ),
         "antigravity" => (
             "gemini",
-            vec!["--session-id".to_string(), uuid.clone(), "-y".to_string()],
+            vec!["-y".to_string()],
         ),
         "codex" => (
             "codex",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--dangerously-bypass-approvals-and-sandbox".to_string(),
             ],
         ),
         "claudecode" => (
             "claude",
             vec![
-                "--session-id".to_string(),
-                uuid.clone(),
                 "--permission-mode".to_string(),
                 "bypassPermissions".to_string(),
             ],
@@ -1636,8 +1953,6 @@ async fn ensure_agent_daemon(cli_name: String, project_path: String) -> Result<(
         "opencode" => (
             "opencode",
             vec![
-                "--session".to_string(),
-                uuid.clone(),
                 "--dangerously-skip-permissions".to_string(),
             ],
         ),
@@ -1754,14 +2069,31 @@ async fn stop_agent_cli(cli_name: String, project_path: String) -> Result<(), St
         {
             let _ = Command::new("kill").args(&["-9", &pid.to_string()]).output();
         }
-        Ok(())
-    } else {
-        Err("No running process found for this agent".to_string())
     }
+    
+    // Also kill any one-shot daemon processes (e.g. Claude Code -p processes)
+    if let Ok(mut daemons) = chat_daemons().lock() {
+        let keys_to_remove: Vec<String> = daemons.keys()
+            .filter(|k| k.contains(&format!("{}_{}", project_path, cli_name)))
+            .cloned()
+            .collect();
+        for key in keys_to_remove {
+            if let Some(mut child) = daemons.remove(&key) {
+                let _ = child.kill();
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
+    fs::create_dir_all(dst).map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("Failed to create directory {:?}: {}", dst, e)
+        )
+    })?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let ty = entry.file_type()?;
@@ -1775,7 +2107,14 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
             if name == "tasks.db" {
                 continue;
             }
-            fs::copy(entry.path(), dst.join(name))?;
+            let src_path = entry.path();
+            let dst_path = dst.join(name);
+            fs::copy(&src_path, &dst_path).map_err(|e| {
+                std::io::Error::new(
+                    e.kind(),
+                    format!("Failed to copy file from {:?} to {:?}: {}", src_path, dst_path, e)
+                )
+            })?;
         }
     }
     Ok(())
@@ -1854,7 +2193,11 @@ pub fn run() {
             ensure_agent_daemon,
             send_agent_stdin,
             ensure_agent_chat_daemon,
-            send_agent_chat_stdin
+            send_agent_chat_stdin,
+            spawn_agent_pty,
+            write_to_pty,
+            resize_pty,
+            kill_pty
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { invoke } from "@tauri-apps/api/core";
 import { Icons } from '../components/Icons';
 import { Task } from '../types';
@@ -9,6 +9,31 @@ interface TasksViewProps {
   fetchTasks: () => void;
   onSelectTask: (taskId: string) => void;
 }
+
+const translations = {
+  English: {
+    tasksBoard: 'Tasks Board',
+    filter: 'Filter',
+    groupStatus: 'Group: Status',
+    groupAssignee: 'Group: Assignee',
+    newTask: 'New Task',
+    todo: 'Todo',
+    inProgress: 'In Progress',
+    inReview: 'In Review',
+    done: 'Done'
+  },
+  '简体中文': {
+    tasksBoard: '任务看板',
+    filter: '筛选',
+    groupStatus: '分组: 状态',
+    groupAssignee: '分组: 负责人',
+    newTask: '新建任务',
+    todo: '待处理',
+    inProgress: '进行中',
+    inReview: '审查中',
+    done: '已完成'
+  }
+};
 
 export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchTasks, onSelectTask }) => {
   // Task Creation states
@@ -35,16 +60,30 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
   // Group state: 'status' | 'assignee'
   const [groupBy, setGroupBy] = useState<'status' | 'assignee'>('status');
 
+  // Language setup
+  const lsGet = (key: string, def: string) => {
+    const val = localStorage.getItem(key);
+    return val ? val : def;
+  };
+  const [language, setLanguage] = useState(() => lsGet('mimi-language', '简体中文'));
+  const t = useMemo(() => translations[language as keyof typeof translations] || translations['English'], [language]);
+
+  useEffect(() => {
+    const handleLang = (e: any) => setLanguage(e.detail);
+    window.addEventListener('mimi-language-changed', handleLang);
+    return () => window.removeEventListener('mimi-language-changed', handleLang);
+  }, []);
+
   // Automatically sync tasks on mount
   useEffect(() => {
     fetchTasks();
   }, []);
 
   const columns = [
-    { key: 'todo', title: 'Todo', color: '#6B7280' },
-    { key: 'in_progress', title: 'In Progress', color: '#E8684A' },
-    { key: 'review', title: 'In Review', color: '#F59E0B' },
-    { key: 'done', title: 'Done', color: '#10B981' }
+    { key: 'todo', title: t.todo, color: '#6B7280' },
+    { key: 'in_progress', title: t.inProgress, color: '#E8684A' },
+    { key: 'review', title: t.inReview, color: '#F59E0B' },
+    { key: 'done', title: t.done, color: '#10B981' }
   ];
 
   const assigneeColumns = [
@@ -166,33 +205,33 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
   const activeColumns = groupBy === 'status' ? columns : assigneeColumns;
 
   return (
-    <div className="view-container bg-panel">
-      <div className="view-header">
-        <div className="view-title-row">
-          <h1 className="view-title">Tasks Board</h1>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
-              className="btn btn-ghost" 
-              style={{ 
-                padding: '6px 12px', 
-                fontSize: '12px',
-                backgroundColor: showFilterBar ? 'var(--bg-hover)' : 'transparent',
-                borderColor: showFilterBar ? 'var(--color-primary-orange)' : 'var(--color-border)',
-              }}
-              onClick={() => setShowFilterBar(!showFilterBar)}
-            >
-              <Icons.Search style={{ width: '14px', height: '14px', marginRight: '4px' }}/> Filter
-            </button>
-            <button 
-              className="btn btn-ghost" 
-              style={{ padding: '6px 12px', fontSize: '12px' }}
-              onClick={() => setGroupBy(groupBy === 'status' ? 'assignee' : 'status')}
-            >
-              <Icons.Layout style={{ width: '14px', height: '14px', marginRight: '4px' }}/> Group: {groupBy === 'status' ? 'Status' : 'Assignee'}
-            </button>
-            <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-              <Icons.Plus style={{ width: '14px', height: '14px', marginRight: '4px' }} /> New Task
-            </button>
+      <div className="view-container bg-panel">
+        <div className="view-header">
+          <div className="view-title-row">
+            <h1 className="view-title">{t.tasksBoard}</h1>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className="btn btn-ghost" 
+                style={{ 
+                  padding: '6px 12px', 
+                  fontSize: '12px',
+                  backgroundColor: showFilterBar ? 'var(--bg-hover)' : 'transparent',
+                  borderColor: showFilterBar ? 'var(--color-primary-orange)' : 'var(--color-border)',
+                }}
+                onClick={() => setShowFilterBar(!showFilterBar)}
+              >
+                <Icons.Search style={{ width: '14px', height: '14px', marginRight: '4px' }}/> {t.filter}
+              </button>
+              <button 
+                className="btn btn-ghost" 
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+                onClick={() => setGroupBy(groupBy === 'status' ? 'assignee' : 'status')}
+              >
+                <Icons.Layout style={{ width: '14px', height: '14px', marginRight: '4px' }}/> {groupBy === 'status' ? t.groupStatus : t.groupAssignee}
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+                <Icons.Plus style={{ width: '14px', height: '14px', marginRight: '4px' }} /> {t.newTask}
+              </button>
           </div>
         </div>
       </div>

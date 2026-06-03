@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import '@xterm/xterm/css/xterm.css';
 import { Icons } from '../components/Icons';
 import { Task, HistoryItem, Comment } from '../types';
 
@@ -198,11 +203,20 @@ const renderCommentContent = (text: string, isCliAgent: boolean) => {
 interface ChatViewProps {
   projectPath: string;
   selectedTask?: Task;
+  tasks?: Task[];
+  setSelectedTaskId?: (id: string | null) => void;
   chatInputText: string;
   setChatInputText: (text: string) => void;
   handleSelectDirectory: () => void;
   fetchTasks?: () => void;
   onNavigate?: (nav: string) => void;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  updatedAt: string;
+  comments: Comment[];
 }
 
 const AVAILABLE_AGENTS = [
@@ -230,7 +244,7 @@ const parseTime = (timeStr: string) => {
   return new Date(timeStr);
 };
 
-const getActiveAgent = (inputText: string, comments: Comment[], assignee?: string) => {
+const getActiveAgent = (inputText: string) => {
   const lowerInput = inputText.toLowerCase();
   
   if (lowerInput.includes('@hermes')) {
@@ -249,32 +263,7 @@ const getActiveAgent = (inputText: string, comments: Comment[], assignee?: strin
     return { name: 'OpenCode', file: 'opencode' };
   }
 
-  // Scan comments backwards for the last agent reply
-  for (let i = comments.length - 1; i >= 0; i--) {
-    const author = comments[i].author;
-    if (['user', 'meaghan'].includes(author.toLowerCase())) {
-      continue;
-    }
-    const authorClean = author.trim();
-    const authorLower = authorClean.toLowerCase();
-    if (authorLower === 'hermes') return { name: 'Hermes', file: 'hermes' };
-    if (authorLower === 'antigravity') return { name: 'Antigravity', file: 'antigravity' };
-    if (authorLower === 'codex') return { name: 'Codex', file: 'codex' };
-    if (authorLower === 'claudecode') return { name: 'ClaudeCode', file: 'claudecode' };
-    if (authorLower === 'opencode') return { name: 'OpenCode', file: 'opencode' };
-    if (authorLower === 'mimicode') return { name: 'MIMIcode', file: null };
-  }
-
-  // Fallback to task assignee
-  if (assignee) {
-    const assigneeLower = assignee.toLowerCase();
-    if (assigneeLower === 'hermes') return { name: 'Hermes', file: 'hermes' };
-    if (assigneeLower === 'antigravity') return { name: 'Antigravity', file: 'antigravity' };
-    if (assigneeLower === 'codex') return { name: 'Codex', file: 'codex' };
-    if (assigneeLower === 'claudecode') return { name: 'ClaudeCode', file: 'claudecode' };
-    if (assigneeLower === 'opencode') return { name: 'OpenCode', file: 'opencode' };
-  }
-
+  // Always default to MIMIcode if no explicit mention is found
   return { name: 'MIMIcode', file: null };
 };
 
@@ -349,6 +338,8 @@ const buildMdContent = (taskData: any, selectedTask: any, commentsList: any[]) =
 export const ChatView: React.FC<ChatViewProps> = ({
   projectPath,
   selectedTask,
+  tasks = [],
+  setSelectedTaskId,
   chatInputText,
   setChatInputText,
   handleSelectDirectory,
@@ -358,6 +349,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentBranch, setCurrentBranch] = useState('main');
   const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingAgent, setThinkingAgent] = useState('MIMIcode');
@@ -367,55 +359,99 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const liveTerminalRef = useRef<HTMLDivElement>(null);
+  const [sessionKey, setSessionKey] = useState<string | null>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
 
-  // Sync localComments when selectedTask changes
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+
+  // Load chat sessions from local storage
+  useEffect(() => {
+    const saved = localStorage.getItem('mimi-chat-sessions');
+    if (saved) {
+      try {
+        setChatSessions(JSON.parse(saved));
+      } catch {}
+    }
+  }, []);
+
+  // Sync localComments when selectedTask or activeChatId changes
   useEffect(() => {
     if (selectedTask) {
       setLocalComments(selectedTask.comments || []);
+    } else if (activeChatId) {
+      const session = chatSessions.find(s => s.id === activeChatId);
+      setLocalComments(session ? session.comments : []);
     } else {
       setLocalComments([]);
     }
-  }, [selectedTask]);
+  }, [selectedTask, activeChatId, chatSessions]);
 
-  // Live log polling for ChatView daemon agent session
+  // xterm.js PTY integration for interactive agent session
   useEffect(() => {
-    if (!isThinking || thinkingAgent === 'MIMIcode' || !projectPath) {
-      setLiveLogContent('');
-      return;
-    }
+    let unlistenData: UnlistenFn | null = null;
 
-    let activeAgentFile = '';
-    const taLower = thinkingAgent.toLowerCase();
-    if (taLower.includes('hermes')) activeAgentFile = 'hermes';
-    else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
-    else if (taLower.includes('codex')) activeAgentFile = 'codex';
-    else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
-    else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
+    if (isThinking && thinkingAgent !== 'MIMIcode' && liveTerminalRef.current && sessionKey) {
+      if (!termRef.current) {
+        const term = new Terminal({
+          theme: {
+            background: '#0f172a',
+            foreground: '#f8fafc',
+            cursor: '#f97316',
+            selectionBackground: 'rgba(249, 115, 22, 0.3)',
+          },
+          fontFamily: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
+          fontSize: 13,
+          cursorBlink: true,
+        });
+        
+        const fitAddon = new FitAddon();
+        term.loadAddon(fitAddon);
+        term.loadAddon(new WebLinksAddon());
 
-    if (!activeAgentFile) return;
+        term.open(liveTerminalRef.current);
+        fitAddon.fit();
 
-    const logFilename = selectedTask 
-      ? `chat_${activeAgentFile}_${selectedTask.id.toLowerCase()}.log`
-      : `chat_${activeAgentFile}_general.log`;
+        termRef.current = term;
+        fitAddonRef.current = fitAddon;
 
-    const separator = projectPath.includes('/') ? '/' : '\\';
-    const logFilePath = `${projectPath}${separator}.agentflow${separator}logs${separator}${logFilename}`;
+        term.onData((data) => {
+          invoke('write_to_pty', { sessionKey, data }).catch(console.error);
+        });
 
-    const pollLogs = async () => {
-      try {
-        const content = await invoke<string | null>('read_file_content', { path: logFilePath });
-        if (content) {
-          setLiveLogContent(content);
-        }
-      } catch (e) {
-        // ignore
+        term.onResize(({ cols, rows }) => {
+          invoke('resize_pty', { sessionKey, cols, rows }).catch(console.error);
+        });
+        
+        const handleResize = () => fitAddonRef.current?.fit();
+        window.addEventListener('resize', handleResize);
+        
+        // Give it a moment then fit
+        setTimeout(() => fitAddon.fit(), 100);
       }
-    };
 
-    pollLogs();
-    const interval = setInterval(pollLogs, 1000);
-    return () => clearInterval(interval);
-  }, [isThinking, thinkingAgent, projectPath, selectedTask]);
+      listen<{ session_key: string; data: string }>('pty-data', (event) => {
+        if (event.payload.session_key === sessionKey && termRef.current) {
+          termRef.current.write(event.payload.data);
+          // Accumulate for saving when session ends
+          setLiveLogContent(prev => prev + event.payload.data);
+        }
+      }).then((unlisten) => {
+        unlistenData = unlisten;
+      });
+
+      return () => {
+        const handleResize = () => fitAddonRef.current?.fit();
+        window.removeEventListener('resize', handleResize);
+        if (unlistenData) unlistenData();
+      };
+    } else if (!isThinking && termRef.current) {
+      termRef.current.dispose();
+      termRef.current = null;
+      fitAddonRef.current = null;
+    }
+  }, [isThinking, thinkingAgent, sessionKey]);
 
   // Auto scroll live terminal to bottom when content changes
   useEffect(() => {
@@ -516,6 +552,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
         }
       }
       
+      if (sessionKey) {
+        await invoke('kill_pty', { sessionKey }).catch(() => {});
+        setSessionKey(null);
+      }
       if (fetchTasks) fetchTasks();
     } catch (err) {
       console.error("Failed to finish chat session:", err);
@@ -536,7 +576,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     if (activeAgentFile) {
       try {
-        await invoke('stop_agent_cli', { cliName: activeAgentFile, projectPath });
+        if (sessionKey) {
+          await invoke('kill_pty', { sessionKey });
+          setSessionKey(null);
+        }
       } catch (err) {
         console.error("Failed to stop CLI:", err);
       }
@@ -586,6 +629,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
       if (mentionRef.current && !mentionRef.current.contains(e.target as Node)) {
         setShowMentionMenu(false);
       }
+      // Handle history menu click outside
+      const target = e.target as HTMLElement;
+      if (!target.closest('.header-left-container')) {
+        setShowHistoryMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -595,28 +643,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!chatInputText.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const lowerInput = chatInputText.toLowerCase();
-      let targetCli: string | null = null;
-      let mentionAssignee = 'antigravity';
-      
-      // Determine the mentioned agent
-      if (lowerInput.includes('@hermes')) {
-        targetCli = 'hermes_agent';
-        mentionAssignee = 'hermes';
-      } else if (lowerInput.includes('@antigravity')) {
-        targetCli = 'gemini';
-        mentionAssignee = 'antigravity';
-      } else if (lowerInput.includes('@codex')) {
-        targetCli = 'codex';
-        mentionAssignee = 'codex';
-      } else if (lowerInput.includes('@claudecode') || lowerInput.includes('@claude')) {
-        targetCli = 'claude';
-        mentionAssignee = 'claudecode';
-      } else if (lowerInput.includes('@opencode')) {
-        targetCli = 'opencode';
-        mentionAssignee = 'opencode';
-      }
-
       if (selectedTask) {
         const separator = projectPath.includes('/') ? '/' : '\\';
         const taskFilePath = `${projectPath}${separator}.agentflow${separator}tasks${separator}${selectedTask.id}.md`;
@@ -657,7 +683,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           .then(() => invoke('run_agentflow_cmd', { projectPath, args: ['sync'] }))
           .then(() => { if (fetchTasks) fetchTasks(); })
           .catch(err => console.error("Background sync error (user comment):", err));
-        let activeAgent = getActiveAgent(chatInputText, taskData.comments, selectedTask.assignee);
+        let activeAgent = getActiveAgent(chatInputText);
         if (!activeAgent.file) {
           activeAgent = { name: 'Antigravity', file: 'antigravity' };
         }
@@ -716,57 +742,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
         setThinkingAgent(activeAgent.name);
         setIsThinking(true);
 
-        // --- CLI AGENT RUN FLOW ---
+        // --- CLI AGENT INTERACTIVE PTY TERMINAL FLOW ---
         (async () => {
           try {
-            const replyText = await invoke<string>('run_agent_cli', {
+            setLiveLogContent('');
+            const newSessionKey = await invoke<string>('spawn_agent_pty', {
               cliName: activeAgent.file,
               projectPath,
-              taskId: selectedTask ? selectedTask.id : null,
-              prompt: userMsg
+              cols: 80,
+              rows: 24
             });
+            setSessionKey(newSessionKey);
 
-            // Write complete output to physical log file
-            const timestamp = new Date().toISOString().replace(/[-:T]/g, '_').substring(0, 19);
-            const logFileName = `cli_${activeAgent.file}_${timestamp}.log`;
-            const separator = projectPath.includes('/') ? '/' : '\\';
-            const logsDir = `${projectPath}${separator}.agentflow${separator}logs`;
-            const logFilePath = `${logsDir}${separator}${logFileName}`;
-
-            // Ensure logs directory exists
-            await invoke('run_shell_command', { 
-              command: `mkdir "${logsDir}"`, 
-              cwd: projectPath 
-            }).catch(() => {});
-
-            await invoke('write_file_content', { path: logFilePath, content: replyText });
-
-            // Build comment: summary (first 100 lines) + link
-            const lines = replyText.split('\n');
-            let summary = lines.slice(0, 100).join('\n');
-            if (lines.length > 100) {
-              summary += '\n\n... (终端日志已被部分截断，完整日志请查看下方链接) ...';
+            // Extract prompt, strip mention prefixes like "@claudecode" or "@claude"
+            let promptToSend = userMsg.trim();
+            const mentionPrefix = `@${activeAgent.name.toLowerCase()}`;
+            const altMentionPrefix = `@${activeAgent.file.toLowerCase()}`;
+            if (promptToSend.toLowerCase().startsWith(mentionPrefix)) {
+              promptToSend = promptToSend.substring(mentionPrefix.length).trim();
+            } else if (promptToSend.toLowerCase().startsWith(altMentionPrefix)) {
+              promptToSend = promptToSend.substring(altMentionPrefix.length).trim();
             }
 
-            const cleanLogPath = logFilePath.replace(/\\/g, '/');
-            const relativeLogLink = `\n\n[查看完整执行终端日志](file:///${cleanLogPath})`;
-            const commentContent = summary + relativeLogLink;
-
-            const assistantComment = {
-              time: new Date().toISOString(),
-              author: activeAgent.name,
-              comment: commentContent
-            };
-            taskData.comments.push(assistantComment);
-            setLocalComments([...taskData.comments]);
-            setIsThinking(false);
-
-            // Save and sync
-            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) });
-            await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
-            if (fetchTasks) fetchTasks();
+            // Send command input to PTY if present
+            if (promptToSend) {
+              // Wait for PTY initialization
+              await new Promise(resolve => setTimeout(resolve, 600));
+              await invoke('write_to_pty', {
+                sessionKey: newSessionKey,
+                data: promptToSend + "\n"
+              });
+            }
           } catch (err: any) {
-            console.error("CLI Execution failed or aborted:", err);
+            console.error("CLI Daemon initialization failed:", err);
             const errorMsg = typeof err === 'string' ? err : String(err);
             const assistantComment = {
               time: new Date().toISOString(),
@@ -783,28 +791,173 @@ export const ChatView: React.FC<ChatViewProps> = ({
           }
         })();
       } else {
-        // Clean title (remove mentions for clean display)
-        let cleanedTitle = chatInputText;
-        if (cleanedTitle.startsWith('@')) {
-          const firstSpace = cleanedTitle.indexOf(' ');
-          if (firstSpace !== -1) {
-            cleanedTitle = cleanedTitle.substring(firstSpace + 1).trim();
+        // DO NOT create task in empty state (Welcome Screen)
+        const userInput = chatInputText;
+        setChatInputText('');
+        
+        const userComment = {
+          time: new Date().toISOString(),
+          author: 'user',
+          comment: userInput
+        };
+        const newComments = [...localComments, userComment];
+
+        let newSessions = [...chatSessions];
+        let currentChatId = activeChatId;
+        if (!currentChatId) {
+          currentChatId = 'chat_' + Date.now();
+          const newSession: ChatSession = {
+            id: currentChatId,
+            title: userInput.substring(0, 20) + (userInput.length > 20 ? '...' : ''),
+            updatedAt: new Date().toISOString(),
+            comments: newComments
+          };
+          newSessions.unshift(newSession);
+          setActiveChatId(currentChatId);
+        } else {
+          const idx = newSessions.findIndex(s => s.id === currentChatId);
+          if (idx !== -1) {
+            newSessions[idx].comments = newComments;
+            newSessions[idx].updatedAt = new Date().toISOString();
+            const [session] = newSessions.splice(idx, 1);
+            newSessions.unshift(session);
           }
         }
+        setChatSessions(newSessions);
+        localStorage.setItem('mimi-chat-sessions', JSON.stringify(newSessions));
+        setLocalComments(newComments);
 
-        // Create new task
-        await invoke("run_agentflow_cmd", { 
-          projectPath, 
-          args: ["add", "--title", cleanedTitle || "新头脑风暴任务", "--assignee", mentionAssignee] 
-        });
-        
-        // Automatically launch agent for task creation / brainstorming if mentioned
-        if (targetCli) {
-          await invoke('launch_external_cli', { cliName: targetCli, projectPath });
+        const activeAgent = getActiveAgent(userInput);
+        if (activeAgent.file) {
+          const agentWarning = {
+            time: new Date().toISOString(),
+            author: 'MIMIcode',
+            comment: `(此为临时会话，内容已保存在本地历史对话中)\n\n⚠️ 你刚刚 @ 了 **${activeAgent.name}**，但在非任务上下文中，部分需要读取仓库或修改文件的智能体可能受限。\n\n👉 **如需完整功能，请在左侧栏新建一个任务，然后再唤起它！**`
+          };
+          const warnComments = [...newComments, agentWarning];
+          
+          if (currentChatId) {
+            const idx = newSessions.findIndex(s => s.id === currentChatId);
+            if (idx !== -1) {
+              newSessions[idx].comments = warnComments;
+              setChatSessions([...newSessions]);
+              localStorage.setItem('mimi-chat-sessions', JSON.stringify(newSessions));
+            }
+          }
+          
+          setLocalComments(warnComments);
+          setIsSubmitting(false);
+          return;
         }
-        
-        setChatInputText('');
-        if (fetchTasks) fetchTasks();
+
+        setThinkingAgent('MIMIcode');
+        setIsThinking(true);
+
+        (async () => {
+          try {
+            // Find configured API Key
+            let activeProvider = '';
+            let activeKey = '';
+            
+            for (const service of ['deepseek', 'openai', 'anthropic']) {
+              try {
+                const key: string = await invoke<string>('get_credential', { service, username: 'default' });
+                if (key && key.trim()) {
+                  activeProvider = service;
+                  activeKey = key.trim();
+                  break;
+                }
+              } catch (e) {
+                // Ignore and check next
+              }
+            }
+
+            let reply = '';
+            if (activeProvider && activeKey) {
+              // We have a configured API key! Let's request it
+              let url = '';
+              let requestBody = {};
+              
+              if (activeProvider === 'deepseek') {
+                url = 'https://api.deepseek.com/chat/completions';
+                requestBody = {
+                  model: 'deepseek-chat',
+                  messages: [
+                    { role: 'system', content: 'You are MIMIcode, a helpful AI coding assistant in MimiCode Studio. Keep your response helpful, friendly, and relatively concise in Chinese.' },
+                    { role: 'user', content: userInput }
+                  ]
+                };
+              } else if (activeProvider === 'openai') {
+                const baseUrl = localStorage.getItem('mimi-openai-base-url') || 'https://api.openai.com/v1';
+                const configuredModel = localStorage.getItem('mimi-openai-model') || 'gpt-4o-mini';
+                const sanitizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+                url = sanitizedBaseUrl.endsWith('/chat/completions') ? sanitizedBaseUrl : `${sanitizedBaseUrl}/chat/completions`;
+                
+                requestBody = {
+                  model: configuredModel,
+                  messages: [
+                    { role: 'system', content: 'You are MIMIcode, a helpful AI coding assistant in MimiCode Studio. Keep your response helpful, friendly, and relatively concise in Chinese.' },
+                    { role: 'user', content: userInput }
+                  ]
+                };
+              } else if (activeProvider === 'anthropic') {
+                url = 'https://api.anthropic.com/v1/messages';
+                requestBody = {
+                  model: 'claude-3-5-haiku-20241022',
+                  max_tokens: 1024,
+                  system: 'You are MIMIcode, a helpful AI coding assistant in MimiCode Studio. Keep your response helpful, friendly, and relatively concise in Chinese.',
+                  messages: [
+                    { role: 'user', content: userInput }
+                  ]
+                };
+              }
+
+              if (url) {
+                try {
+                  const resStr = await invoke<string>('proxy_post_request', {
+                    url,
+                    apiKey: activeKey,
+                    body: JSON.stringify(requestBody)
+                  });
+                  const resJson = JSON.parse(resStr);
+                  if (activeProvider === 'deepseek' || activeProvider === 'openai') {
+                    reply = resJson.choices?.[0]?.message?.content || '收到空回复';
+                  } else if (activeProvider === 'anthropic') {
+                    reply = resJson.content?.[0]?.text || '收到空回复';
+                  }
+                } catch (apiErr: any) {
+                  console.error('API request failed:', apiErr);
+                  reply = `⚠️ 调用 ${activeProvider} API 失败，请检查您的 API Key 是否有效或网络连接是否正常。\n\n具体错误信息：\n\`\`\`\n${String(apiErr)}\n\`\`\``;
+                }
+              }
+            }
+
+            if (!reply) {
+              reply = `你好！我是 **MIMIcode AI 助手**。🤖\n\n目前你处于**无任务状态下的临时会话**中。由于您还没有在 **Settings (设置)** 页面配置 API Key，所以我现在还无法连接到大模型为您提供智能问答服务。\n\n**如何开启智能对话：**\n1. 点击左侧导航栏最下方的 **Settings** ⚙️；\n2. 在 **API Keys** 配置区，填入您的 **DeepSeek**、**OpenAI** 或 **Anthropic** API Key 并保存；\n3. 回到这里即可和我进行无限制的自由对话！\n\n**我能为您做什么：**\n* **新建任务**：点击左侧 **Tasks** 栏新建任务，我会作为专属智能体（如 Claude Code/Gemini）辅助您在工作区自动编写代码并测试。\n* **解答技术疑问**：配置 API Key 后，随时可以在这里向我咨询代码设计、Bug 调试或技术方案。`;
+            }
+
+            const finalComments = [...newComments, {
+              time: new Date().toISOString(),
+              author: 'MIMIcode',
+              comment: `(此为无任务状态下的临时会话，关闭后可在顶部菜单再次找回)\n\n${reply}`
+            }];
+            
+            if (currentChatId) {
+              const idx = newSessions.findIndex(s => s.id === currentChatId);
+              if (idx !== -1) {
+                newSessions[idx].comments = finalComments;
+                newSessions[idx].updatedAt = new Date().toISOString();
+                setChatSessions([...newSessions]);
+                localStorage.setItem('mimi-chat-sessions', JSON.stringify(newSessions));
+              }
+            }
+            setLocalComments(finalComments);
+          } catch (err: any) {
+            console.error(err);
+          } finally {
+            setIsThinking(false);
+          }
+        })();
       }
     } catch (e: any) {
       alert("Error: " + e.toString());
@@ -860,9 +1013,179 @@ export const ChatView: React.FC<ChatViewProps> = ({
     <div className="view-container">
       {/* Chat Header */}
       <div className="main-header">
-        <div className="header-left">
-          <span>New Conversation</span>
-          <Icons.ChevronDown style={{ color: 'var(--color-text-muted)' }} />
+        <div className="header-left-container" style={{ position: 'relative' }}>
+          <div 
+            className="header-left" 
+            style={{ cursor: 'pointer' }}
+            onClick={() => setShowHistoryMenu(!showHistoryMenu)}
+          >
+            <span style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedTask 
+                ? selectedTask.title 
+                : (activeChatId 
+                   ? chatSessions.find(s => s.id === activeChatId)?.title 
+                   : 'New Conversation')}
+            </span>
+            <Icons.ChevronDown style={{ color: 'var(--color-text-muted)' }} />
+          </div>
+          {showHistoryMenu && (
+            <div 
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: '8px',
+                width: '300px',
+                maxHeight: '400px',
+                overflowY: 'auto',
+                backgroundColor: 'var(--bg-panel)',
+                border: '1px solid var(--color-border)',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '4px'
+              }}
+            >
+              <div 
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  fontWeight: (!selectedTask && !activeChatId) ? 600 : 400,
+                  color: (!selectedTask && !activeChatId) ? 'var(--color-primary-orange)' : 'var(--color-text-main)',
+                  backgroundColor: (!selectedTask && !activeChatId) ? 'var(--color-primary-light)' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onClick={() => {
+                  if (setSelectedTaskId) setSelectedTaskId(null);
+                  setActiveChatId(null);
+                  setLocalComments([]);
+                  setShowHistoryMenu(false);
+                }}
+              >
+                <Icons.Plus style={{ width: 14, height: 14 }} /> 
+                + 新建对话
+              </div>
+
+              {chatSessions.length > 0 && (
+                <>
+                  <div style={{ padding: '8px 12px 4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>历史对话 (Chats)</div>
+                  {chatSessions.map(s => (
+                    <div 
+                      key={s.id}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        backgroundColor: activeChatId === s.id ? 'var(--color-primary-light)' : 'transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activeChatId !== s.id) e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activeChatId !== s.id) e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                      onClick={() => {
+                        if (setSelectedTaskId) setSelectedTaskId(null);
+                        setActiveChatId(s.id);
+                        setShowHistoryMenu(false);
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden', flex: 1 }}>
+                        <span style={{ 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap',
+                          fontSize: '13px',
+                          fontWeight: activeChatId === s.id ? 600 : 400,
+                          color: activeChatId === s.id ? 'var(--color-primary-orange)' : 'var(--color-text-main)'
+                        }}>{s.title}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{new Date(s.updatedAt).toLocaleDateString()} {new Date(s.updatedAt).toLocaleTimeString()}</span>
+                      </div>
+                      <div 
+                        style={{
+                          padding: '4px',
+                          borderRadius: '4px',
+                          color: 'var(--color-text-muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginLeft: '8px'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newSessions = chatSessions.filter(chat => chat.id !== s.id);
+                          setChatSessions(newSessions);
+                          localStorage.setItem('mimi-chat-sessions', JSON.stringify(newSessions));
+                          if (activeChatId === s.id) {
+                            setActiveChatId(null);
+                            setLocalComments([]);
+                          }
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#ef4444';
+                          e.currentTarget.style.backgroundColor = 'var(--bg-main)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = 'var(--color-text-muted)';
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        title="删除该对话"
+                      >
+                        <Icons.Trash2 style={{ width: 14, height: 14 }} />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              
+              {tasks.length > 0 && (
+                <>
+                  <div style={{ height: '1px', backgroundColor: 'var(--color-border)', margin: '8px 0 4px 0' }} />
+                  <div style={{ padding: '8px 12px 4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>开发任务 (Tasks)</div>
+                  {tasks.map(t => (
+                    <div 
+                      key={t.id}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        fontWeight: selectedTask?.id === t.id ? 600 : 400,
+                        color: selectedTask?.id === t.id ? 'var(--color-primary-orange)' : 'var(--color-text-main)',
+                        backgroundColor: selectedTask?.id === t.id ? 'var(--color-primary-light)' : 'transparent',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}
+                      onClick={() => {
+                        if (setSelectedTaskId) setSelectedTaskId(t.id);
+                        setActiveChatId(null);
+                        setShowHistoryMenu(false);
+                      }}
+                      onMouseEnter={(e) => {
+                        if (selectedTask?.id !== t.id) e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (selectedTask?.id !== t.id) e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t.id}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="header-center">
@@ -888,7 +1211,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Chat Content */}
-      {!selectedTask ? (
+      {!selectedTask && localComments.length === 0 ? (
         <div className="chat-welcome">
           <h1 className="welcome-title">你好，我是 <span>MIMIcode</span></h1>
           <p className="welcome-subtitle">你的本地多智能体协同开发伙伴</p>
@@ -906,34 +1229,41 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       ) : (
         <div className="chat-scroll-area" ref={scrollRef}>
-          <div className="chat-welcome" style={{ padding: '0 0 24px 0', borderBottom: '1px solid var(--color-border)' }}>
-            <h1 className="welcome-title" style={{ fontSize: '24px' }}>{selectedTask.title}</h1>
-            <p className="welcome-subtitle" style={{ marginBottom: '16px' }}>{selectedTask.id}</p>
-            <div className="welcome-actions">
-              <button className="action-btn" onClick={() => handleFillInput(`@Hermes 帮我头脑风暴一下: ${selectedTask.title}`)}>
-                <Icons.Zap className="action-btn-icon" /> Brainstorm
-              </button>
-              <button className="action-btn" onClick={() => handleNavigate('Specifications')}>
-                <Icons.FileText className="action-btn-icon" /> Spec
-              </button>
-              <button className="action-btn" onClick={() => handleFillInput(`@Antigravity 前端设计: ${selectedTask.title}`)}>
-                <Icons.Layout className="action-btn-icon" /> Design
-              </button>
-              <button className="action-btn" onClick={() => handleFillInput(`@Codex 开始构建: ${selectedTask.title}`)}>
-                <Icons.Code className="action-btn-icon" /> Build
-              </button>
-              <button className="action-btn" onClick={() => handleFillInput(`@OpenCode 重构代码: ${selectedTask.title}`)}>
-                <Icons.RefreshCw className="action-btn-icon" /> Refactor
-              </button>
-              <button className="action-btn" onClick={() => handleFillInput(`@ClaudeCode 审查代码: ${selectedTask.title}`)}>
-                <Icons.Shield className="action-btn-icon" /> Review
-              </button>
+          {selectedTask ? (
+            <div className="chat-welcome" style={{ padding: '0 0 24px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <h1 className="welcome-title" style={{ fontSize: '24px' }}>{selectedTask.title}</h1>
+              <p className="welcome-subtitle" style={{ marginBottom: '16px' }}>{selectedTask.id}</p>
+              <div className="welcome-actions">
+                <button className="action-btn" onClick={() => handleFillInput(`@Hermes 帮我头脑风暴一下: ${selectedTask.title}`)}>
+                  <Icons.Zap className="action-btn-icon" /> Brainstorm
+                </button>
+                <button className="action-btn" onClick={() => handleNavigate('Specifications')}>
+                  <Icons.FileText className="action-btn-icon" /> Spec
+                </button>
+                <button className="action-btn" onClick={() => handleFillInput(`@Antigravity 前端设计: ${selectedTask.title}`)}>
+                  <Icons.Layout className="action-btn-icon" /> Design
+                </button>
+                <button className="action-btn" onClick={() => handleFillInput(`@Codex 开始构建: ${selectedTask.title}`)}>
+                  <Icons.Code className="action-btn-icon" /> Build
+                </button>
+                <button className="action-btn" onClick={() => handleFillInput(`@OpenCode 重构代码: ${selectedTask.title}`)}>
+                  <Icons.RefreshCw className="action-btn-icon" /> Refactor
+                </button>
+                <button className="action-btn" onClick={() => handleFillInput(`@ClaudeCode 审查代码: ${selectedTask.title}`)}>
+                  <Icons.Shield className="action-btn-icon" /> Review
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="chat-welcome" style={{ padding: '0 0 24px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <h1 className="welcome-title" style={{ fontSize: '24px' }}>临时全局会话</h1>
+              <p className="welcome-subtitle" style={{ marginBottom: '16px' }}>(当前未选择任务，记录不会被持久化保存)</p>
+            </div>
+          )}
 
           {(() => {
             const items = [
-              ...(selectedTask.history || []).map(h => ({ type: 'history', time: h.time, data: h })),
+              ...(selectedTask?.history || []).map(h => ({ type: 'history', time: h.time, data: h })),
               ...(localComments || []).map(c => ({ type: 'comment', time: c.time, data: c }))
             ].sort((a, b) => parseTime(a.time).getTime() - parseTime(b.time).getTime());
 
@@ -1029,8 +1359,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         </div>
                       </div>
                       
-                      <div className="chat-live-terminal-body" ref={liveTerminalRef}>
-                        {liveLogContent ? liveLogContent : "等待终端输出...\n➜ "}
+                      <div 
+                        className="pty-terminal-container" 
+                        ref={liveTerminalRef}
+                        style={{ height: '350px', backgroundColor: '#0f172a', padding: '8px', overflow: 'hidden' }}
+                      >
                       </div>
                       
                       <div className="chat-live-terminal-actions">
@@ -1051,6 +1384,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       )}
 
       {/* Input Bar */}
+      {!(isThinking && thinkingAgent !== 'MIMIcode') && (
       <div className="chat-input-wrapper">
         <div className="chat-input-box">
           <span title="附加文件或目录" style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -1065,7 +1399,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
             className="chat-input-field" 
             placeholder={isThinking && thinkingAgent !== 'MIMIcode' ? `输入指令给 ${thinkingAgent}...` : "Ask anything or @agent..."}
             value={chatInputText}
-            onChange={(e) => setChatInputText(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setChatInputText(val);
+              if (val.endsWith('@') || val.match(/\s@$/)) {
+                setShowMentionMenu(true);
+              } else if (!val.includes('@')) {
+                setShowMentionMenu(false);
+              }
+            }}
             onKeyDown={handleKeyDown}
             disabled={isSubmitting && !(isThinking && thinkingAgent !== 'MIMIcode')}
             ref={inputRef}
@@ -1140,6 +1482,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <Icons.Send className="chat-input-send" onClick={handleSubmit} style={{ cursor: 'pointer', opacity: isSubmitting ? 0.5 : 1 }} />
         </div>
       </div>
+      )}
     </div>
   );
 };

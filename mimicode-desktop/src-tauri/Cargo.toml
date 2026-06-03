@@ -26,5 +26,6 @@ keyring = "2"
 sysinfo = "0.30"
 chrono = "0.4"
 rfd = "0.17.2"
+portable-pty = "0.8"
 
 

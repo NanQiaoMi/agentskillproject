@@ -287,7 +287,9 @@ function App() {
       </aside>
 
       <main className="main-content">
-        {renderMainContent()}
+        <div key={`${activeNav}-${viewState}`} style={{ display: 'contents' }}>
+          {renderMainContent()}
+        </div>
       </main>
 
       <ErrorBoundary>

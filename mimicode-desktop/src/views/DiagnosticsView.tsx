@@ -267,7 +267,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
         {activeTab === 'System Diagnostics' && (
           <div style={{ padding: '24px 32px', display: 'flex', gap: '32px' }}>
             <div className="diag-list" style={{ flex: 1 }}>
-              <div className="diag-item">
+              <div className="diag-item" style={{ '--i': 0 } as React.CSSProperties}>
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.GitBranch /></div>
                 <div className="diag-info">
                   <div className="diag-name font-semibold">{t.git}</div>
@@ -277,7 +277,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   {envStatus?.git_installed ? t.healthy : t.error}
                 </div>
               </div>
-              <div className="diag-item">
+              <div className="diag-item" style={{ '--i': 1 } as React.CSSProperties}>
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Code /></div>
                 <div className="diag-info">
                   <div className="diag-name font-semibold">{t.pythonEnv}</div>
@@ -287,7 +287,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   {envStatus?.python_installed ? t.healthy : t.error}
                 </div>
               </div>
-              <div className="diag-item">
+              <div className="diag-item" style={{ '--i': 2 } as React.CSSProperties}>
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Zap /></div>
                 <div className="diag-info">
                   <div className="diag-name font-semibold">{t.uvPkg}</div>
@@ -297,7 +297,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   {envStatus?.uv_installed ? t.healthy : t.error}
                 </div>
               </div>
-              <div className="diag-item">
+              <div className="diag-item" style={{ '--i': 3 } as React.CSSProperties}>
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Box /></div>
                 <div className="diag-info">
                   <div className="diag-name font-semibold">{t.node}</div>
@@ -307,7 +307,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                   {nodeHealthy ? t.healthy : t.error}
                 </div>
               </div>
-              <div className="diag-item">
+              <div className="diag-item" style={{ '--i': 4 } as React.CSSProperties}>
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
                 <div className="diag-info">
                   <div className="diag-name font-semibold">{t.agentsServices}</div>

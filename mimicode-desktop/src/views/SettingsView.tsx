@@ -567,8 +567,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
               <div className="agents-grid">
                 {/* Built-in Agents */}
-                {Object.entries(agentConfigs).map(([key, info]) => (
-                  <div key={key} className="agent-card">
+                {Object.entries(agentConfigs).map(([key, info], index) => (
+                  <div key={key} className="agent-card" style={{ '--i': index } as React.CSSProperties}>
                     <div className="agent-card-header">
                       <div className="agent-card-info">
                         {getAgentIcon(key, agentDisplayNames[key] ?? key)}
@@ -589,7 +589,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
                 {/* Custom Agents */}
                 {customAgents.map((agent, i) => (
-                  <div key={`custom-${i}`} className="agent-card">
+                  <div key={`custom-${i}`} className="agent-card" style={{ '--i': i } as React.CSSProperties}>
                     <div className="agent-card-header">
                       <div className="agent-card-info">
                         <div className="agent-card-avatar" style={{ background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

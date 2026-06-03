@@ -332,11 +332,11 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
                 </div>
                 
                 <div className="kanban-column-content">
-                  {colTasks.map(t => {
+                  {colTasks.map((t, index) => {
                     const pri = t.priority || 'Medium';
                     const priStyle = getPriorityStyle(pri);
                     return (
-                      <div key={t.id} className="kanban-card" onClick={() => onSelectTask(t.id)}>
+                      <div key={t.id} className="kanban-card" style={{ '--i': index } as React.CSSProperties} onClick={() => onSelectTask(t.id)}>
                         <div className="kanban-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span className="font-mono">{t.id}</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

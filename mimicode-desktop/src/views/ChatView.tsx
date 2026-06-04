@@ -1045,22 +1045,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 zIndex: 100,
                 display: 'flex',
                 flexDirection: 'column',
-                padding: '4px'
+                padding: '4px',
+                animation: 'dropdownPop var(--duration-fast) var(--ease-spring) both',
+                transformOrigin: 'top left'
               }}
             >
               <div 
-                style={{
-                  padding: '8px 12px',
-                  cursor: 'pointer',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  fontWeight: (!selectedTask && !activeChatId) ? 600 : 400,
-                  color: (!selectedTask && !activeChatId) ? 'var(--color-primary-orange)' : 'var(--color-text-main)',
-                  backgroundColor: (!selectedTask && !activeChatId) ? 'var(--color-primary-light)' : 'transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
+                className={`dropdown-item ${(!selectedTask && !activeChatId) ? 'active' : ''}`}
+                style={{ fontSize: '13px', gap: '8px' }}
                 onClick={() => {
                   if (setSelectedTaskId) setSelectedTaskId(null);
                   setActiveChatId(null);
@@ -1068,31 +1060,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   setShowHistoryMenu(false);
                 }}
               >
-                <Icons.Plus style={{ width: 14, height: 14 }} /> 
-                + 新建对话
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <Icons.Plus style={{ width: 14, height: 14 }} /> 
+                  新建对话
+                </div>
               </div>
 
               {chatSessions.length > 0 && (
                 <>
                   <div style={{ padding: '8px 12px 4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>历史对话 (Chats)</div>
-                  {chatSessions.map(s => (
+                  {chatSessions.map((s, idx) => (
                     <div 
                       key={s.id}
-                      style={{
-                        padding: '8px 12px',
-                        cursor: 'pointer',
-                        borderRadius: '4px',
-                        backgroundColor: activeChatId === s.id ? 'var(--color-primary-light)' : 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (activeChatId !== s.id) e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (activeChatId !== s.id) e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
+                      className={`dropdown-item ${activeChatId === s.id ? 'active' : ''}`}
+                      style={{ animationDelay: `${idx * 20}ms` }}
                       onClick={() => {
                         if (setSelectedTaskId) setSelectedTaskId(null);
                         setActiveChatId(s.id);
@@ -1111,15 +1092,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{new Date(s.updatedAt).toLocaleDateString()} {new Date(s.updatedAt).toLocaleTimeString()}</span>
                       </div>
                       <div 
-                        style={{
-                          padding: '4px',
-                          borderRadius: '4px',
-                          color: 'var(--color-text-muted)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginLeft: '8px'
-                        }}
+                        className="dropdown-icon-btn"
                         onClick={(e) => {
                           e.stopPropagation();
                           const newSessions = chatSessions.filter(chat => chat.id !== s.id);

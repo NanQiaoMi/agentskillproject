@@ -206,6 +206,16 @@ interface SpecificationsViewProps {
 }
 
 export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectPath }) => {
+  const [language, setLanguage] = useState(() => {
+    try { return localStorage.getItem('mimi-language') || '简体中文'; } catch { return '简体中文'; }
+  });
+
+  useEffect(() => {
+    const handleLang = (e: any) => setLanguage(e.detail);
+    window.addEventListener('mimi-language-changed', handleLang);
+    return () => window.removeEventListener('mimi-language-changed', handleLang);
+  }, []);
+
   const [activeTab, setActiveTab] = useState('Architecture'); // PRD, Design, Architecture, API Contracts
   const [content, setContent] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -232,7 +242,12 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
     if (targetHeading) {
       // Disable scroll spy during smooth scroll
       (window as any).specManualScrolling = true;
-      targetHeading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = targetHeading.getBoundingClientRect();
+      const scrollPosition = container.scrollTop + (targetRect.top - containerRect.top) - 32; // 32px for padding buffer
+
+      container.scrollTo({ top: scrollPosition, behavior: 'smooth' });
 
       // Re-enable scroll spy after smooth scroll finishes (roughly 800ms)
       setTimeout(() => {
@@ -535,7 +550,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
       <div className="view-header" style={{ paddingBottom: '0' }}>
         <div className="view-title-row" style={{ paddingBottom: '16px' }}>
           <div>
-            <h1 className="view-title">Specifications</h1>
+            <h1 className="view-title">{language === '简体中文' ? '需求规范 (Specifications)' : 'Specifications'}</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div className="header-right-users" style={{ display: 'flex' }}>
@@ -548,17 +563,17 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                 <>
                   <button className="btn btn-primary" onClick={handleSave} style={{ padding: '6px 12px', fontSize: '12px' }}>
                     <Icons.Check style={{ width: '12px', height: '12px', marginRight: '6px' }} />
-                    Save
+                    {language === '简体中文' ? '保存' : 'Save'}
                   </button>
                   <button className="btn btn-ghost" onClick={handleCancel} style={{ padding: '6px 12px', fontSize: '12px' }}>
                     <XIcon style={{ width: '12px', height: '12px', marginRight: '6px' }} />
-                    Cancel
+                    {language === '简体中文' ? '取消' : 'Cancel'}
                   </button>
                 </>
               ) : (
                 <button className="btn btn-ghost" onClick={handleEditClick} style={{ padding: '6px 12px', fontSize: '12px' }}>
                   <Icons.Edit2 style={{ width: '12px', height: '12px', marginRight: '6px' }} />
-                  Edit
+                  {language === '简体中文' ? '编辑' : 'Edit'}
                 </button>
               )}
             </div>
@@ -566,24 +581,33 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
         </div>
         
         <div className="view-tabs" style={{ gap: '32px' }}>
-          {['PRD', 'Design', 'Architecture', 'API Contracts'].map(tab => (
-            <div 
-              key={tab} 
-              className={`view-tab ${activeTab === tab ? 'active' : ''} ${isEditing ? 'disabled' : ''}`}
-              onClick={() => !isEditing && setActiveTab(tab)}
-              style={{ 
-                paddingBottom: '12px',
-                cursor: isEditing ? 'not-allowed' : 'pointer',
-                opacity: isEditing && activeTab !== tab ? 0.5 : 1
-              }}
-            >
-              {tab}
-            </div>
-          ))}
+          {['PRD', 'Design', 'Architecture', 'API Contracts'].map(tab => {
+            const displayTab = language === '简体中文' ? {
+              'PRD': '需求规格 (PRD)',
+              'Design': '设计规范 (Design)',
+              'Architecture': '系统架构 (Architecture)',
+              'API Contracts': '接口契约 (API Contracts)'
+            }[tab] || tab : tab;
+
+            return (
+              <div 
+                key={tab} 
+                className={`view-tab ${activeTab === tab ? 'active' : ''} ${isEditing ? 'disabled' : ''}`}
+                onClick={() => !isEditing && setActiveTab(tab)}
+                style={{ 
+                  paddingBottom: '12px',
+                  cursor: isEditing ? 'not-allowed' : 'pointer',
+                  opacity: isEditing && activeTab !== tab ? 0.5 : 1
+                }}
+              >
+                {displayTab}
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div className="view-content" style={{ display: 'flex', flex: 1, overflow: isEditing ? 'hidden' : 'auto' }}>
+      <div className="view-content" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {isEditing ? (
           <div style={{ display: 'flex', flex: 1, gap: '24px', padding: '24px', overflow: 'hidden' }}>
             {/* Left Column: Textarea Editor */}

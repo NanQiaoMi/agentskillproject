@@ -25,6 +25,7 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
   const [gitDiagnostics, setGitDiagnostics] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [allCommitDates, setAllCommitDates] = useState<string[]>([]);
 
   const parseWorktreeList = (raw: string) => {
     return raw.split('\n').filter(Boolean).map(line => {
@@ -85,6 +86,7 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
       setWtMeta(null);
       setFileStats([]);
       setGitDiagnostics(null);
+      setAllCommitDates([]);
       return;
     }
     
@@ -92,12 +94,13 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
       setLoadingDetails(true);
       try {
         // Run all Git loading calls in parallel
-        const [metaRes, commitsRes, statusRes, filesRes, diagRes] = await Promise.allSettled([
+        const [metaRes, commitsRes, statusRes, filesRes, diagRes, allDatesRes] = await Promise.allSettled([
           invoke<any>("get_path_metadata", { path: selectedWt.path }),
           invoke<string>("get_git_commits", { repoPath: selectedWt.path }),
           invoke<string>("get_git_status", { repoPath: selectedWt.path }),
           invoke<string>("read_dir_recursive", { path: selectedWt.path }),
-          invoke<any>("get_git_diagnostics", { repoPath: selectedWt.path })
+          invoke<any>("get_git_diagnostics", { repoPath: selectedWt.path }),
+          invoke<string>("run_shell_command", { command: 'git log --all --since="1 year ago" --date=short --format=%ad', cwd: selectedWt.path })
         ]);
 
         // 1. Process metadata
@@ -216,6 +219,14 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
             pack_files: 0,
           });
         }
+
+        // 6. Process all commit dates
+        if (allDatesRes.status === 'fulfilled') {
+          const dates = allDatesRes.value.split('\n').map(l => l.trim()).filter(Boolean);
+          setAllCommitDates(dates);
+        } else {
+          setAllCommitDates([]);
+        }
       } catch (err) {
         console.error("加载 Worktree 详情失败:", err);
       } finally {
@@ -289,10 +300,8 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
 
   const getCommitCountsMap = () => {
     const commitCounts: Record<string, number> = {};
-    commits.forEach(c => {
-      if (c.date) {
-        commitCounts[c.date] = (commitCounts[c.date] || 0) + 1;
-      }
+    allCommitDates.forEach(date => {
+      commitCounts[date] = (commitCounts[date] || 0) + 1;
     });
     return commitCounts;
   };
@@ -326,29 +335,14 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
         const dateString = `${year}-${month}-${day}`;
         
         const realCount = commitCounts[dateString] || 0;
-        
-        // Background simulated agent activity log
-        let simulatedCount = 0;
-        const dayOfWeek = currentDate.getDay();
-        if (dayOfWeek > 0 && dayOfWeek < 6) {
-          let hash = 0;
-          for (let i = 0; i < dateString.length; i++) {
-            hash = dateString.charCodeAt(i) + ((hash << 5) - hash);
-          }
-          const rand = Math.abs(hash) % 100;
-          if (rand < 55) {
-            simulatedCount = (rand % 3) + 1;
-          }
-        }
-        
-        const count = realCount > 0 ? realCount + simulatedCount : simulatedCount;
+        const count = realCount;
         const isReal = realCount > 0;
         
         weekDays.push({ 
           date: dateString, 
           count, 
           realCount, 
-          simulatedCount, 
+          simulatedCount: 0, 
           isReal 
         });
 
@@ -366,19 +360,11 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
   const { weeks, monthsLabels } = generateHeatmapData();
 
   const getHeatmapColor = (day: { count: number; isReal: boolean }) => {
-    if (day.isReal) {
-      if (day.count <= 2) return '#FDBA74';
-      if (day.count <= 5) return '#FB923C';
-      if (day.count <= 10) return '#F97316';
-      return '#EA580C'; // glowing orange for real commits
-    }
-    
     if (day.count === 0) return 'var(--color-border)'; 
-    if (day.count === 1) return '#e6f4ea';
-    if (day.count === 2) return '#9BE9A8';
-    if (day.count === 3) return '#40C463';
-    if (day.count === 4) return '#30A14E';
-    return '#216E39';
+    if (day.count <= 2) return '#FDBA74';
+    if (day.count <= 5) return '#FB923C';
+    if (day.count <= 10) return '#F97316';
+    return '#EA580C'; // glowing orange for real commits
   };
 
   const renderTopologyGraph = () => {
@@ -1157,12 +1143,8 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
                   {/* Heatmap Legend */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '10.5px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '1.5px', backgroundColor: '#e6f4ea', display: 'inline-block' }}></span>
-                      <span style={{ color: 'var(--color-text-muted)' }}>智能体协作模拟</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '1.5px', backgroundColor: '#FB923C', boxShadow: '0 0 2px var(--color-primary-orange)', display: 'inline-block' }}></span>
-                      <span style={{ color: 'var(--color-text-muted)' }}>真实代码提交 (高亮发光)</span>
+                      <span style={{ color: 'var(--color-text-muted)' }}>提交活跃记录</span>
                     </div>
                   </div>
                 </div>
@@ -1210,7 +1192,7 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
                                 key={dIdx}
                                 className={`heatmap-square ${day.isReal ? 'real-commit' : ''}`}
                                 style={{ backgroundColor: getHeatmapColor(day) }}
-                                title={`${day.date}: ${day.count} 次提交 (${day.isReal ? `您做出了 ${day.realCount} 次真实代码提交` : '智能体协作模拟提交'})`}
+                                title={`${day.date}: ${day.count} 次提交`}
                               />
                             ))}
                           </div>

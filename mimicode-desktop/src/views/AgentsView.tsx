@@ -215,9 +215,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath, onNavigate 
             return (
               <div key={agent.id} className="agent-list-card">
                 <div className="agent-list-left">
-                  <div className="agent-avatar-large" style={{ backgroundColor: agent.color, color: '#fff' }}>
-                    {agent.name.charAt(0)}
-                  </div>
+                  {getAgentIcon(agent.id, agent.name, 'large')}
                   <div className="agent-list-info">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className="agent-name-large">{agent.name}</span>
@@ -380,14 +378,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath, onNavigate 
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '36px', height: '36px', borderRadius: '10px',
-                  backgroundColor: settingsAgent.color, color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 600, fontSize: '16px',
-                }}>
-                  {settingsAgent.name.charAt(0)}
-                </div>
+                {getAgentIcon(settingsAgent.id, settingsAgent.name, 'small')}
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--color-text-main)' }}>{settingsAgent.name}</div>
                   <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{settingsAgent.role}</div>
@@ -579,4 +570,26 @@ const inputStyle: React.CSSProperties = {
   fontSize: '13px',
   fontFamily: 'var(--font-mono)',
   outline: 'none',
+};
+
+const getAgentIcon = (id: string, name: string, size: 'large' | 'small' = 'large') => {
+  const baseStyle: React.CSSProperties = { color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+  const iconSize = size === 'large' ? '24px' : '18px';
+  const containerClass = size === 'large' ? 'agent-card-avatar' : '';
+  const containerStyle = size === 'small' ? { width: '36px', height: '36px', borderRadius: '10px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' } : {};
+
+  switch(id.toLowerCase()) {
+    case 'claudecode':
+      return <div className={containerClass} style={{ ...baseStyle, ...containerStyle, background: 'linear-gradient(135deg, #FF8C00 0%, #E52E71 100%)' }}><Icons.Shield style={{ width: iconSize, height: iconSize }} /></div>;
+    case 'codex':
+      return <div className={containerClass} style={{ ...baseStyle, ...containerStyle, background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}><Icons.Code style={{ width: iconSize, height: iconSize }} /></div>;
+    case 'hermes':
+      return <div className={containerClass} style={{ ...baseStyle, ...containerStyle, background: 'linear-gradient(135deg, #F53844 0%, #42378F 100%)' }}><Icons.Box style={{ width: iconSize, height: iconSize }} /></div>;
+    case 'antigravity':
+      return <div className={containerClass} style={{ ...baseStyle, ...containerStyle, background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}><Icons.Zap style={{ width: iconSize, height: iconSize }} /></div>;
+    case 'opencode':
+      return <div className={containerClass} style={{ ...baseStyle, ...containerStyle, background: 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)' }}><Icons.Terminal style={{ width: iconSize, height: iconSize }} /></div>;
+    default:
+      return <div className={containerClass} style={{ ...baseStyle, ...containerStyle, background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)' }}>{name.charAt(0).toUpperCase()}</div>;
+  }
 };

@@ -6,6 +6,7 @@ use std::io::Read;
 use keyring::Entry;
 use chrono::Local;
 use tauri::Emitter;
+use tauri::Manager;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -797,15 +798,17 @@ fn run_git_cmd(args: &[&str], current_dir: &Path) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn select_directory() -> Result<String, String> {
-    let result = rfd::FileDialog::new()
-        .set_title("选择 MIMIcode 项目工作区目录")
-        .pick_folder();
-    
-    match result {
-        Some(path) => Ok(path.to_string_lossy().to_string()),
-        None => Err("Operation cancelled by user".to_string()),
-    }
+async fn select_directory() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let result = rfd::FileDialog::new()
+            .set_title("选择 MIMIcode 项目工作区目录")
+            .pick_folder();
+        
+        match result {
+            Some(path) => Ok(path.to_string_lossy().to_string()),
+            None => Err("Operation cancelled by user".to_string()),
+        }
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -2120,6 +2123,119 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchResultData {
+    pub id: String,
+    pub path: String,
+    pub line: u32,
+    pub title: String,
+    pub excerpt: String,
+    pub result_type: String, // 'code', 'task', etc.
+}
+
+#[tauri::command]
+fn search_codebase(project_path: String, query: String, match_case: bool, is_regex: bool) -> Result<Vec<SearchResultData>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    
+    let repo_dir = Path::new(&project_path);
+    if !repo_dir.exists() {
+        return Err("Project path does not exist".to_string());
+    }
+
+    let mut git_args = vec!["grep", "-n", "-I"];
+    if !match_case {
+        git_args.push("-i");
+    }
+    if is_regex {
+        git_args.push("-E");
+    } else {
+        git_args.push("-F");
+    }
+    git_args.push("-m");
+    git_args.push("100");
+    git_args.push("--");
+    git_args.push(&query);
+
+    #[allow(unused_imports)]
+    use std::os::windows::process::CommandExt;
+    let mut cmd = Command::new("git");
+    cmd.args(&git_args).current_dir(repo_dir);
+    
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    let mut results = Vec::new();
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for (i, line_str) in stdout.lines().enumerate() {
+        let parts: Vec<&str> = line_str.splitn(3, ':').collect();
+        if parts.len() == 3 {
+            let path = parts[0].to_string();
+            let line_num: u32 = parts[1].parse().unwrap_or(1);
+            let content = parts[2].to_string();
+            
+            let result_type = if path.ends_with(".md") && path.to_lowercase().contains("spec") {
+                "spec".to_string()
+            } else if path.ends_with(".md") && path.to_lowercase().contains("task") {
+                "task".to_string()
+            } else {
+                "code".to_string()
+            };
+            
+            let title = Path::new(&path).file_name().unwrap_or_default().to_string_lossy().into_owned();
+
+            results.push(SearchResultData {
+                id: format!("res_{}", i),
+                path,
+                line: line_num,
+                title,
+                excerpt: content,
+                result_type,
+            });
+        }
+    }
+
+    Ok(results)
+}
+
+#[tauri::command]
+fn open_file_in_editor(path: String, line: Option<u32>) -> Result<(), String> {
+    #[allow(unused_imports)]
+    use std::os::windows::process::CommandExt;
+
+    let target = match line {
+        Some(l) => format!("{}:{}", path, l),
+        None => path.clone(),
+    };
+
+    let mut cmd = Command::new("cmd");
+    cmd.args(&["/C", "code", "--goto", &target]);
+
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    match cmd.spawn() {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            // fallback
+            let mut fb = Command::new("cmd");
+            fb.args(&["/C", "start", "\"\"", &path]);
+            #[cfg(windows)]
+            fb.creation_flags(0x08000000);
+            fb.spawn().map(|_| ()).map_err(|e| e.to_string())
+        }
+    }
+}
+
 #[tauri::command]
 fn initialize_project(project_path: String) -> Result<String, String> {
     let target_agentflow = Path::new(&project_path).join(".agentflow");
@@ -2158,6 +2274,36 @@ fn initialize_project(project_path: String) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|_app| {
+            // Set window icon from icons/icon.png
+            // Try multiple possible locations for the icon file
+            let possible_paths = vec![
+                // Dev mode: relative to exe (src-tauri/target/debug/)
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                    .map(|d| d.join("../../icons/icon.png")),
+                // Direct path in src-tauri
+                Some(std::path::PathBuf::from("icons/icon.png")),
+            ];
+            
+            for maybe_path in possible_paths {
+                if let Some(path) = maybe_path {
+                    if path.exists() {
+                        if let Ok(img) = image::open(&path) {
+                            let rgba = img.to_rgba8();
+                            let (w, h) = rgba.dimensions();
+                            let icon = tauri::image::Image::new_owned(rgba.into_raw(), w, h);
+                            if let Some(window) = _app.get_webview_window("main") {
+                                let _ = window.set_icon(icon);
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             check_environment,
             setup_environment,
@@ -2197,7 +2343,9 @@ pub fn run() {
             spawn_agent_pty,
             write_to_pty,
             resize_pty,
-            kill_pty
+            kill_pty,
+            search_codebase,
+            open_file_in_editor
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

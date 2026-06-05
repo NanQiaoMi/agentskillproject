@@ -3,6 +3,17 @@
 
 # Logs
 .agentflow/logs/*.log
+.agentflow/logs/
+
+# Local agent/skill installations
+.agents/
+.claude/
+.hermes/
+skills-lock.json
+
+# Local build/package artifacts
+*.zip
+*.bak
 
 # Python cache
 __pycache__/

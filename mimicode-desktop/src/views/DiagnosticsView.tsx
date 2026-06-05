@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Icons } from '../components/Icons';
 import { EnvStatus } from '../types';
 import { invoke } from '@tauri-apps/api/core';
+import { useAppContext } from '../context/AppContext';
+import { EnvironmentRepairModal } from '../components/EnvironmentRepairModal';
 
 interface DiagnosticsViewProps {
   envStatus: EnvStatus | null;
@@ -74,13 +76,12 @@ const translations = {
 };
 
 export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, projectPath }) => {
+  const { setEnvStatus, addToast } = useAppContext();
   const [activeTab, setActiveTab] = useState('System Diagnostics');
   const [logs, setLogs] = useState<string>('');
-  const [nodeVersion, setNodeVersion] = useState<string>('');
-  const [nodeHealthy, setNodeHealthy] = useState<boolean>(false);
   const [agentStatus, setAgentStatus] = useState<Record<string, boolean>>({});
   const [isRunningCheck, setIsRunningCheck] = useState(false);
-  const [isRepairing, setIsRepairing] = useState(false);
+  const [isRepairModalOpen, setIsRepairModalOpen] = useState(false);
 
   // Logs tab state
   const [agentFilter, setAgentFilter] = useState('All Agents');
@@ -104,9 +105,8 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     return () => window.removeEventListener('mimi-language-changed', handleLang);
   }, []);
 
-  // Fetch Node.js version on mount
+  // Fetch on mount
   useEffect(() => {
-    fetchNodeVersion();
     fetchAgentStatus();
   }, []);
 
@@ -117,16 +117,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     }
   }, [logs, autoScroll, agentFilter, levelFilter, searchText]);
 
-  const fetchNodeVersion = async () => {
-    try {
-      const version: string = await invoke('get_node_version');
-      setNodeVersion(version);
-      setNodeHealthy(true);
-    } catch (_e) {
-      setNodeVersion('Not Detected');
-      setNodeHealthy(false);
-    }
-  };
+
 
   const fetchAgentStatus = async () => {
     try {
@@ -151,28 +142,19 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     setIsRunningCheck(true);
     try {
       await Promise.allSettled([
-        invoke('check_environment', { projectPath }),
+        invoke('check_environment', { projectPath }).then((status) => setEnvStatus(status as EnvStatus)),
         invoke('check_agent_clis_running').then((status: unknown) => {
           setAgentStatus(status as Record<string, boolean>);
-        }),
-        fetchNodeVersion(),
+        })
       ]);
     } finally {
       setIsRunningCheck(false);
+      const msg = language === '简体中文' ? '环境检查已完成' : 'Environment check completed';
+      addToast(msg, 'success');
     }
   };
 
-  const handleRepairEnvironment = async () => {
-    setIsRepairing(true);
-    try {
-      await invoke('setup_environment', { projectPath });
-      await handleRunFullCheck();
-    } catch (e) {
-      console.error('Repair failed:', e);
-    } finally {
-      setIsRepairing(false);
-    }
-  };
+
 
   // Load logs when Logs tab is activated
   useEffect(() => {
@@ -302,16 +284,46 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Box /></div>
                 <div className="diag-info">
                   <div className="diag-name font-semibold">{t.node}</div>
-                  <div className="diag-desc text-muted">{nodeVersion === 'Not Detected' ? t.notDetected : (nodeVersion || t.detecting)}</div>
+                  <div className="diag-desc text-muted">{envStatus?.node_version || t.notDetected}</div>
                 </div>
-                <div className={`diag-status ${nodeHealthy ? 'text-success' : 'text-destructive'}`}>
-                  {nodeHealthy ? t.healthy : t.error}
+                <div className={`diag-status ${envStatus?.node_installed ? 'text-success' : 'text-destructive'}`}>
+                  {envStatus?.node_installed ? t.healthy : t.error}
                 </div>
               </div>
               <div className="diag-item" style={{ '--i': 4 } as React.CSSProperties}>
+                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Box /></div>
+                <div className="diag-info">
+                  <div className="diag-name font-semibold">npm</div>
+                  <div className="diag-desc text-muted">{envStatus?.npm_version || t.notDetected}</div>
+                </div>
+                <div className={`diag-status ${envStatus?.npm_installed ? 'text-success' : 'text-destructive'}`}>
+                  {envStatus?.npm_installed ? t.healthy : t.error}
+                </div>
+              </div>
+              <div className="diag-item" style={{ '--i': 5 } as React.CSSProperties}>
                 <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
                 <div className="diag-info">
-                  <div className="diag-name font-semibold">{t.agentsServices}</div>
+                  <div className="diag-name font-semibold">Smithery CLI</div>
+                  <div className="diag-desc text-muted">{envStatus?.smithery_installed ? 'Installed' : t.notDetected}</div>
+                </div>
+                <div className={`diag-status ${envStatus?.smithery_installed ? 'text-success' : 'text-destructive'}`}>
+                  {envStatus?.smithery_installed ? t.healthy : t.error}
+                </div>
+              </div>
+              <div className="diag-item" style={{ '--i': 6 } as React.CSSProperties}>
+                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
+                <div className="diag-info">
+                  <div className="diag-name font-semibold">Claude Code CLI</div>
+                  <div className="diag-desc text-muted">{envStatus?.claude_code_installed ? 'Installed' : t.notDetected}</div>
+                </div>
+                <div className={`diag-status ${envStatus?.claude_code_installed ? 'text-success' : 'text-destructive'}`}>
+                  {envStatus?.claude_code_installed ? t.healthy : t.error}
+                </div>
+              </div>
+              <div className="diag-item" style={{ '--i': 7 } as React.CSSProperties}>
+                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
+                <div className="diag-info">
+                  <div className="diag-name font-semibold">{t.agentsServices} (Running)</div>
                   <div className="diag-desc text-muted">{agentSummary.text}</div>
                 </div>
                 <div className={`diag-status ${agentSummary.healthy ? 'text-success' : 'text-destructive'}`}>
@@ -334,17 +346,11 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
               <button
                 className="btn w-full"
                 style={{ justifyContent: 'flex-start', padding: '10px 14px', backgroundColor: 'var(--bg-main)' }}
-                onClick={handleRepairEnvironment}
-                disabled={isRepairing}
+                onClick={() => setIsRepairModalOpen(true)}
               >
-                <Icons.Settings style={{ width: '16px', height: '16px', marginRight: '8px', animation: isRepairing ? 'spin 1s linear infinite' : undefined }}/>
-                {isRepairing ? t.repairing : t.repairEnv}
+                <Icons.Settings style={{ width: '16px', height: '16px', marginRight: '8px' }}/>
+                {t.repairEnv}
               </button>
-              {isRepairing && (
-                <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: '1.4' }}>
-                  {language === '简体中文' ? '后台脚本正在检测并静默安装缺失组件（Python/Node/Git/uv 及 Agent CLI），可能需要几分钟，请耐心等待...' : 'A background script is detecting and silently installing missing components (Python/Node/Git/uv and Agent CLIs). This may take a few minutes...'}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -420,6 +426,14 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
           </div>
         )}
       </div>
+      <EnvironmentRepairModal 
+        isOpen={isRepairModalOpen}
+        onClose={() => setIsRepairModalOpen(false)}
+        envStatus={envStatus}
+        projectPath={projectPath}
+        language={language}
+        onRepairComplete={handleRunFullCheck}
+      />
     </div>
   );
 };

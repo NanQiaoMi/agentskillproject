@@ -20,6 +20,12 @@ pub struct EnvStatus {
     python_version: String,
     uv_installed: bool,
     uv_version: String,
+    node_installed: bool,
+    node_version: String,
+    npm_installed: bool,
+    npm_version: String,
+    smithery_installed: bool,
+    claude_code_installed: bool,
     venv_initialized: bool,
     project_db_shared: bool,
 }
@@ -172,6 +178,10 @@ fn check_environment(project_path: String) -> EnvStatus {
     let git_version = get_command_version("git", &["--version"]);
     let python_version = get_command_version("python", &["--version"]);
     let uv_version = get_command_version("uv", &["--version"]);
+    let node_version = get_command_version("node", &["--version"]);
+    let npm_version = get_command_version("npm", &["--version"]);
+    let smithery_version = get_command_version("smithery", &["--version"]);
+    let claude_version = get_command_version("claude", &["--version"]);
     
     let venv_path = Path::new(&project_path).join(".agentflow").join("venv");
     let venv_initialized = venv_path.exists() && 
@@ -185,6 +195,12 @@ fn check_environment(project_path: String) -> EnvStatus {
         python_version,
         uv_installed: !uv_version.is_empty(),
         uv_version,
+        node_installed: !node_version.is_empty(),
+        node_version,
+        npm_installed: !npm_version.is_empty(),
+        npm_version,
+        smithery_installed: !smithery_version.is_empty(),
+        claude_code_installed: !claude_version.is_empty(),
         venv_initialized,
         project_db_shared: true,
     }
@@ -219,9 +235,21 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "uv is already installed."
 }
 
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+
 if (Get-Command npm -ErrorAction SilentlyContinue) {
     Write-Host "Installing global npm packages for agents..."
-    npm install -g @smithery/cli @anthropic-ai/claude-code
+    if (-not (Get-Command smithery -ErrorAction SilentlyContinue)) {
+        npm install -g @smithery/cli
+    }
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        npm install -g @anthropic-ai/claude-code
+    }
+} else {
+    Write-Host "npm not found. Trying through cmd..."
+    cmd /c "npm install -g @smithery/cli @anthropic-ai/claude-code"
 }
 
 $AgentflowDir = Join-Path $args[0] ".agentflow"

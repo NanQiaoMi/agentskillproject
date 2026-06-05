@@ -35,6 +35,12 @@ export interface EnvStatus {
   python_version: string;
   uv_installed: boolean;
   uv_version: string;
+  node_installed: boolean;
+  node_version: string;
+  npm_installed: boolean;
+  npm_version: string;
+  smithery_installed: boolean;
+  claude_code_installed: boolean;
   venv_initialized: boolean;
   project_db_shared: boolean;
 }

@@ -38,3 +38,10 @@ export interface EnvStatus {
   venv_initialized: boolean;
   project_db_shared: boolean;
 }
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  comments: Comment[];
+  updatedAt: string;
+}

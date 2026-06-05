@@ -1,307 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
+
 import '@xterm/xterm/css/xterm.css';
 import { Icons } from '../components/Icons';
-import { Task, HistoryItem, Comment } from '../types';
+import { Task, Comment, ChatSession } from '../types';
+import { ChatInput } from '../components/chat/ChatInput';
+import { MessageList } from '../components/chat/MessageList';
 
-const parseLinksOnly = (text: string) => {
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match;
-  
-  while ((match = linkRegex.exec(text)) !== null) {
-    const beforeText = text.substring(lastIndex, match.index);
-    if (beforeText) {
-      parts.push(beforeText);
-    }
-    const label = match[1];
-    const url = match[2];
-    parts.push(
-      <a 
-        key={`link-${match.index}`} 
-        href="#" 
-        onClick={async (e) => {
-          e.preventDefault();
-          if (url.startsWith('file:///')) {
-            const cleanPath = decodeURIComponent(url.substring(8)); // strip file:///
-            await invoke('open_in_explorer', { path: cleanPath });
-          }
-        }}
-        style={{ color: 'var(--color-primary-orange)', textDecoration: 'underline', fontWeight: 500 }}
-      >
-        {label}
-      </a>
-    );
-    lastIndex = linkRegex.lastIndex;
-  }
-  
-  const afterText = text.substring(lastIndex);
-  if (afterText) {
-    parts.push(afterText);
-  }
-  return parts.length > 0 ? parts : text;
-};
-
-const parseAnsiWithLinks = (text: string) => {
-  const ansiRegex = /\x1b\[([0-9;?]+)m/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  
-  let currentStyles: React.CSSProperties = {};
-  
-  while ((match = ansiRegex.exec(text)) !== null) {
-    const textSegment = text.substring(lastIndex, match.index);
-    if (textSegment) {
-      parts.push({
-        text: textSegment,
-        styles: { ...currentStyles }
-      });
-    }
-    
-    const codes = match[1].split(';');
-    for (const code of codes) {
-      const codeNum = parseInt(code, 10);
-      if (codeNum === 0) {
-        currentStyles = {};
-      } else if (codeNum === 1) {
-        currentStyles.fontWeight = 'bold';
-      } else if (codeNum === 3) {
-        currentStyles.fontStyle = 'italic';
-      } else if (codeNum === 4) {
-        currentStyles.textDecoration = 'underline';
-      } else if (codeNum >= 30 && codeNum <= 37) {
-        const colors = [
-          '#cbd5e1', // 30: gray / dark black
-          '#f87171', // 31: red
-          '#34d399', // 32: green
-          '#fbbf24', // 33: yellow
-          '#60a5fa', // 34: blue
-          '#ec4899', // 35: magenta
-          '#22d3ee', // 36: cyan
-          '#f8fafc', // 37: white
-        ];
-        currentStyles.color = colors[codeNum - 30];
-      } else if (codeNum >= 90 && codeNum <= 97) {
-        const colors = [
-          '#94a3b8', // 90: bright black (gray)
-          '#fca5a5', // 91: bright red
-          '#6ee7b7', // 92: bright green
-          '#fde047', // 93: bright yellow
-          '#93c5fd', // 94: bright blue
-          '#f9a8d4', // 95: bright magenta
-          '#67e8f9', // 96: bright cyan
-          '#ffffff', // 97: bright white
-        ];
-        currentStyles.color = colors[codeNum - 90];
-      }
-    }
-    
-    lastIndex = ansiRegex.lastIndex;
-  }
-  
-  const finalSegment = text.substring(lastIndex);
-  if (finalSegment) {
-    parts.push({
-      text: finalSegment,
-      styles: { ...currentStyles }
-    });
-  }
-  
-  const renderedElements: React.ReactNode[] = [];
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  
-  parts.forEach((part, partIdx) => {
-    let pLastIndex = 0;
-    let pMatch;
-    const partText = part.text;
-    linkRegex.lastIndex = 0; // Reset RegExp search position for this string segment
-    
-    while ((pMatch = linkRegex.exec(partText)) !== null) {
-      const before = partText.substring(pLastIndex, pMatch.index);
-      if (before) {
-        renderedElements.push(
-          <span key={`p-${partIdx}-b-${pMatch.index}`} style={part.styles}>
-            {before}
-          </span>
-        );
-      }
-      
-      const label = pMatch[1];
-      const url = pMatch[2];
-      
-      renderedElements.push(
-        <a 
-          key={`p-${partIdx}-l-${pMatch.index}`} 
-          href="#" 
-          onClick={async (e) => {
-            e.preventDefault();
-            if (url.startsWith('file:///')) {
-              const cleanPath = decodeURIComponent(url.substring(8)); // strip file:///
-              await invoke('open_in_explorer', { path: cleanPath });
-            }
-          }}
-          style={{ 
-            color: '#f97316', 
-            textDecoration: 'underline', 
-            fontWeight: 600,
-            cursor: 'pointer',
-            ...part.styles 
-          }}
-        >
-          {label}
-        </a>
-      );
-      
-      pLastIndex = linkRegex.lastIndex;
-    }
-    
-    const after = partText.substring(pLastIndex);
-    if (after) {
-      renderedElements.push(
-        <span key={`p-${partIdx}-a`} style={part.styles}>
-          {after}
-        </span>
-      );
-    }
-  });
-  
-  return renderedElements.length > 0 ? renderedElements : [text];
-};
-
-const renderCommentContent = (text: string, isCliAgent: boolean) => {
-  if (isCliAgent) {
-    return (
-      <div 
-        className="cli-terminal-log" 
-        style={{
-          fontFamily: 'var(--font-mono, monospace)',
-          backgroundColor: '#0f172a',
-          color: '#f8fafc',
-          padding: '16px',
-          borderRadius: '8px',
-          border: '1px solid #334155',
-          overflowX: 'auto',
-          fontSize: '13px',
-          lineHeight: '1.6',
-          whiteSpace: 'pre-wrap'
-        }}
-      >
-        {parseAnsiWithLinks(text)}
-      </div>
-    );
-  } else {
-    return <div style={{ whiteSpace: 'pre-wrap' }}>{parseLinksOnly(text)}</div>;
-  }
-};
-
-interface ChatViewProps {
-  projectPath: string;
-  selectedTask?: Task;
-  tasks?: Task[];
-  setSelectedTaskId?: (id: string | null) => void;
-  chatInputText: string;
-  setChatInputText: (text: string) => void;
-  handleSelectDirectory: () => void;
-  fetchTasks?: () => void;
-  onNavigate?: (nav: string) => void;
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  updatedAt: string;
-  comments: Comment[];
-}
-
-const AVAILABLE_AGENTS = [
-  { id: 'hermes', name: 'Hermes Agent', role: 'Planner' },
-  { id: 'antigravity', name: 'Antigravity', role: 'Frontend' },
-  { id: 'codex', name: 'Codex', role: 'Backend' },
-  { id: 'claudecode', name: 'Claude Code', role: 'Auditor' },
-  { id: 'opencode', name: 'OpenCode CLI', role: 'Refactorer' },
-];
-
-const parseTime = (timeStr: string) => {
-  if (!timeStr) return new Date();
-  if (!timeStr.includes('Z') && !timeStr.match(/[\+\-]\d{2}:\d{2}$/)) {
-    const parts = timeStr.split(/[-TH:.]/);
-    if (parts.length >= 6) {
-      const year = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1; // 0-based
-      const day = parseInt(parts[2], 10);
-      const hour = parseInt(parts[3], 10);
-      const minute = parseInt(parts[4], 10);
-      const second = parseInt(parts[5], 10);
-      return new Date(year, month, day, hour, minute, second);
-    }
-  }
-  return new Date(timeStr);
-};
-
-const getActiveAgent = (inputText: string) => {
-  const lowerInput = inputText.toLowerCase();
-  
-  if (lowerInput.includes('@hermes')) {
-    return { name: 'Hermes', file: 'hermes' };
-  }
-  if (lowerInput.includes('@antigravity')) {
-    return { name: 'Antigravity', file: 'antigravity' };
-  }
-  if (lowerInput.includes('@codex')) {
-    return { name: 'Codex', file: 'codex' };
-  }
-  if (lowerInput.includes('@claudecode') || lowerInput.includes('@claude')) {
-    return { name: 'ClaudeCode', file: 'claudecode' };
-  }
-  if (lowerInput.includes('@opencode')) {
-    return { name: 'OpenCode', file: 'opencode' };
-  }
-
-  // Always default to MIMIcode if no explicit mention is found
-  return { name: 'MIMIcode', file: null };
-};
-
-const getAgentAvatarStyle = (author: string) => {
-  const authorLower = author.trim().toLowerCase();
-  let bgColor = '#4F46E5'; // Default Indigo
-  if (authorLower === 'user' || authorLower === 'meaghan') {
-    bgColor = 'var(--color-primary-orange)';
-  } else if (authorLower === 'hermes') {
-    bgColor = '#6366F1'; // Indigo
-  } else if (authorLower === 'antigravity') {
-    bgColor = '#F97316'; // Coral / Orange
-  } else if (authorLower === 'codex') {
-    bgColor = '#10B981'; // Emerald
-  } else if (authorLower === 'claudecode' || authorLower === 'claude') {
-    bgColor = '#F59E0B'; // Amber / Gold
-  } else if (authorLower === 'opencode') {
-    bgColor = '#8B5CF6'; // Violet / Purple
-  } else if (authorLower === 'mimicode') {
-    bgColor = '#3B82F6'; // Blue
-  }
-  return {
-    backgroundColor: bgColor,
-    color: '#fff'
-  };
-};
-
-const getAgentInitials = (author: string) => {
-  const authorLower = author.trim().toLowerCase();
-  if (authorLower === 'user' || authorLower === 'meaghan') return 'U';
-  if (authorLower === 'hermes') return 'H';
-  if (authorLower === 'antigravity') return 'A';
-  if (authorLower === 'codex') return 'C';
-  if (authorLower === 'claudecode' || authorLower === 'claude') return 'CC';
-  if (authorLower === 'opencode') return 'O';
-  if (authorLower === 'mimicode') return 'M';
-  return author.charAt(0).toUpperCase();
-};
+import {
+  getActiveAgent
+} from '../utils/chatUtils';
 
 const buildMdContent = (taskData: any, selectedTask: any, commentsList: any[]) => {
   const updatedTaskData = { ...taskData, comments: commentsList };
@@ -335,6 +43,18 @@ const buildMdContent = (taskData: any, selectedTask: any, commentsList: any[]) =
   return mdContent;
 };
 
+export interface ChatViewProps {
+  projectPath: string;
+  selectedTask: Task | null;
+  tasks?: Task[];
+  setSelectedTaskId: (id: string | null) => void;
+  chatInputText: string;
+  setChatInputText: (text: string) => void;
+  handleSelectDirectory: () => void;
+  fetchTasks: () => void;
+  onNavigate: (viewId: string) => void;
+}
+
 export const ChatView: React.FC<ChatViewProps> = ({
   projectPath,
   selectedTask,
@@ -348,21 +68,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentBranch, setCurrentBranch] = useState('main');
-  const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingAgent, setThinkingAgent] = useState('MIMIcode');
   const [localComments, setLocalComments] = useState<Comment[]>([]);
-  const [liveLogContent, setLiveLogContent] = useState('');
-  const mentionRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const liveTerminalRef = useRef<HTMLDivElement>(null);
-  const [sessionKey, setSessionKey] = useState<string | null>(null);
-  const termRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-
+  const [hasActivePty, setHasActivePty] = useState(false);
+  const cliScrollRef = useRef<HTMLDivElement>(null);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
@@ -388,77 +100,28 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   }, [selectedTask, activeChatId, chatSessions]);
 
-  // xterm.js PTY integration for interactive agent session
+  // Listen to PTY status changes from AgentTerminalPanel
   useEffect(() => {
-    let unlistenData: UnlistenFn | null = null;
+    const handleStatus = (e: any) => {
+      setHasActivePty(e.detail.hasActiveSessions);
+    };
+    window.addEventListener('agent-tui-status', handleStatus);
+    return () => window.removeEventListener('agent-tui-status', handleStatus);
+  }, []);
 
-    if (isThinking && thinkingAgent !== 'MIMIcode' && liveTerminalRef.current && sessionKey) {
-      if (!termRef.current) {
-        const term = new Terminal({
-          theme: {
-            background: '#0f172a',
-            foreground: '#f8fafc',
-            cursor: '#f97316',
-            selectionBackground: 'rgba(249, 115, 22, 0.3)',
-          },
-          fontFamily: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
-          fontSize: 13,
-          cursorBlink: true,
-        });
-        
-        const fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
-        term.loadAddon(new WebLinksAddon());
+  const handleSendPtyInput = () => {
+    if (!chatInputText.trim()) return;
 
-        term.open(liveTerminalRef.current);
-        fitAddon.fit();
-
-        termRef.current = term;
-        fitAddonRef.current = fitAddon;
-
-        term.onData((data) => {
-          invoke('write_to_pty', { sessionKey, data }).catch(console.error);
-        });
-
-        term.onResize(({ cols, rows }) => {
-          invoke('resize_pty', { sessionKey, cols, rows }).catch(console.error);
-        });
-        
-        const handleResize = () => fitAddonRef.current?.fit();
-        window.addEventListener('resize', handleResize);
-        
-        // Give it a moment then fit
-        setTimeout(() => fitAddon.fit(), 100);
-      }
-
-      listen<{ session_key: string; data: string }>('pty-data', (event) => {
-        if (event.payload.session_key === sessionKey && termRef.current) {
-          termRef.current.write(event.payload.data);
-          // Accumulate for saving when session ends
-          setLiveLogContent(prev => prev + event.payload.data);
-        }
-      }).then((unlisten) => {
-        unlistenData = unlisten;
-      });
-
-      return () => {
-        const handleResize = () => fitAddonRef.current?.fit();
-        window.removeEventListener('resize', handleResize);
-        if (unlistenData) unlistenData();
-      };
-    } else if (!isThinking && termRef.current) {
-      termRef.current.dispose();
-      termRef.current = null;
-      fitAddonRef.current = null;
+    try {
+      const cmd = chatInputText;
+      window.dispatchEvent(new CustomEvent('send-pty-input', {
+        detail: { data: cmd }
+      }));
+      setChatInputText('');
+    } catch (err) {
+      console.error("Failed to write to pty from chat input:", err);
     }
-  }, [isThinking, thinkingAgent, sessionKey]);
-
-  // Auto scroll live terminal to bottom when content changes
-  useEffect(() => {
-    if (liveTerminalRef.current) {
-      liveTerminalRef.current.scrollTop = liveTerminalRef.current.scrollHeight;
-    }
-  }, [liveLogContent]);
+  };
 
   const handleSendInteractiveInput = async () => {
     const cmd = chatInputText.trim();
@@ -488,110 +151,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const handleFinishChatSession = async () => {
-    if (!selectedTask || !projectPath) {
-      setIsThinking(false);
-      setThinkingAgent('MIMIcode');
-      return;
-    }
 
-    let activeAgentFile = '';
-    const taLower = thinkingAgent.toLowerCase();
-    if (taLower.includes('hermes')) activeAgentFile = 'hermes';
-    else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
-    else if (taLower.includes('codex')) activeAgentFile = 'codex';
-    else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
-    else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
-
-    if (!activeAgentFile) return;
-
-    try {
-      const timestamp = new Date().toISOString().replace(/[-:T]/g, '_').substring(0, 19);
-      const logFileName = `cli_${activeAgentFile}_${timestamp}.log`;
-      const separator = projectPath.includes('/') ? '/' : '\\';
-      const logsDir = `${projectPath}${separator}.agentflow${separator}logs`;
-      const logFilePath = `${logsDir}${separator}${logFileName}`;
-
-      await invoke('run_shell_command', { 
-        command: `mkdir "${logsDir}"`, 
-        cwd: projectPath 
-      }).catch(() => {});
-
-      await invoke('write_file_content', { path: logFilePath, content: liveLogContent });
-
-      const lines = liveLogContent.split('\n');
-      let summary = lines.slice(0, 100).join('\n');
-      if (lines.length > 100) {
-        summary += '\n\n... (终端日志已被部分截断，完整日志请查看下方链接) ...';
-      }
-
-      const cleanLogPath = logFilePath.replace(/\\/g, '/');
-      const relativeLogLink = `\n\n[查看完整执行终端日志](file:///${cleanLogPath})`;
-      const commentContent = summary + relativeLogLink;
-
-      const assistantComment = {
-        time: new Date().toISOString(),
-        author: thinkingAgent,
-        comment: commentContent
-      };
-
-      const taskFilePath = `${projectPath}${separator}.agentflow${separator}tasks${separator}${selectedTask.id}.md`;
-      const fileContent: string | null = await invoke('read_file_content', { path: taskFilePath });
-      if (fileContent) {
-        const startIdx = fileContent.indexOf('<!-- agentflow');
-        const endIdx = fileContent.indexOf('-->', startIdx);
-        if (startIdx !== -1 && endIdx !== -1) {
-          const jsonStr = fileContent.substring(startIdx + '<!-- agentflow'.length, endIdx).trim();
-          const taskData = JSON.parse(jsonStr);
-          if (!taskData.comments) taskData.comments = [];
-          taskData.comments.push(assistantComment);
-
-          await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) });
-          await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
-          setLocalComments([...taskData.comments]);
-        }
-      }
-      
-      if (sessionKey) {
-        await invoke('kill_pty', { sessionKey }).catch(() => {});
-        setSessionKey(null);
-      }
-      if (fetchTasks) fetchTasks();
-    } catch (err) {
-      console.error("Failed to finish chat session:", err);
-    } finally {
-      setIsThinking(false);
-      setThinkingAgent('MIMIcode');
-    }
-  };
-
-  const handleStopChatSession = async () => {
-    let activeAgentFile = '';
-    const taLower = thinkingAgent.toLowerCase();
-    if (taLower.includes('hermes')) activeAgentFile = 'hermes';
-    else if (taLower.includes('antigravity')) activeAgentFile = 'antigravity';
-    else if (taLower.includes('codex')) activeAgentFile = 'codex';
-    else if (taLower.includes('claudecode') || taLower.includes('claude')) activeAgentFile = 'claudecode';
-    else if (taLower.includes('opencode')) activeAgentFile = 'opencode';
-
-    if (activeAgentFile) {
-      try {
-        if (sessionKey) {
-          await invoke('kill_pty', { sessionKey });
-          setSessionKey(null);
-        }
-      } catch (err) {
-        console.error("Failed to stop CLI:", err);
-      }
-    }
-    setIsThinking(false);
-    setThinkingAgent('MIMIcode');
-  };
 
   // Auto scroll to bottom
   const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (cliScrollRef.current) {
+      cliScrollRef.current.scrollTop = cliScrollRef.current.scrollHeight;
     }
   };
 
@@ -626,9 +191,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   // Close mention menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (mentionRef.current && !mentionRef.current.contains(e.target as Node)) {
-        setShowMentionMenu(false);
-      }
       // Handle history menu click outside
       const target = e.target as HTMLElement;
       if (!target.closest('.header-left-container')) {
@@ -641,6 +203,45 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSubmit = async () => {
     if (!chatInputText.trim() || isSubmitting) return;
+    
+    if (chatInputText.trim().toLowerCase() === '/clear') {
+      setChatInputText('');
+      if (selectedTask) {
+        try {
+          const separator = projectPath.includes('/') ? '/' : '\\';
+          const taskFilePath = `${projectPath}${separator}.agentflow${separator}tasks${separator}${selectedTask.id}.md`;
+          const fileContent: string | null = await invoke('read_file_content', { path: taskFilePath });
+          if (fileContent) {
+            const startIdx = fileContent.indexOf('<!-- agentflow');
+            const endIdx = fileContent.indexOf('-->', startIdx);
+            if (startIdx !== -1 && endIdx !== -1) {
+              const jsonStr = fileContent.substring(startIdx + '<!-- agentflow'.length, endIdx).trim();
+              const taskData = JSON.parse(jsonStr);
+              taskData.comments = [];
+              setLocalComments([]);
+              await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, []) });
+              await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
+              if (fetchTasks) fetchTasks();
+            }
+          }
+        } catch (err) {
+          console.error('Failed to clear task chat:', err);
+        }
+      } else {
+        setLocalComments([]);
+        if (activeChatId) {
+          const newSessions = [...chatSessions];
+          const idx = newSessions.findIndex(s => s.id === activeChatId);
+          if (idx !== -1) {
+            newSessions[idx].comments = [];
+            setChatSessions(newSessions);
+            localStorage.setItem('mimi-chat-sessions', JSON.stringify(newSessions));
+          }
+        }
+      }
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       if (selectedTask) {
@@ -742,53 +343,36 @@ export const ChatView: React.FC<ChatViewProps> = ({
         setThinkingAgent(activeAgent.name);
         setIsThinking(true);
 
-        // --- CLI AGENT INTERACTIVE PTY TERMINAL FLOW ---
+        // --- DELEGATE TO GLOBAL AGENT TUI ---
         (async () => {
-          try {
-            setLiveLogContent('');
-            const newSessionKey = await invoke<string>('spawn_agent_pty', {
-              cliName: activeAgent.file,
-              projectPath,
-              cols: 80,
-              rows: 24
-            });
-            setSessionKey(newSessionKey);
-
-            // Extract prompt, strip mention prefixes like "@claudecode" or "@claude"
-            let promptToSend = userMsg.trim();
-            const mentionPrefix = `@${activeAgent.name.toLowerCase()}`;
-            const altMentionPrefix = `@${activeAgent.file.toLowerCase()}`;
-            if (promptToSend.toLowerCase().startsWith(mentionPrefix)) {
-              promptToSend = promptToSend.substring(mentionPrefix.length).trim();
-            } else if (promptToSend.toLowerCase().startsWith(altMentionPrefix)) {
-              promptToSend = promptToSend.substring(altMentionPrefix.length).trim();
-            }
-
-            // Send command input to PTY if present
-            if (promptToSend) {
-              // Wait for PTY initialization
-              await new Promise(resolve => setTimeout(resolve, 600));
-              await invoke('write_to_pty', {
-                sessionKey: newSessionKey,
-                data: promptToSend + "\n"
-              });
-            }
-          } catch (err: any) {
-            console.error("CLI Daemon initialization failed:", err);
-            const errorMsg = typeof err === 'string' ? err : String(err);
-            const assistantComment = {
-              time: new Date().toISOString(),
-              author: activeAgent.name,
-              comment: `❌ 执行失败或已被用户中止。\n\n终端输出：\n\`\`\`\n${errorMsg}\n\`\`\``
-            };
-            taskData.comments.push(assistantComment);
-            setLocalComments([...taskData.comments]);
-            setIsThinking(false);
-
-            await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) });
-            await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
-            if (fetchTasks) fetchTasks();
+          let promptToSend = userMsg.trim();
+          
+          // Strip any leading @mention (e.g. @Claude Code, @hermes) before sending to TUI
+          const mentionRegex = /^@[a-zA-Z0-9\s]+(?:\s|$)/i;
+          const match = promptToSend.match(mentionRegex);
+          if (match) {
+            promptToSend = promptToSend.substring(match[0].length).trim();
           }
+
+          window.dispatchEvent(new CustomEvent('spawn-agent-tui', {
+            detail: {
+              agentId: activeAgent.file,
+              prompt: promptToSend
+            }
+          }));
+
+          const assistantComment = {
+            time: new Date().toISOString(),
+            author: activeAgent.name,
+            comment: `🚀 已经为您在右下角 AgentTUI 面板中启动了 \`${activeAgent.name}\` 终端进程！\n\n您可以随时在面板中监控执行进度、干预流程，或者利用多标签页同时启动多个智能体并进行对比操作。`
+          };
+          taskData.comments.push(assistantComment);
+          setLocalComments([...taskData.comments]);
+          setIsThinking(false);
+
+          await invoke('write_file_content', { path: taskFilePath, content: buildMdContent(taskData, selectedTask, taskData.comments) });
+          await invoke('run_agentflow_cmd', { projectPath, args: ['sync'] });
+          if (fetchTasks) fetchTasks();
         })();
       } else {
         // DO NOT create task in empty state (Welcome Screen)
@@ -966,14 +550,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const handleCommitInput = () => {
+    const hasMention = chatInputText.trim().startsWith('@');
+    
+    if (hasMention) {
+      // If explicitly mentioning an agent, always use handleSubmit to route correctly
+      handleSubmit();
+    } else if (hasActivePty) {
+      // If a global PTY session is active, route input directly to the current TUI tab
+      handleSendPtyInput();
+    } else if (isThinking && thinkingAgent !== 'MIMIcode') {
+      handleSendInteractiveInput();
+    } else {
+      handleSubmit();
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (isThinking && thinkingAgent !== 'MIMIcode') {
-        handleSendInteractiveInput();
-      } else {
-        handleSubmit();
-      }
+      handleCommitInput();
     }
   };
 
@@ -999,14 +595,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } catch {
       // User cancelled selection
     }
-  };
-
-  const handleMentionSelect = (agentName: string) => {
-    setChatInputText(chatInputText + `@${agentName} `);
-    setShowMentionMenu(false);
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
   };
 
   return (
@@ -1201,7 +789,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </div>
       ) : (
-        <div className="chat-scroll-area" ref={scrollRef}>
+        <div className="chat-scroll-area" ref={cliScrollRef}>
           {selectedTask ? (
             <div className="chat-welcome" style={{ padding: '0 0 24px 0', borderBottom: '1px solid var(--color-border)' }}>
               <h1 className="welcome-title" style={{ fontSize: '24px' }}>{selectedTask.title}</h1>
@@ -1234,228 +822,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
           )}
 
-          {(() => {
-            const items = [
-              ...(selectedTask?.history || []).map(h => ({ type: 'history', time: h.time, data: h })),
-              ...(localComments || []).map(c => ({ type: 'comment', time: c.time, data: c }))
-            ].sort((a, b) => parseTime(a.time).getTime() - parseTime(b.time).getTime());
-
-            if (items.length === 0) {
-              return (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                  暂无活动记录
-                </div>
-              );
-            }
-
-            return items.map((item, index) => {
-              const dateStr = parseTime(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              
-              if (item.type === 'history') {
-                const h = item.data as HistoryItem;
-                return (
-                   <div key={`hist-${index}`} className="chat-message">
-                    <div className="message-header">
-                      <div className="message-avatar avatar-agent"><Icons.Activity style={{width: 14, height:14}}/></div>
-                      <span className="message-sender">{h.operator} (System)</span>
-                      <span className="message-time">{dateStr}</span>
-                    </div>
-                    <div className="message-body">
-                      <div className="agent-step" style={{ color: 'var(--color-text-main)' }}>
-                        <Icons.CheckCircle2 style={{ width: '12px', height: '12px', color: 'var(--color-success)' }}/> 
-                        状态变更: [{h.from}] {"->"} [{h.to}]
-                      </div>
-                      <p style={{ marginTop: '4px', fontSize: '13px', color: 'var(--color-text-secondary)' }}>{h.message}</p>
-                    </div>
-                  </div>
-                );
-              } else {
-                const c = item.data as Comment;
-                const isUser = c.author === 'user' || c.author === 'meaghan';
-                return (
-                   <div key={`comm-${index}`} className="chat-message">
-                    <div className="message-header">
-                      <div 
-                        className={`message-avatar ${isUser ? 'avatar-user' : 'avatar-agent'}`}
-                        style={getAgentAvatarStyle(c.author)}
-                      >
-                         {getAgentInitials(c.author)}
-                      </div>
-                      <span className="message-sender">{c.author}</span>
-                      <span className="message-time">{dateStr}</span>
-                    </div>
-                    <div className="message-body">
-                      {renderCommentContent(
-                        c.comment,
-                        ['hermes', 'antigravity', 'codex', 'claudecode', 'opencode'].includes(c.author.toLowerCase())
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-            });
-          })()}
-          {isThinking && (
-             <div className="chat-message">
-              <div className="message-header">
-                <div 
-                  className="message-avatar avatar-agent" 
-                  style={getAgentAvatarStyle(thinkingAgent)}
-                >
-                  {getAgentInitials(thinkingAgent)}
-                </div>
-                <span className="message-sender">{thinkingAgent}</span>
-                <span className="message-time">{thinkingAgent === 'MIMIcode' ? '思考中...' : '交互会话中...'}</span>
-              </div>
-              <div className="message-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {thinkingAgent === 'MIMIcode' ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                      正在生成回答...
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontSize: '13px' }}>
-                      正在执行 CLI，你可以直接在下方输入框中向智能体发送交互命令：
-                    </span>
-                    
-                    <div className="chat-live-terminal">
-                      <div className="chat-live-terminal-header">
-                        <div className="chat-live-terminal-title">
-                          <Icons.Terminal style={{ width: '14px', height: '14px', marginRight: '6px' }} />
-                          {thinkingAgent} 终端交互面板
-                        </div>
-                        <div className="chat-live-terminal-status">
-                          <span className="chat-live-terminal-status-dot" />
-                          活动中
-                        </div>
-                      </div>
-                      
-                      <div 
-                        className="pty-terminal-container" 
-                        ref={liveTerminalRef}
-                        style={{ height: '350px', backgroundColor: '#0f172a', padding: '8px', overflow: 'hidden' }}
-                      >
-                      </div>
-                      
-                      <div className="chat-live-terminal-actions">
-                        <button className="btn-terminal-save" onClick={handleFinishChatSession}>
-                          结束并保存会话
-                        </button>
-                        <button className="btn-terminal-stop" onClick={handleStopChatSession}>
-                          强制中断
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Input Bar */}
-      {!(isThinking && thinkingAgent !== 'MIMIcode') && (
-      <div className="chat-input-wrapper">
-        <div className="chat-input-box">
-          <span title="附加文件或目录" style={{ display: 'inline-flex', alignItems: 'center' }}>
-            <Icons.Plus 
-              className="chat-input-icon" 
-              style={{ width: '18px', height: '18px', cursor: 'pointer' }} 
-              onClick={handleAttachFile}
-            />
-          </span>
-          <input 
-            type="text" 
-            className="chat-input-field" 
-            placeholder={isThinking && thinkingAgent !== 'MIMIcode' ? `输入指令给 ${thinkingAgent}...` : "Ask anything or @agent..."}
-            value={chatInputText}
-            onChange={(e) => {
-              const val = e.target.value;
-              setChatInputText(val);
-              if (val.endsWith('@') || val.match(/\s@$/)) {
-                setShowMentionMenu(true);
-              } else if (!val.includes('@')) {
-                setShowMentionMenu(false);
-              }
-            }}
-            onKeyDown={handleKeyDown}
-            disabled={isSubmitting && !(isThinking && thinkingAgent !== 'MIMIcode')}
-            ref={inputRef}
+          <MessageList 
+            selectedTask={selectedTask || null}
+            localComments={localComments}
+            isThinking={isThinking}
+            thinkingAgent={thinkingAgent}
           />
-          <div style={{ position: 'relative', zIndex: 10 }} ref={mentionRef}>
-            <span 
-              style={{ 
-                color: 'var(--color-text-muted)', 
-                fontFamily: 'var(--font-mono)', 
-                fontSize: '14px', 
-                marginRight: '12px',
-                cursor: 'pointer',
-                padding: '6px 10px',
-                borderRadius: '4px',
-                backgroundColor: showMentionMenu ? 'var(--bg-hover)' : 'transparent',
-                transition: 'background-color 0.15s ease',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                userSelect: 'none'
-              }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setShowMentionMenu(!showMentionMenu);
-              }}
-              onMouseEnter={(e) => { if (!showMentionMenu) e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; }}
-              onMouseLeave={(e) => { if (!showMentionMenu) e.currentTarget.style.backgroundColor = 'transparent'; }}
-              title="提及智能体"
-            >@</span>
-            {showMentionMenu && (
-              <div style={{
-                position: 'absolute',
-                bottom: '36px',
-                right: 0,
-                width: '220px',
-                backgroundColor: 'var(--bg-main)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '10px',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-                zIndex: 100,
-                overflow: 'hidden',
-                padding: '4px 0',
-              }}>
-                <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  选择智能体
-                </div>
-                {AVAILABLE_AGENTS.map(agent => (
-                  <div
-                    key={agent.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '8px',
-                      padding: '8px 12px', fontSize: '13px', cursor: 'pointer',
-                      color: 'var(--color-text-main)',
-                      transition: 'background-color 0.15s ease',
-                    }}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleMentionSelect(agent.name);
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <span style={{ fontWeight: 500 }}>{agent.name}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>({agent.role})</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <Icons.Send className="chat-input-send" onClick={handleSubmit} style={{ cursor: 'pointer', opacity: isSubmitting ? 0.5 : 1 }} />
         </div>
-      </div>
       )}
+
+      <ChatInput 
+        chatInputText={chatInputText}
+        setChatInputText={setChatInputText}
+        isThinking={isThinking}
+        thinkingAgent={thinkingAgent}
+        isSubmitting={isSubmitting}
+        handleAttachFile={handleAttachFile}
+        handleCommitInput={handleCommitInput}
+        handleKeyDown={handleKeyDown}
+      />
     </div>
   );
 };

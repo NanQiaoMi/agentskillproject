@@ -191,35 +191,94 @@ fn check_environment(project_path: String) -> EnvStatus {
 }
 
 #[tauri::command]
-fn setup_environment(project_path: String) -> Result<String, String> {
-    let agentflow_dir = Path::new(&project_path).join(".agentflow");
-    let venv_dir = agentflow_dir.join("venv");
-    
-    // Check if uv is installed
-    let use_uv = if cfg!(windows) {
-        Command::new("cmd").args(&["/C", "uv", "--version"]).output().is_ok()
-    } else {
-        Command::new("uv").arg("--version").output().is_ok()
-    };
+async fn setup_environment(project_path: String) -> Result<String, String> {
+    use std::io::Write;
+    let script_content = r#"
+$ErrorActionPreference = "Continue"
 
-    let status = if use_uv {
-        let mut cmd = Command::new("uv");
-        cmd.args(&["venv", venv_dir.to_str().unwrap()]);
-        cmd.output().map_err(|e| e.to_string())?
+function Install-WingetPackage {
+    param([string]$Id, [string]$Command)
+    if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing $Id..."
+        winget install --id $Id -e --silent --accept-package-agreements --accept-source-agreements
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     } else {
-        let mut cmd = Command::new("python");
-        cmd.args(&["-m", "venv", venv_dir.to_str().unwrap()]);
-        cmd.output().map_err(|e| e.to_string())?
-    };
+        Write-Host "$Command is already installed."
+    }
+}
 
-    if !status.status.success() {
-        return Err(format!(
-            "Failed to create virtual environment: {}",
-            String::from_utf8_lossy(&status.stderr)
-        ));
+Install-WingetPackage -Id "Git.Git" -Command "git"
+Install-WingetPackage -Id "OpenJS.NodeJS" -Command "node"
+Install-WingetPackage -Id "Python.Python.3.11" -Command "python"
+
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing uv..."
+    irm https://astral.sh/uv/install.ps1 | iex
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+} else {
+    Write-Host "uv is already installed."
+}
+
+if (Get-Command npm -ErrorAction SilentlyContinue) {
+    Write-Host "Installing global npm packages for agents..."
+    npm install -g @smithery/cli @anthropic-ai/claude-code
+}
+
+$AgentflowDir = Join-Path $args[0] ".agentflow"
+$VenvDir = Join-Path $AgentflowDir "venv"
+if (-not (Test-Path $VenvDir)) {
+    Write-Host "Creating virtual environment..."
+    if (Get-Command uv -ErrorAction SilentlyContinue) {
+        uv venv $VenvDir
+    } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+        python -m venv $VenvDir
+    }
+}
+
+$ReqFile = Join-Path $AgentflowDir "requirements.txt"
+if (Test-Path $ReqFile) {
+    Write-Host "Installing python dependencies..."
+    if (Get-Command uv -ErrorAction SilentlyContinue) {
+        $env:VIRTUAL_ENV = $VenvDir
+        uv pip install -r $ReqFile
+    } else {
+        $PipPath = Join-Path $VenvDir "Scripts\pip.exe"
+        if (Test-Path $PipPath) {
+            & $PipPath install -r $ReqFile
+        }
+    }
+}
+
+Write-Host "Environment setup complete."
+"#;
+
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join("mimicode_repair_env.ps1");
+    if let Ok(mut file) = std::fs::File::create(&script_path) {
+        let _ = file.write_all(script_content.as_bytes());
     }
 
-    Ok("Virtual environment initialized successfully".to_string())
+    let output = Command::new("powershell")
+        .args(&[
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            script_path.to_str().unwrap(),
+            &project_path,
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let _ = std::fs::remove_file(&script_path);
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if !output.status.success() {
+        return Err(format!("Environment repair failed.\nStdout: {}\nStderr: {}", stdout, stderr));
+    }
+
+    Ok(format!("Environment setup successfully.\n{}", stdout))
 }
 
 #[tauri::command]
@@ -961,6 +1020,67 @@ fn get_git_diagnostics(repo_path: String) -> Result<GitDiagnostics, String> {
         loose_objects,
         pack_files,
     })
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct GitBranches {
+    current: String,
+    all: Vec<String>,
+}
+
+#[tauri::command]
+fn get_git_branches(repo_path: String) -> Result<GitBranches, String> {
+    let repo_path_obj = Path::new(&repo_path);
+    if !repo_path_obj.exists() {
+        return Err("Repository path does not exist".to_string());
+    }
+
+    let out_str = run_git_cmd(&["branch", "--list", "--all"], repo_path_obj)?;
+    
+    let mut current = String::from("main");
+    let mut all = Vec::new();
+    
+    for line in out_str.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let is_current = line.starts_with('*');
+        let mut branch_name = if is_current {
+            line[1..].trim().to_string()
+        } else {
+            line.trim().to_string()
+        };
+        
+        if branch_name.starts_with("remotes/") {
+            branch_name = branch_name.replace("remotes/", "");
+        }
+        
+        if branch_name.starts_with("origin/") {
+            branch_name = branch_name.replacen("origin/", "", 1);
+        }
+        
+        if is_current {
+            if branch_name.starts_with('(') {
+                // e.g., "(HEAD detached at commit123)"
+                current = branch_name.clone();
+            } else {
+                current = branch_name.clone();
+            }
+        }
+        
+        if !all.contains(&branch_name) && !branch_name.contains("HEAD") {
+            all.push(branch_name);
+        }
+    }
+
+    Ok(GitBranches { current, all })
+}
+
+#[tauri::command]
+fn checkout_git_branch(repo_path: String, branch: String) -> Result<(), String> {
+    let repo_path_obj = Path::new(&repo_path);
+    run_git_cmd(&["checkout", &branch], repo_path_obj)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -2099,25 +2219,28 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     })?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
-        let ty = entry.file_type()?;
         let name = entry.file_name();
-        if ty.is_dir() {
-            if name == "venv" || name == "__pycache__" || name == "logs" {
-                continue;
+        let src_path = entry.path();
+        
+        let metadata = fs::metadata(&src_path);
+        if let Ok(md) = metadata {
+            if md.is_dir() {
+                if name == "venv" || name == "__pycache__" || name == "logs" || name == ".git" {
+                    continue;
+                }
+                copy_dir_all(&src_path, &dst.join(&name))?;
+            } else {
+                if name == "tasks.db" {
+                    continue;
+                }
+                let dst_path = dst.join(&name);
+                fs::copy(&src_path, &dst_path).map_err(|e| {
+                    std::io::Error::new(
+                        e.kind(),
+                        format!("Failed to copy file from {:?} to {:?}: {}", src_path, dst_path, e)
+                    )
+                })?;
             }
-            copy_dir_all(&entry.path(), &dst.join(name))?;
-        } else {
-            if name == "tasks.db" {
-                continue;
-            }
-            let src_path = entry.path();
-            let dst_path = dst.join(name);
-            fs::copy(&src_path, &dst_path).map_err(|e| {
-                std::io::Error::new(
-                    e.kind(),
-                    format!("Failed to copy file from {:?} to {:?}: {}", src_path, dst_path, e)
-                )
-            })?;
         }
     }
     Ok(())
@@ -2237,7 +2360,7 @@ fn open_file_in_editor(path: String, line: Option<u32>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn initialize_project(project_path: String) -> Result<String, String> {
+async fn initialize_project(project_path: String) -> Result<String, String> {
     let target_agentflow = Path::new(&project_path).join(".agentflow");
     
     if !target_agentflow.exists() {
@@ -2262,7 +2385,7 @@ fn initialize_project(project_path: String) -> Result<String, String> {
          venv_path.join("bin").join("python").exists());
          
     if !has_venv {
-        setup_environment(project_path.clone())?;
+        setup_environment(project_path.clone()).await?;
     }
     
     let _ = run_agentflow_cmd(project_path, vec!["sync".to_string()]);
@@ -2274,6 +2397,7 @@ fn initialize_project(project_path: String) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|_app| {
             // Set window icon from icons/icon.png
             // Try multiple possible locations for the icon file
@@ -2326,6 +2450,8 @@ pub fn run() {
             open_in_explorer,
             open_in_terminal,
             get_git_status,
+            get_git_branches,
+            checkout_git_branch,
             get_path_metadata,
             get_git_diagnostics,
             read_file_content,
@@ -2502,5 +2628,4 @@ mod tests {
         std::fs::remove_file(test_path).ok();
     }
 }
-
 

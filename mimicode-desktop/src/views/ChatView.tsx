@@ -68,6 +68,23 @@ export const ChatView: React.FC<ChatViewProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentBranch, setCurrentBranch] = useState('main');
+  const [branches, setBranches] = useState<string[]>([]);
+  const [showBranchMenu, setShowBranchMenu] = useState(false);
+
+  const fetchBranches = async () => {
+    if (!projectPath) return;
+    try {
+      const res: any = await invoke("get_git_branches", { repoPath: projectPath });
+      setCurrentBranch(res.current);
+      setBranches(res.all);
+    } catch (e) {
+      console.error("Failed to fetch branches:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranches();
+  }, [projectPath]);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [isThinking, setIsThinking] = useState(false);
@@ -749,14 +766,72 @@ export const ChatView: React.FC<ChatViewProps> = ({
           )}
         </div>
         
-        <div className="header-center">
+        <div className="header-center" style={{ position: 'relative' }}>
           <span style={{ cursor: 'pointer' }} onClick={handleSelectDirectory}>
             {projectPath.split('\\').pop() || projectPath.split('/').pop() || "Select Project"}
           </span>
           <span className="header-center-divider">|</span>
-          <Icons.GitBranch className="header-center-icon" />
-          <span>{currentBranch}</span>
-          <Icons.ChevronDown className="header-center-icon" />
+          <div 
+            style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '4px' }}
+            onClick={() => setShowBranchMenu(!showBranchMenu)}
+          >
+            <Icons.GitBranch className="header-center-icon" style={{ margin: 0 }} />
+            <span>{currentBranch}</span>
+            <Icons.ChevronDown className="header-center-icon" style={{ margin: 0 }} />
+          </div>
+          
+          {showBranchMenu && (
+            <div 
+              style={{
+                position: 'absolute',
+                top: '100%',
+                marginTop: '8px',
+                width: '200px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                backgroundColor: 'var(--bg-panel)',
+                border: '1px solid var(--color-border)',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '4px',
+                animation: 'dropdownPop var(--duration-fast) var(--ease-spring) both',
+                transformOrigin: 'top center'
+              }}
+            >
+              <div style={{ padding: '8px 12px 4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>分支列表 (Branches)</div>
+              {branches.map((b) => (
+                <div 
+                  key={b}
+                  className={`dropdown-item ${currentBranch === b ? 'active' : ''}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setShowBranchMenu(false);
+                    if (b !== currentBranch) {
+                      try {
+                        await invoke("checkout_git_branch", { repoPath: projectPath, branch: b });
+                        (window as any).showToast?.(`已切换到分支 ${b}`, "success");
+                        fetchBranches();
+                      } catch (err: any) {
+                        (window as any).showToast?.(`切换分支失败: ${err}`, "error");
+                      }
+                    }
+                  }}
+                >
+                  <span style={{ 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis', 
+                    whiteSpace: 'nowrap',
+                    fontSize: '13px',
+                    fontWeight: currentBranch === b ? 600 : 400,
+                    color: currentBranch === b ? 'var(--color-primary-orange)' : 'var(--color-text-main)'
+                  }}>{b}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         
         <div className="header-right">

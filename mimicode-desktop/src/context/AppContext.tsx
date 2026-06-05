@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { EnvStatus, Task } from '../types';
-import { dispatchAppNotification } from '../components/NotificationsPanel';
+import { notifyAppAndDesktop } from '../utils/notifications';
 
 interface AppContextType {
   projectPath: string;
@@ -42,20 +42,24 @@ export interface ToastMessage {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [projectPath, setProjectPath] = useState(() => localStorage.getItem("mimicode_project_path") || "D:\\agentcode");
+  const [projectPath, setProjectPath] = useState(() => localStorage.getItem('mimicode_project_path') || 'D:\\agentcode');
   const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const tasksRef = useRef<Task[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeNav, setActiveNav] = useState("Chat");
+  const [activeNav, setActiveNav] = useState('Chat');
   const [viewState, setViewState] = useState<'list' | 'detail'>('list');
-  const [chatInputText, setChatInputText] = useState("");
+  const [chatInputText, setChatInputText] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [language, setLanguage] = useState(() => {
-    try { return localStorage.getItem('mimi-language') || '简体中文'; } catch { return '简体中文'; }
+    try {
+      return localStorage.getItem('mimi-language') || '简体中文';
+    } catch {
+      return '简体中文';
+    }
   });
 
   const addToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -72,32 +76,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchTasks = async (isBackgroundPolling: boolean = false) => {
     try {
-      const res: string = await invoke("run_agentflow_cmd", {
+      const res: string = await invoke('run_agentflow_cmd', {
         projectPath,
-        args: ["json-list"]
+        args: ['json-list'],
       });
       const jsonStart = res.indexOf('[');
       if (jsonStart !== -1) {
         const jsonStr = res.substring(jsonStart);
         const parsed: Task[] = JSON.parse(jsonStr);
-        
+
         if (isBackgroundPolling && tasksRef.current.length > 0) {
           parsed.forEach(currentTask => {
             const prevTask = tasksRef.current.find(t => t.id === currentTask.id);
             if (prevTask && prevTask.status !== currentTask.status && currentTask.status === 'done') {
-              dispatchAppNotification({
+              void notifyAppAndDesktop({
                 type: 'task',
                 title: '后台任务完成',
-                desc: `系统检测到任务 "${currentTask.title}" 的状态已被智能体更新为“已完成”。`
+                desc: `检测到任务 "${currentTask.title}" 已由智能体更新为“已完成”。`,
+                desktop: true,
+                respectFocus: true,
               });
-              
-              if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
-                new Notification('任务完成', { body: `任务 "${currentTask.title}" 已处理完毕。` });
-              }
             }
           });
         }
-        
+
         tasksRef.current = parsed;
         setTasks(parsed);
       } else {
@@ -107,7 +109,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch (err) {
       if (!isBackgroundPolling) {
         console.error(err);
-        addToast("MIMIcode 无法加载任务列表！" + String(err), "error");
+        addToast('MIMIcode 无法加载任务列表：' + String(err), 'error');
       }
       tasksRef.current = [];
       setTasks([]);
@@ -116,15 +118,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleSelectDirectory = async () => {
     try {
-      const selected: string = await invoke("select_directory");
+      const selected: string = await invoke('select_directory');
       if (selected) {
-        await invoke("initialize_project", { projectPath: selected });
+        await invoke('initialize_project', { projectPath: selected });
         setProjectPath(selected);
-        localStorage.setItem("mimicode_project_path", selected);
+        localStorage.setItem('mimicode_project_path', selected);
       }
     } catch (err) {
-      if (err !== "Operation cancelled by user") {
-        addToast("选择目录失败: " + err, "error");
+      if (err !== 'Operation cancelled by user') {
+        addToast('选择目录失败：' + err, 'error');
       }
     }
   };
@@ -138,11 +140,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("mimi-language", language);
+    localStorage.setItem('mimi-language', language);
   }, [language]);
 
   useEffect(() => {
-    localStorage.setItem("mimicode_project_path", projectPath);
+    localStorage.setItem('mimicode_project_path', projectPath);
   }, [projectPath]);
 
   return (
@@ -159,7 +161,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       toasts, addToast, removeToast,
       language, setLanguage,
       showNewTaskModal, setShowNewTaskModal,
-      showWizard, setShowWizard
+      showWizard, setShowWizard,
     }}>
       {children}
     </AppContext.Provider>

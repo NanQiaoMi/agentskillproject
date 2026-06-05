@@ -166,6 +166,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     setIsRepairing(true);
     try {
       await invoke('setup_environment', { projectPath });
+      await handleRunFullCheck();
     } catch (e) {
       console.error('Repair failed:', e);
     } finally {
@@ -339,6 +340,11 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
                 <Icons.Settings style={{ width: '16px', height: '16px', marginRight: '8px', animation: isRepairing ? 'spin 1s linear infinite' : undefined }}/>
                 {isRepairing ? t.repairing : t.repairEnv}
               </button>
+              {isRepairing && (
+                <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: '1.4' }}>
+                  {language === '简体中文' ? '后台脚本正在检测并静默安装缺失组件（Python/Node/Git/uv 及 Agent CLI），可能需要几分钟，请耐心等待...' : 'A background script is detecting and silently installing missing components (Python/Node/Git/uv and Agent CLIs). This may take a few minutes...'}
+                </div>
+              )}
             </div>
           </div>
         )}

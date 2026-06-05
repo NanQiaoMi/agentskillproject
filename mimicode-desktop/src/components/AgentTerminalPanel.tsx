@@ -9,6 +9,7 @@ import { CanvasAddon } from '@xterm/addon-canvas';
 import { Rnd } from 'react-rnd';
 import '@xterm/xterm/css/xterm.css';
 import { Icons } from './Icons';
+import { notifyAppAndDesktop } from '../utils/notifications';
 
 const playNotificationSound = () => {
   try {
@@ -38,27 +39,14 @@ const playNotificationSound = () => {
   }
 };
 
-import { dispatchAppNotification } from './NotificationsPanel';
-
 const showNotification = (title: string, body: string, type: 'agent' | 'system' = 'system', osNotify: boolean = true) => {
-  if (typeof window.dispatchEvent === 'function') {
-    dispatchAppNotification({
-      type,
-      title,
-      desc: body
-    });
-  }
-
-  if (!osNotify) return;
-
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body });
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then(p => {
-      if (p === 'granted') new Notification(title, { body });
-    });
-  }
+  void notifyAppAndDesktop({
+    type,
+    title,
+    desc: body,
+    desktop: osNotify,
+    respectFocus: true,
+  });
 };
 
 interface AgentTerminalPanelProps {
@@ -260,6 +248,7 @@ const AgentTerminalInstance: React.FC<{
     let unlistenTauri: (() => void) | undefined;
     let unlistenExit: (() => void) | undefined;
     let dataBuffer = "";
+    let lastNotification: { key: string; at: number } | null = null;
     
     // Helper to trigger notifications
     const checkAndNotify = (isExit: boolean = false) => {
@@ -270,15 +259,39 @@ const AgentTerminalInstance: React.FC<{
       const soundNotif = localStorage.getItem('mimi-notif-sound') !== 'false';
 
       const str = dataBuffer.trimEnd();
-      const isPrompt = str.endsWith('>') || str.endsWith('❯') || str.endsWith('$') || str.endsWith('?');
-      const isIntercept = dataBuffer.includes('Please review') || !!dataBuffer.match(/\([yY]\/[nN]\)/) || !!dataBuffer.match(/\[[yY]\/[nN]\]/) || dataBuffer.includes('人工确认') || dataBuffer.includes('Confirm') || dataBuffer.includes('Continue?');
+      const isPrompt = /(?:>|❯|[$?])\s*$/.test(str);
+      const isIntercept =
+        dataBuffer.includes('Please review') ||
+        dataBuffer.includes('人工确认') ||
+        dataBuffer.includes('Confirm') ||
+        dataBuffer.includes('Continue?') ||
+        /\([yY]\/[nN]\)/.test(dataBuffer) ||
+        /\[[yY]\/[nN]\]/.test(dataBuffer);
+      const isComplete =
+        isExit ||
+        isPrompt ||
+        dataBuffer.includes('任务完成') ||
+        dataBuffer.includes('Task Complete') ||
+        dataBuffer.includes('Done');
 
+      let notification: { key: string; body: string } | null = null;
       if (agentInterceptNotif && isIntercept) {
-        if (soundNotif && !isFocused) playNotificationSound();
-        showNotification('Mimicode Agent', '智能体需要你的审核或输入。', 'agent', !isFocused);
-      } else if (taskCompleteNotif && (isExit || isPrompt || dataBuffer.includes('任务完成') || dataBuffer.includes('Task Complete') || dataBuffer.includes('✨ Done'))) {
-        if (soundNotif && !isFocused) playNotificationSound();
-        showNotification('Mimicode Agent', isExit ? '智能体已退出或完成任务。' : '智能体已处理完毕。', 'agent', !isFocused);
+        notification = { key: 'agent-intercept', body: '智能体需要你的审核或输入。' };
+      } else if (taskCompleteNotif && isComplete) {
+        notification = {
+          key: isExit ? 'agent-exit' : 'agent-complete',
+          body: isExit ? '智能体已退出或完成任务。' : '智能体已处理完毕。',
+        };
+      }
+
+      if (notification) {
+        const now = Date.now();
+        const canNotify = !lastNotification || lastNotification.key !== notification.key || now - lastNotification.at > 10000;
+        if (canNotify) {
+          lastNotification = { key: notification.key, at: now };
+          if (soundNotif && !isFocused) playNotificationSound();
+          showNotification('Mimicode Agent', notification.body, 'agent', !isFocused);
+        }
       }
       dataBuffer = ""; // Reset buffer after notification
     };

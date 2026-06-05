@@ -32,8 +32,8 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({ onClose, onC
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   
   const [language, setLanguage] = useState(() => {
-    try { return localStorage.getItem('mimi-language') || 'en'; } 
-    catch { return 'en'; }
+    try { return localStorage.getItem('mimi-language') || '简体中文'; } 
+    catch { return '简体中文'; }
   });
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({ onClose, onC
     return () => window.removeEventListener('mimi-language-changed', handleLanguageChange);
   }, []);
 
-  const t = (en: string, zh: string) => language === 'zh' ? zh : en;
+  const t = (en: string, zh: string) => (language === 'zh' || language === '简体中文') ? zh : en;
 
   // Step 1: Project Info
   const [projectName, setProjectName] = useState('My Awesome Project');

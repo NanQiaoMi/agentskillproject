@@ -2,13 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
 
-// Custom X icon since it's not defined in components/Icons.tsx
-const XIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
+
 
 export interface ArchNode {
   id: string;
@@ -57,12 +51,7 @@ const saveNodesToDoc = (currentContent: string, currentNodes: ArchNode[]) => {
   return updatedContent;
 };
 
-const ArrowRight = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="5" y1="12" x2="19" y2="12" />
-    <polyline points="12 5 19 12 12 19" />
-  </svg>
-);
+
 
 const TEMPLATES: Record<string, string> = {
   PRD: `# PRD-001: 用户登录与权限系统
@@ -542,7 +531,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
           >
-            <XIcon style={{ width: '14px', height: '14px' }} />
+            <Icons.X style={{ width: '14px', height: '14px' }} />
           </button>
         </div>
       )}
@@ -566,7 +555,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                     {language === '简体中文' ? '保存' : 'Save'}
                   </button>
                   <button className="btn btn-ghost" onClick={handleCancel} style={{ padding: '6px 12px', fontSize: '12px' }}>
-                    <XIcon style={{ width: '12px', height: '12px', marginRight: '6px' }} />
+                    <Icons.X style={{ width: '12px', height: '12px', marginRight: '6px' }} />
                     {language === '简体中文' ? '取消' : 'Cancel'}
                   </button>
                 </>
@@ -773,7 +762,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                           {frontendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
                         </div>
 
-                        <ArrowRight style={{ color: 'var(--color-text-muted)' }} />
+                        <Icons.ArrowRight style={{ color: 'var(--color-text-muted)' }} />
 
                         {/* Column 2: Gateway */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
@@ -795,7 +784,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                           {gatewayNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
                         </div>
 
-                        <ArrowRight style={{ color: 'var(--color-text-muted)' }} />
+                        <Icons.ArrowRight style={{ color: 'var(--color-text-muted)' }} />
 
                         {/* Column 3: Backend */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
@@ -817,7 +806,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                           {backendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
                         </div>
 
-                        <ArrowRight style={{ color: 'var(--color-text-muted)' }} />
+                        <Icons.ArrowRight style={{ color: 'var(--color-text-muted)' }} />
 
                         {/* Column 4: Resources */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
@@ -858,7 +847,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                 onClick={() => setEditingNode(null)} 
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
               >
-                <XIcon style={{ width: '16px', height: '16px' }} />
+                <Icons.X style={{ width: '16px', height: '16px' }} />
               </button>
             </div>
             <div className="modal-body">

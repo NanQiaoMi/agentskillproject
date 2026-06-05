@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { invoke } from "@tauri-apps/api/core";
 import { Icons } from '../components/Icons';
 import { Task } from '../types';
+import { dispatchAppNotification } from '../components/NotificationsPanel';
+import { useAgentCmd } from '../hooks/useAgentCmd';
+import { KanbanBoard } from '../components/kanban/KanbanBoard';
 
 interface TasksViewProps {
   tasks: Task[];
-  projectPath: string;
   fetchTasks: () => void;
   onSelectTask: (taskId: string) => void;
 }
@@ -35,7 +36,9 @@ const translations = {
   }
 };
 
-export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchTasks, onSelectTask }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelectTask }) => {
+  const { runCmd } = useAgentCmd();
+
   // Task Creation states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -102,20 +105,19 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
     }
     setIsCreating(true);
     try {
-      const args = ["add", "--title", newTaskTitle, "--assignee", newTaskAssignee];
-      if (newTaskDesc.trim()) {
-        args.push("--desc", newTaskDesc);
-      }
-      
-      await invoke("run_agentflow_cmd", {
-        projectPath,
-        args
-      });
+      const args = ["create-task", `--title="${newTaskTitle}"`, `--assignee=${newTaskAssignee}`];
+      if (newTaskDesc.trim()) args.push(`--desc="${newTaskDesc}"`);
+      await runCmd(args);
       
       setShowCreateModal(false);
       setNewTaskTitle('');
       setNewTaskDesc('');
       fetchTasks();
+      dispatchAppNotification({
+        type: 'task',
+        title: '任务已创建',
+        desc: `新任务 "${newTaskTitle}" 已成功分配给 ${newTaskAssignee}。`
+      });
     } catch (err: any) {
       alert("创建任务失败: " + err.toString());
     } finally {
@@ -154,14 +156,16 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
         args.push("--desc", "");
       }
       
-      await invoke("run_agentflow_cmd", {
-        projectPath,
-        args
-      });
+      await runCmd(args);
       
       setShowEditModal(false);
       setEditingTask(null);
       fetchTasks();
+      dispatchAppNotification({
+        type: 'task',
+        title: '任务已更新',
+        desc: `任务 "${editTaskTitle}" 的状态已更新为 ${editTaskStatus}。`
+      });
     } catch (err: any) {
       alert("修改任务失败: " + err.toString());
     } finally {
@@ -175,21 +179,18 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
       return;
     }
     try {
-      await invoke("run_agentflow_cmd", {
-        projectPath,
-        args: ["delete", taskId]
-      });
+      await runCmd(["delete", taskId]);
       fetchTasks();
+      dispatchAppNotification({
+        type: 'system',
+        title: '任务已删除',
+        desc: `任务 ${taskId} 已被永久删除。`
+      });
     } catch (err: any) {
       alert("删除任务失败: " + err.toString());
     }
   };
 
-  const getPriorityStyle = (priority: string = 'High') => {
-    if (priority === 'High') return { bg: 'rgba(239, 68, 68, 0.1)', color: '#EF4444' };
-    if (priority === 'Medium') return { bg: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B' };
-    return { bg: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' };
-  };
 
   // Perform Client-Side Filtering
   const filteredTasks = tasks.filter(t => {
@@ -305,84 +306,15 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, projectPath, fetchT
         </div>
       )}
 
-      <div className="view-content" style={{ padding: '16px', overflow: 'hidden' }}>
-        <div className="kanban-board-container">
-          {activeColumns.map(col => {
-            const colTasks = filteredTasks.filter(t => {
-              if (groupBy === 'status') {
-                if (col.key === 'todo') return t.status === 'todo' || t.status === 'pending' || !t.status;
-                if (col.key === 'in_progress') return t.status === 'in_progress' || t.status === 'fixing';
-                if (col.key === 'review') return t.status === 'review';
-                return t.status === col.key;
-              } else {
-                if (col.key === 'user') return t.assignee === 'user' || !t.assignee;
-                return t.assignee === col.key;
-              }
-            });
-
-            return (
-              <div key={col.key} className="kanban-column">
-                <div className="kanban-column-header">
-                  <div className="kanban-column-title">
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: col.color }}></span>
-                    <span>{col.title}</span>
-                    <span className="kanban-count-badge">{colTasks.length}</span>
-                  </div>
-                  <button className="btn-icon-ghost" onClick={() => setShowCreateModal(true)} style={{ border: 'none' }}><Icons.Plus style={{ width: '14px', height: '14px' }} /></button>
-                </div>
-                
-                <div className="kanban-column-content">
-                  {colTasks.map((t, index) => {
-                    const pri = t.priority || 'Medium';
-                    const priStyle = getPriorityStyle(pri);
-                    return (
-                      <div key={t.id} className="kanban-card" style={{ '--i': index } as React.CSSProperties} onClick={() => onSelectTask(t.id)}>
-                        <div className="kanban-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span className="font-mono">{t.id}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <button
-                              className="btn-icon-ghost"
-                              title="修改任务"
-                              onClick={(e) => handleOpenEdit(e, t)}
-                              style={{ width: '20px', height: '20px', border: 'none', background: 'transparent', color: 'var(--color-text-muted)' }}
-                            >
-                              <Icons.Edit2 style={{ width: '11px', height: '11px' }} />
-                            </button>
-                            <button
-                              className="btn-icon-ghost"
-                              title="删除任务"
-                              onClick={(e) => handleDeleteTask(e, t.id)}
-                              style={{ width: '20px', height: '20px', border: 'none', background: 'transparent', color: 'var(--color-text-muted)' }}
-                            >
-                              <Icons.Trash2 style={{ width: '11px', height: '11px' }} />
-                            </button>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: col.color }}></span>
-                          </div>
-                        </div>
-                        <div className="kanban-card-title">{t.title}</div>
-                        <div className="kanban-card-footer">
-                          <div className="agent-badge" style={{ padding: '2px 6px', border: 'none', background: 'transparent' }}>
-                            <div className="agent-avatar-small" style={{ width: '20px', height: '20px', fontSize: '10px', marginRight: '6px' }}>
-                              {t.assignee ? t.assignee.charAt(0).toUpperCase() : 'U'}
-                            </div>
-                            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{t.assignee || 'Unassigned'}</span>
-                          </div>
-                          <span style={{
-                            fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px',
-                            backgroundColor: priStyle.bg, color: priStyle.color
-                          }}>
-                            {pri}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <KanbanBoard
+        filteredTasks={filteredTasks}
+        activeColumns={activeColumns}
+        groupBy={groupBy}
+        onSelectTask={onSelectTask}
+        onOpenEdit={handleOpenEdit}
+        onDeleteTask={handleDeleteTask}
+        onCreateTaskClick={() => setShowCreateModal(true)}
+      />
 
       {/* Task Creation Modal */}
       {showCreateModal && (

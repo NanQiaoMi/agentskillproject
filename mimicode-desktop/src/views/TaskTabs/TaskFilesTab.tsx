@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../../components/Icons';
+import { Highlight, themes } from 'prism-react-renderer';
 
 interface TaskFilesTabProps {
   projectPath: string;
@@ -91,27 +92,59 @@ export const TaskFilesTab: React.FC<TaskFilesTabProps> = ({ projectPath }) => {
             {fileError}
           </div>
         ) : (
-          <>
-            <div style={{ padding: '6px 16px', borderBottom: '1px solid var(--border-color)', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'monospace' }}>
-              {selectedFile}
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--bg-panel)' }}>
+              <Icons.FileText style={{ width: '16px', height: '16px', marginRight: '8px', color: 'var(--color-primary-orange)' }} />
+              <span style={{ fontSize: '13px', color: 'var(--color-text-main)', fontFamily: 'var(--font-mono)' }}>{selectedFile}</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <Icons.MoreHorizontal style={{ width: '16px', height: '16px', color: 'var(--color-text-muted)', cursor: 'pointer' }} />
+              </div>
             </div>
-            <pre style={{
-              flex: 1,
-              margin: 0,
-              padding: '12px 16px',
-              fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", monospace',
-              fontSize: '12px',
-              lineHeight: 1.6,
-              overflowY: 'auto',
-              overflowX: 'auto',
-              backgroundColor: 'var(--bg-terminal, var(--bg-main))',
-              color: 'var(--color-text-main)',
-              whiteSpace: 'pre',
-              tabSize: 4
+            
+            <div style={{ flex: 1, overflow: 'auto', backgroundColor: '#1e1e1e' }}>
+              <Highlight theme={themes.vsDark} code={fileContent} language={selectedFile.split('.').pop() || 'typescript'}>
+                {({ style, tokens, getLineProps, getTokenProps }) => (
+                  <pre style={{ ...style, margin: 0, padding: '16px 0', fontSize: '13px', fontFamily: '"Cascadia Code", "Fira Code", monospace', minHeight: '100%' }}>
+                    {tokens.map((line, i) => (
+                      <div key={i} {...getLineProps({ line })} style={{ display: 'flex' }}>
+                        <span style={{ 
+                          width: '40px', 
+                          textAlign: 'right', 
+                          paddingRight: '16px', 
+                          color: '#858585', 
+                          userSelect: 'none',
+                          opacity: 0.5
+                        }}>{i + 1}</span>
+                        <span style={{ paddingLeft: '8px' }}>
+                          {line.map((token, key) => (
+                            <span key={key} {...getTokenProps({ token })} />
+                          ))}
+                        </span>
+                      </div>
+                    ))}
+                  </pre>
+                )}
+              </Highlight>
+            </div>
+            
+            <div className="editor-statusbar" style={{ 
+              padding: '6px 16px', 
+              borderTop: '1px solid var(--color-border)', 
+              backgroundColor: 'var(--bg-main)', 
+              display: 'flex', 
+              justifyContent: 'flex-end', 
+              gap: '24px',
+              fontSize: '11px',
+              color: 'var(--color-text-muted)',
+              fontFamily: 'var(--font-mono)'
             }}>
-              {fileContent}
-            </pre>
-          </>
+              <span>Ln {fileContent.split('\n').length}, Col 1</span>
+              <span>Spaces: 4</span>
+              <span>UTF-8</span>
+              <span>LF</span>
+              <span style={{ textTransform: 'capitalize' }}>{selectedFile.split('.').pop() || 'text'}</span>
+            </div>
+          </div>
         )}
       </div>
     </div>

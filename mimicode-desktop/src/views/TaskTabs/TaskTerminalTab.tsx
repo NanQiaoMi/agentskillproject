@@ -112,65 +112,86 @@ export const TaskTerminalTab: React.FC<TaskTerminalTabProps> = ({ projectPath, t
   };
 
   return (
-    <div className="tab-pane-full flex-col" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div className="terminal-tabs-row" style={{ display: 'flex', borderBottom: '1px solid var(--color-border)' }}>
+    <div className="tab-pane-full flex-col" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', backgroundColor: '#0A0A0A' }}>
+      <div className="terminal-tabs-row" style={{ display: 'flex', borderBottom: '1px solid #333', backgroundColor: '#141414', padding: '0 16px' }}>
         {['agentflow', 'bash', 'pytest', 'git'].map(tab => (
           <div 
             key={tab}
             className={`term-tab ${activeTermTab === tab ? 'active' : ''}`}
             onClick={() => setActiveTermTab(tab)}
             style={{
-              padding: '8px 16px',
+              padding: '12px 20px',
               cursor: 'pointer',
               fontSize: '12px',
-              borderBottom: activeTermTab === tab ? '2px solid var(--color-primary-orange)' : 'none',
-              color: activeTermTab === tab ? 'var(--color-text-main)' : 'var(--color-text-muted)'
+              fontFamily: 'var(--font-mono)',
+              borderBottom: activeTermTab === tab ? '2px solid #E8684A' : '2px solid transparent',
+              color: activeTermTab === tab ? '#E2E8F0' : '#64748B',
+              textTransform: 'capitalize',
+              transition: 'all 0.2s ease'
             }}
           >
-            {tab}
+            {tab === 'agentflow' ? 'AgentFlow' : tab}
           </div>
         ))}
       </div>
       
-      <div className="terminal-window" style={{ flex: 1, backgroundColor: 'var(--bg-terminal, #1e1e1e)', color: '#d4d4d4', overflowY: 'auto', padding: '16px', fontFamily: '"Cascadia Code", "Fira Code", monospace', display: 'flex', flexDirection: 'column' }}>
+      <div className="terminal-window" style={{ flex: 1, backgroundColor: '#0A0A0A', color: '#D4D4D4', overflowY: 'auto', padding: '24px', fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", monospace', display: 'flex', flexDirection: 'column', fontSize: '13px', lineHeight: 1.6 }}>
         {activeTermTab === 'agentflow' && (
-          <div className="term-content font-mono text-xs" style={{ flex: 1 }}>
-            {logContent.trim() ? logContent.split('\n').map((line, i) => (
-              <div key={i} className="term-line" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                {line}
-              </div>
-            )) : <div style={{ color: 'var(--color-text-muted)' }}>No logs available for this task.</div>}
+          <div className="term-content font-mono" style={{ flex: 1 }}>
+            {logContent.trim() ? logContent.split('\n').map((line, i) => {
+              // Basic colorization for logs
+              let color = '#D4D4D4';
+              if (line.includes('[INFO]')) color = '#3B82F6';
+              else if (line.includes('[ERROR]')) color = '#EF4444';
+              else if (line.includes('[WARN]')) color = '#F59E0B';
+              else if (line.includes('[SUCCESS]')) color = '#10B981';
+              return (
+                <div key={i} className="term-line" style={{ whiteSpace: 'pre-wrap', color }}>
+                  {line}
+                </div>
+              );
+            }) : <div style={{ color: '#64748B' }}>No logs available for this task.</div>}
             <div ref={termEndRef} />
           </div>
         )}
         
         {activeTermTab === 'git' && (
-          <div className="term-content font-mono text-xs" style={{ flex: 1 }}>
-            <div className="term-line" style={{ color: '#888' }}><span className="term-prompt">➜</span> <span className="term-cmd">git status</span></div>
+          <div className="term-content font-mono" style={{ flex: 1 }}>
+            <div className="term-line"><span style={{ color: '#10B981', marginRight: '8px' }}>➜</span> <span style={{ color: '#60A5FA', marginRight: '8px' }}>workspace</span> <span style={{ color: '#E2E8F0' }}>git status</span></div>
             {gitLoading ? (
-              <div className="term-line">Running git status...</div>
+              <div className="term-line" style={{ color: '#64748B', marginTop: '8px' }}>Running git status...</div>
             ) : (
-              gitStatus.split('\n').map((line, i) => (
-                <div key={i} className="term-line" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                  {line}
-                </div>
-              ))
+              <div style={{ marginTop: '8px' }}>
+                {gitStatus.split('\n').map((line, i) => {
+                  let color = '#D4D4D4';
+                  if (line.includes('modified:')) color = '#EF4444';
+                  else if (line.includes('new file:')) color = '#10B981';
+                  else if (line.includes('Untracked files:')) color = '#F59E0B';
+                  return (
+                    <div key={i} className="term-line" style={{ whiteSpace: 'pre-wrap', color }}>
+                      {line}
+                    </div>
+                  );
+                })}
+              </div>
             )}
             <div ref={termEndRef} />
           </div>
         )}
         
         {activeTermTab === 'pytest' && (
-          <div className="term-content font-mono text-xs" style={{ flex: 1 }}>
-            <div className="term-line" style={{ color: '#888' }}><span className="term-prompt">➜</span> <span className="term-cmd">pytest --version</span></div>
+          <div className="term-content font-mono" style={{ flex: 1 }}>
+            <div className="term-line"><span style={{ color: '#10B981', marginRight: '8px' }}>➜</span> <span style={{ color: '#60A5FA', marginRight: '8px' }}>workspace</span> <span style={{ color: '#E2E8F0' }}>pytest --version</span></div>
             {pytestLoading ? (
-              <div className="term-line">Running pytest...</div>
+              <div className="term-line" style={{ color: '#64748B', marginTop: '8px' }}>Running pytest...</div>
             ) : (
-              pytestStatus.split('\n').map((line, i) => (
-                <div key={i} className="term-line" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                  {line}
-                </div>
-              ))
+              <div style={{ marginTop: '8px' }}>
+                {pytestStatus.split('\n').map((line, i) => (
+                  <div key={i} className="term-line" style={{ whiteSpace: 'pre-wrap' }}>
+                    {line}
+                  </div>
+                ))}
+              </div>
             )}
             <div ref={termEndRef} />
           </div>
@@ -178,37 +199,40 @@ export const TaskTerminalTab: React.FC<TaskTerminalTabProps> = ({ projectPath, t
 
         {activeTermTab === 'bash' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <div className="term-content font-mono text-xs" style={{ flex: 1 }}>
+            <div className="term-content font-mono" style={{ flex: 1 }}>
               {bashHistory.map((item, i) => (
                 <div key={i} className="term-line" style={{ 
                   whiteSpace: 'pre-wrap', 
-                  lineHeight: 1.5,
-                  color: item.type === 'cmd' ? '#3B82F6' : item.type === 'error' ? '#EF4444' : '#d4d4d4'
+                  color: item.type === 'cmd' ? '#E2E8F0' : item.type === 'error' ? '#EF4444' : '#94A3B8',
+                  marginTop: item.type === 'cmd' && i > 0 ? '16px' : '4px'
                 }}>
-                  {item.type === 'cmd' && <span style={{ color: '#10B981', marginRight: '8px' }}>➜</span>}
+                  {item.type === 'cmd' && <><span style={{ color: '#10B981', marginRight: '8px' }}>➜</span> <span style={{ color: '#60A5FA', marginRight: '8px' }}>workspace</span></>}
                   {item.text}
                 </div>
               ))}
-              {bashRunning && <div className="term-line" style={{ color: '#888' }}>Running command...</div>}
+              {bashRunning && <div className="term-line" style={{ color: '#64748B', marginTop: '8px' }}>Running command...</div>}
               <div ref={termEndRef} />
             </div>
             
-            <form onSubmit={handleBashSubmit} style={{ display: 'flex', marginTop: '12px', borderTop: '1px solid #333', paddingTop: '8px' }}>
-              <span style={{ color: '#10B981', fontFamily: 'monospace', marginRight: '8px', display: 'flex', alignItems: 'center' }}>➜</span>
+            <form onSubmit={handleBashSubmit} style={{ display: 'flex', marginTop: '16px', borderTop: '1px solid #333', paddingTop: '16px', alignItems: 'center' }}>
+              <span style={{ color: '#10B981', marginRight: '8px' }}>➜</span>
+              <span style={{ color: '#60A5FA', marginRight: '8px' }}>workspace</span>
               <input
                 type="text"
                 value={bashInput}
                 onChange={e => setBashInput(e.target.value)}
-                placeholder="Type bash command and press Enter..."
+                placeholder=""
                 disabled={bashRunning}
+                autoFocus
                 style={{
                   flex: 1,
                   backgroundColor: 'transparent',
                   border: 'none',
                   outline: 'none',
-                  color: '#fff',
+                  color: '#F8FAFC',
                   fontFamily: '"Cascadia Code", "Fira Code", monospace',
-                  fontSize: '12px'
+                  fontSize: '13px',
+                  caretColor: '#10B981'
                 }}
               />
             </form>

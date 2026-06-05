@@ -24,8 +24,8 @@
   --color-warning-bg: rgba(245, 158, 11, 0.1);
   --color-destructive: #EF4444;
   
-  --font-sans: 'Cascadia Code', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: 'Cascadia Code', 'Fira Code', monospace;
+  --font-sans: 'Cascadia Code', 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-mono: 'Cascadia Code', 'Fira Code', Consolas, "PingFang SC", "Microsoft YaHei", monospace;
   
   --shadow-soft: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.025);
   --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
@@ -120,17 +120,14 @@ body {
   gap: 12px;
 }
 .brand-logo-container {
-  width: 28px;
-  height: 28px;
-  background-color: var(--color-primary-orange);
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: bold;
-  font-size: 16px;
-  box-shadow: 0 2px 8px rgba(232, 104, 74, 0.3);
+  overflow: hidden;
+  flex-shrink: 0;
   transition: transform var(--duration-normal) var(--ease-spring),
               box-shadow var(--duration-normal) var(--ease-standard);
 }
@@ -296,6 +293,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-right: 100px;
 }
 .view-title { font-size: 20px; font-weight: 600; color: var(--color-text-main); }
 .view-content { flex: 1; overflow-y: auto; }
@@ -318,7 +316,7 @@ body {
 .header-center { display: flex; align-items: center; gap: 8px; background-color: var(--bg-hover); padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 500; border: 1px solid var(--color-border); }
 .header-center-icon { color: var(--color-text-muted); }
 .header-center-divider { color: var(--color-border); }
-.header-right { display: flex; align-items: center; gap: 16px; }
+.header-right { display: flex; align-items: center; gap: 16px; padding-right: 100px; }
 .header-icon-btn { background: none; border: none; color: var(--color-text-secondary); cursor: pointer; display: flex; align-items: center; }
 .user-avatar { width: 24px; height: 24px; border-radius: 50%; background-color: var(--color-border); overflow: hidden; }
 .chat-welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
@@ -1948,3 +1946,33 @@ body {
   100% { background-position: 0% 50%; }
 }
 
+/* Modal and Panel Animations */
+.fade-in-scale {
+  animation: fadeInScale 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

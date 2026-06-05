@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { Icons } from "./components/Icons";
-import { Task, EnvStatus } from "./types";
+import { EnvStatus } from "./types";
 
 // Import Views
 import { ChatView } from "./views/ChatView";
@@ -17,136 +16,107 @@ import { PromptsView } from "./views/PromptsView";
 import { NewProjectWizard } from "./components/NewProjectWizard";
 import { AgentTerminalPanel } from "./components/AgentTerminalPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { GlobalSearchModal } from "./components/GlobalSearchModal";
+import { NotificationsPanel, dispatchAppNotification } from "./components/NotificationsPanel";
+import { NewTaskModal } from "./components/NewTaskModal";
+import { useAgentCmd } from "./hooks/useAgentCmd";
 
-const appTranslations = {
-  'English': {
-    brandSubtitle: 'AI-Native Vibe Coding Studio',
-    nav: {
-      Chat: 'Chat',
-      Tasks: 'Tasks',
-      Agents: 'Agents',
-      Worktrees: 'Worktrees',
-      Specifications: 'Specifications',
-      Prompts: 'Prompts',
-      Diagnostics: 'Diagnostics',
-      Settings: 'Settings'
-    },
-    activeTasks: 'ACTIVE TASKS',
-    noTasks: 'No tasks found in project.',
-    newProject: 'New Project Wizard'
-  },
-  '简体中文': {
-    brandSubtitle: 'AI原生共振编程工作室',
-    nav: {
-      Chat: '对话',
-      Tasks: '任务中心',
-      Agents: '智能体',
-      Worktrees: '工作区',
-      Specifications: '需求规格',
-      Prompts: '提示词',
-      Diagnostics: '系统诊断',
-      Settings: '系统设置'
-    },
-    activeTasks: '进行中的任务',
-    noTasks: '当前项目中没有找到任何任务。',
-    newProject: '新建项目向导'
-  }
-};
+import { Sidebar } from "./components/layout/Sidebar";
+
+import { useAppContext } from "./context/AppContext";
+
+let hasDispatchedWelcome = false;
 
 function App() {
-  const DEFAULT_PROJECT_PATH = "d:\\agentcode";
-  const [projectPath, setProjectPath] = useState(DEFAULT_PROJECT_PATH);
-  const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeNav, setActiveNav] = useState("Chat");
-  const [viewState, setViewState] = useState<'list' | 'detail'>('list');
-  const [chatInputText, setChatInputText] = useState("");
-  interface ToastItem {
-    id: number;
-    message: string;
-    type: 'success' | 'error' | 'info';
-  }
+  const {
+    projectPath, setProjectPath,
+    envStatus, setEnvStatus,
+    tasks,
+    selectedTaskId, setSelectedTaskId,
+    activeNav, setActiveNav,
+    viewState, setViewState,
+    chatInputText, setChatInputText,
+    showSearchModal, setShowSearchModal,
+    showWizard, setShowWizard,
+    fetchTasks, handleSelectDirectory,
+    toasts, addToast, removeToast,
+    setLanguage
+  } = useAppContext();
 
-  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [showInterceptionModal, setShowInterceptionModal] = useState(false);
-  const [showWizard, setShowWizard] = useState(false);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   
-  const [language, setLanguage] = useState(() => {
-    try { return localStorage.getItem('mimi-language') || '简体中文'; } catch { return '简体中文'; }
-  });
-  const t = appTranslations[language as keyof typeof appTranslations] || appTranslations['English'];
 
   useEffect(() => {
     const handleLangChange = (e: any) => {
       setLanguage(e.detail);
     };
+    const handleUnread = (e: Event) => {
+      const ce = e as CustomEvent;
+      setUnreadNotifications(ce.detail);
+    };
     window.addEventListener('mimi-language-changed', handleLangChange);
-    return () => window.removeEventListener('mimi-language-changed', handleLangChange);
+    window.addEventListener('app-notification-unread', handleUnread);
+    
+    // Dispatch a welcome system notification once per session
+    if (!hasDispatchedWelcome) {
+      hasDispatchedWelcome = true;
+      const timerId = setTimeout(() => {
+        dispatchAppNotification({
+          type: 'system',
+          title: '系统启动成功',
+          desc: '欢迎来到 MIMIcode Studio！系统环境检查完毕，智能体已准备就绪。'
+        });
+      }, 1500);
+      
+      return () => {
+        window.removeEventListener('mimi-language-changed', handleLangChange);
+        window.removeEventListener('app-notification-unread', handleUnread);
+        clearTimeout(timerId);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('mimi-language-changed', handleLangChange);
+      window.removeEventListener('app-notification-unread', handleUnread);
+    };
   }, []);
 
   useEffect(() => {
     (window as any).setShowInterceptionModal = setShowInterceptionModal;
-    (window as any).showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-      const id = Date.now() + Math.random();
-      setToasts(prev => [...prev, { id, message, type }]);
-      setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== id));
-      }, 4000);
+    (window as any).showToast = addToast;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearchModal(prev => !prev);
+      }
     };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
 
   useEffect(() => {
     loadEnvironment();
     fetchTasks();
+    
+    // Background polling every 5 seconds to monitor tasks
+    const interval = setInterval(() => {
+      fetchTasks(true);
+    }, 5000);
+    return () => clearInterval(interval);
   }, [projectPath]);
 
-  async function handleSelectDirectory() {
-    try {
-      const selected: string = await invoke("select_directory");
-      if (selected) {
-        await invoke("initialize_project", { projectPath: selected });
-        setProjectPath(selected);
-      }
-    } catch (err) {
-      if (err !== "Operation cancelled by user") {
-        (window as any).showToast("选择目录失败: " + err, "error");
-      }
-    }
-  }
+  const { checkEnv } = useAgentCmd();
 
   async function loadEnvironment() {
     try {
-      const res: EnvStatus = await invoke("check_environment", { projectPath });
+      const res: EnvStatus = await checkEnv();
       setEnvStatus(res);
     } catch (err) {
       console.error(err);
-    }
-  }
-
-  async function fetchTasks() {
-    try {
-      const res: string = await invoke("run_agentflow_cmd", {
-        projectPath,
-        args: ["json-list"]
-      });
-      const jsonStart = res.indexOf("[");
-      if (jsonStart !== -1) {
-        const jsonStr = res.substring(jsonStart);
-        const parsed: Task[] = JSON.parse(jsonStr);
-        setTasks(parsed);
-        if (parsed.length > 0 && !selectedTaskId) {
-          setSelectedTaskId(parsed[0].id);
-        }
-      } else {
-        setTasks([]);
-      }
-    } catch (err) {
-      console.error(err);
-      (window as any).showToast("MIMIcode 无法加载任务列表！" + String(err), "error");
-      setTasks([]);
     }
   }
 
@@ -157,14 +127,14 @@ function App() {
       return (
         <ChatView 
           projectPath={projectPath}
-          selectedTask={selectedTask}
+          selectedTask={selectedTask || null}
           tasks={tasks}
           setSelectedTaskId={setSelectedTaskId}
           chatInputText={chatInputText}
           setChatInputText={setChatInputText}
           handleSelectDirectory={handleSelectDirectory}
           fetchTasks={fetchTasks}
-          onNavigate={(nav) => setActiveNav(nav)}
+          onNavigate={(nav: string) => setActiveNav(nav)}
         />
       );
     } else if (activeNav === 'Tasks') {
@@ -181,7 +151,6 @@ function App() {
       return (
         <TasksView 
           tasks={tasks} 
-          projectPath={projectPath}
           fetchTasks={fetchTasks}
           onSelectTask={(id) => {
             setSelectedTaskId(id);
@@ -207,90 +176,54 @@ function App() {
 
   return (
     <div className="app-container">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="brand-logo-container">M</div>
-          <div className="brand-text">
-            <span className="brand-title">MIMIcode Studio</span>
-            <span className="brand-subtitle">{t.brandSubtitle}</span>
-          </div>
-        </div>
-        
-        <div className="sidebar-scrollable">
-          <div className="nav-section">
-            <a href="#" className={`nav-item ${activeNav === 'Chat' ? 'active' : ''}`} onClick={() => { setActiveNav('Chat'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.MessageSquare className="nav-icon" /><span>{t.nav.Chat}</span></div>
-            </a>
-            <a href="#" className={`nav-item ${activeNav === 'Tasks' ? 'active' : ''}`} onClick={() => { setActiveNav('Tasks'); setViewState('list'); fetchTasks(); }}>
-              <div className="nav-item-left"><Icons.CheckSquare className="nav-icon" /><span>{t.nav.Tasks}</span></div>
-            </a>
-            <a href="#" className={`nav-item ${activeNav === 'Agents' ? 'active' : ''}`} onClick={() => { setActiveNav('Agents'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.Users className="nav-icon" /><span>{t.nav.Agents}</span></div>
-            </a>
-            <a href="#" className={`nav-item ${activeNav === 'Worktrees' ? 'active' : ''}`} onClick={() => { setActiveNav('Worktrees'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.GitBranch className="nav-icon" /><span>{t.nav.Worktrees}</span></div>
-            </a>
-            <a href="#" className={`nav-item ${activeNav === 'Specifications' ? 'active' : ''}`} onClick={() => { setActiveNav('Specifications'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.BookOpen className="nav-icon" /><span>{t.nav.Specifications}</span></div>
-            </a>
-            <a href="#" className={`nav-item ${activeNav === 'Prompts' ? 'active' : ''}`} onClick={() => { setActiveNav('Prompts'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.FileText className="nav-icon" /><span>{t.nav.Prompts}</span></div>
-            </a>
-            <a href="#" className={`nav-item ${activeNav === 'Diagnostics' ? 'active' : ''}`} onClick={() => { setActiveNav('Diagnostics'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.Activity className="nav-icon" /><span>{t.nav.Diagnostics}</span></div>
-            </a>
-            <a href="#" className={`nav-item ${activeNav === 'Settings' ? 'active' : ''}`} onClick={() => { setActiveNav('Settings'); setViewState('list'); }}>
-              <div className="nav-item-left"><Icons.Settings className="nav-icon" /><span>{t.nav.Settings}</span></div>
-            </a>
-          </div>
+      <Sidebar />
 
-          <div className="nav-section" style={{ marginTop: '12px' }}>
-            <div className="section-header">
-              <span className="section-title">{t.activeTasks}</span>
-              <button className="btn-icon-ghost" title="New Task" onClick={() => setShowNewTaskModal(true)}>
-                <Icons.Plus />
-              </button>
-            </div>
-            
-            {tasks.length === 0 ? (
-               <div style={{ padding: '12px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                 {t.noTasks}
-               </div>
-            ) : tasks.map((task) => (
-              <div 
-                key={task.id}
-                className={`task-card-sidebar ${selectedTaskId === task.id ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedTaskId(task.id);
-                  if (activeNav === 'Tasks') setViewState('detail');
-                }}
-              >
-                <div className="task-header-row">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Icons.FileText style={{ color: 'var(--color-primary-orange)', width: '12px', height: '12px' }} />
-                    <span className="task-id">{task.id}</span>
-                  </div>
-                  <div className={`task-status-dot ${task.status === 'in_progress' ? 'in-progress' : task.status === 'review' ? 'in-review' : 'pending'}`} />
-                </div>
-                <div className="task-card-title">{task.title}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Global trigger wizard in sidebar footer */}
-        <div className="sidebar-footer">
-          <button className="btn w-full" style={{ padding: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} onClick={() => setShowWizard(true)}>
-            <Icons.Plus style={{ width: '12px', height: '12px' }}/> {t.newProject}
+      <main className="main-content" style={{ position: 'relative' }}>
+        {/* Top-Right Action Toolbar */}
+        <div style={{ position: 'absolute', top: '16px', right: '24px', display: 'flex', gap: '12px', zIndex: 100 }}>
+          <button 
+            className="btn-icon-ghost hover-scale" 
+            title="Global Search (Ctrl+K)"
+            onClick={() => setShowSearchModal(true)}
+            style={{ 
+              backgroundColor: 'var(--bg-panel)', 
+              border: '1px solid var(--color-border)',
+              width: '32px', height: '32px',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+            }}
+          >
+            <Icons.Search style={{ width: '18px', height: '18px', color: 'var(--color-text-main)' }} />
+          </button>
+          <button 
+            className="btn-icon-ghost hover-scale" 
+            title="Notifications"
+            onClick={() => setShowNotifications(true)}
+            style={{ 
+              backgroundColor: 'var(--bg-panel)', 
+              border: '1px solid var(--color-border)', 
+              position: 'relative',
+              width: '32px', height: '32px',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+            }}
+          >
+            <Icons.Bell style={{ width: '18px', height: '18px', color: 'var(--color-text-main)' }} />
+            {unreadNotifications > 0 && (
+              <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-primary-orange)', border: '2px solid var(--bg-panel)' }}></div>
+            )}
           </button>
         </div>
-      </aside>
 
-      <main className="main-content">
         <div key={`${activeNav}-${viewState}`} style={{ display: 'contents' }}>
           {renderMainContent()}
         </div>
       </main>
+
+      <GlobalSearchModal isOpen={showSearchModal} onClose={() => setShowSearchModal(false)} projectPath={projectPath || ''} />
+      <NotificationsPanel isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
 
       <ErrorBoundary>
         <AgentTerminalPanel projectPath={projectPath} />
@@ -306,79 +239,7 @@ function App() {
         />
       )}
 
-      {/* Existing modals remain unchanged */}
-      {showNewTaskModal && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowNewTaskModal(false) }}>
-          <div className="modal-card" style={{ width: '500px' }}>
-            <div className="modal-header">
-              <div className="modal-title">Create New Task<br/><span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 'normal' }}>创建新任务卡片</span></div>
-              <button className="btn-icon-ghost" onClick={() => setShowNewTaskModal(false)}><Icons.Plus style={{ transform: 'rotate(45deg)' }}/></button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Task Title</label>
-                <input 
-                  type="text" 
-                  className="intercept-input" 
-                  placeholder="输入任务标题..." 
-                  id="newTaskTitleInput"
-                />
-              </div>
-              <div className="form-group" style={{ marginTop: '8px' }}>
-                <label className="form-label">Description</label>
-                <textarea 
-                  className="intercept-input" 
-                  rows={4} 
-                  placeholder="描述任务的详细信息..."
-                  id="newTaskDescInput"
-                ></textarea>
-              </div>
-              <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Assign to Agent</label>
-                  <select className="form-select" id="newTaskAssigneeInput">
-                    <option value="antigravity">Antigravity (前端专家)</option>
-                    <option value="codex">Codex (后端专家)</option>
-                    <option value="hermes">Hermes (规划专家)</option>
-                    <option value="opencode">OpenCode (重构专家)</option>
-                    <option value="claudecode">Claude Code (审计专家)</option>
-                    <option value="user">User (我来处理)</option>
-                  </select>
-                </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Priority</label>
-                  <select className="form-select" id="newTaskPriorityInput">
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Low">Low</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn" onClick={() => setShowNewTaskModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={async () => {
-                const title = (document.getElementById('newTaskTitleInput') as HTMLInputElement).value;
-                const desc = (document.getElementById('newTaskDescInput') as HTMLTextAreaElement).value;
-                const assignee = (document.getElementById('newTaskAssigneeInput') as HTMLSelectElement).value;
-                if (!title.trim()) {
-                  alert("请输入任务标题");
-                  return;
-                }
-                try {
-                  const args = ["add", "--title", title, "--assignee", assignee];
-                  if (desc.trim()) args.push("--desc", desc);
-                  await invoke("run_agentflow_cmd", { projectPath, args });
-                  setShowNewTaskModal(false);
-                  fetchTasks();
-                } catch (err: any) {
-                  alert("创建任务失败: " + err.toString());
-                }
-              }}>Create Task</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NewTaskModal />
 
       {showInterceptionModal && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowInterceptionModal(false) }}>
@@ -434,20 +295,20 @@ function App() {
           <div key={toast.id} className={`toast-card toast-${toast.type}`}>
             <span className="toast-icon">
               {toast.type === 'success' && (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <Icons.CheckCircle2 width={16} height={16} strokeWidth={2.5} />
               )}
               {toast.type === 'error' && (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                <Icons.XCircle width={16} height={16} strokeWidth={2.5} />
               )}
               {toast.type === 'info' && (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <Icons.Info width={16} height={16} strokeWidth={2.5} />
               )}
             </span>
             <div className="toast-message">{toast.message}</div>
             <button className="toast-close-btn" onClick={() => {
-              setToasts(prev => prev.filter(t => t.id !== toast.id));
+              removeToast(toast.id);
             }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <Icons.X width={12} height={12} strokeWidth={2.5} />
             </button>
           </div>
         ))}

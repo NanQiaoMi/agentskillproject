@@ -1,0 +1,135 @@
+import React from 'react';
+import { Icons } from '../Icons';
+import { useAppContext } from '../../context/AppContext';
+
+export const Sidebar: React.FC = () => {
+  const {
+    activeNav, setActiveNav,
+    setViewState,
+    tasks,
+    selectedTaskId, setSelectedTaskId,
+    fetchTasks,
+    setShowNewTaskModal,
+    setShowWizard,
+    language
+  } = useAppContext();
+
+  const appTranslations = {
+    'English': {
+      brandSubtitle: 'AI-Native Vibe Coding Studio',
+      nav: {
+        Chat: 'Chat',
+        Tasks: 'Tasks',
+        Agents: 'Agents',
+        Worktrees: 'Worktrees',
+        Specifications: 'Specifications',
+        Prompts: 'Prompts',
+        Diagnostics: 'Diagnostics',
+        Settings: 'Settings'
+      },
+      activeTasks: 'ACTIVE TASKS',
+      noTasks: 'No tasks found in project.',
+      newProject: 'New Project Wizard'
+    },
+    '简体中文': {
+      brandSubtitle: 'AI原生共振编程工作室',
+      nav: {
+        Chat: '对话',
+        Tasks: '任务中心',
+        Agents: '智能体',
+        Worktrees: '工作区',
+        Specifications: '需求规格',
+        Prompts: '提示词',
+        Diagnostics: '系统诊断',
+        Settings: '系统设置'
+      },
+      activeTasks: '进行中的任务',
+      noTasks: '当前项目中没有找到任何任务。',
+      newProject: '新建项目向导'
+    }
+  };
+
+  const t = appTranslations[language as keyof typeof appTranslations] || appTranslations['English'];
+
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-header">
+        <div className="brand-logo-container" style={{ background: 'transparent', padding: '2px' }}>
+          <img src="/logo.png" alt="MIMICODE" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        </div>
+        <div className="brand-text">
+          <span className="brand-title">MIMIcode Studio</span>
+          <span className="brand-subtitle">{t.brandSubtitle}</span>
+        </div>
+      </div>
+      
+      <div className="sidebar-scrollable">
+        <div className="nav-section">
+          <a href="#" className={`nav-item ${activeNav === 'Chat' ? 'active' : ''}`} onClick={() => { setActiveNav('Chat'); setViewState('list'); setSelectedTaskId(null); }}>
+            <div className="nav-item-left"><Icons.MessageSquare className="nav-icon" /><span>{t.nav.Chat}</span></div>
+          </a>
+          <a href="#" className={`nav-item ${activeNav === 'Tasks' ? 'active' : ''}`} onClick={() => { setActiveNav('Tasks'); setViewState('list'); fetchTasks(); }}>
+            <div className="nav-item-left"><Icons.CheckSquare className="nav-icon" /><span>{t.nav.Tasks}</span></div>
+          </a>
+          <a href="#" className={`nav-item ${activeNav === 'Agents' ? 'active' : ''}`} onClick={() => { setActiveNav('Agents'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.Users className="nav-icon" /><span>{t.nav.Agents}</span></div>
+          </a>
+          <a href="#" className={`nav-item ${activeNav === 'Worktrees' ? 'active' : ''}`} onClick={() => { setActiveNav('Worktrees'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.GitBranch className="nav-icon" /><span>{t.nav.Worktrees}</span></div>
+          </a>
+          <a href="#" className={`nav-item ${activeNav === 'Specifications' ? 'active' : ''}`} onClick={() => { setActiveNav('Specifications'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.BookOpen className="nav-icon" /><span>{t.nav.Specifications}</span></div>
+          </a>
+          <a href="#" className={`nav-item ${activeNav === 'Prompts' ? 'active' : ''}`} onClick={() => { setActiveNav('Prompts'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.FileText className="nav-icon" /><span>{t.nav.Prompts}</span></div>
+          </a>
+          <a href="#" className={`nav-item ${activeNav === 'Diagnostics' ? 'active' : ''}`} onClick={() => { setActiveNav('Diagnostics'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.Activity className="nav-icon" /><span>{t.nav.Diagnostics}</span></div>
+          </a>
+          <a href="#" className={`nav-item ${activeNav === 'Settings' ? 'active' : ''}`} onClick={() => { setActiveNav('Settings'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.Settings className="nav-icon" /><span>{t.nav.Settings}</span></div>
+          </a>
+        </div>
+
+        <div className="nav-section" style={{ marginTop: '12px' }}>
+          <div className="section-header">
+            <span className="section-title">{t.activeTasks}</span>
+            <button className="btn-icon-ghost" title="New Task" onClick={() => setShowNewTaskModal(true)}>
+              <Icons.Plus />
+            </button>
+          </div>
+          
+          {tasks.length === 0 ? (
+             <div style={{ padding: '12px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+               {t.noTasks}
+             </div>
+          ) : tasks.map((task) => (
+            <div 
+              key={task.id}
+              className={`task-card-sidebar ${selectedTaskId === task.id ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedTaskId(task.id);
+                if (activeNav === 'Tasks') setViewState('detail');
+              }}
+            >
+              <div className="task-header-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Icons.FileText style={{ color: 'var(--color-primary-orange)', width: '12px', height: '12px' }} />
+                  <span className="task-id">{task.id}</span>
+                </div>
+                <div className={`task-status-dot ${task.status === 'in_progress' ? 'in-progress' : task.status === 'review' ? 'in-review' : 'pending'}`} />
+              </div>
+              <div className="task-card-title">{task.title}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="sidebar-footer">
+        <button className="btn w-full" style={{ padding: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} onClick={() => setShowWizard(true)}>
+          <Icons.Plus style={{ width: '12px', height: '12px' }}/> {t.newProject}
+        </button>
+      </div>
+    </aside>
+  );
+};

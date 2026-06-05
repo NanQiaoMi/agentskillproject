@@ -38,7 +38,19 @@ const playNotificationSound = () => {
   }
 };
 
-const showNotification = (title: string, body: string) => {
+import { dispatchAppNotification } from './NotificationsPanel';
+
+const showNotification = (title: string, body: string, type: 'agent' | 'system' = 'system', osNotify: boolean = true) => {
+  if (typeof window.dispatchEvent === 'function') {
+    dispatchAppNotification({
+      type,
+      title,
+      desc: body
+    });
+  }
+
+  if (!osNotify) return;
+
   if (!('Notification' in window)) return;
   if (Notification.permission === 'granted') {
     new Notification(title, { body });
@@ -91,6 +103,59 @@ const AgentTerminalInstance: React.FC<{
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const sessionKeyRef = useRef<string | null>(null);
+  
+  const lastDataTimeRef = useRef<number>(Date.now());
+  const pendingInputRef = useRef<string | null>(null);
+
+  const simulateTyping = async (text: string, sessionKey: string) => {
+    for (const char of text) {
+      await invoke('write_to_pty', { sessionKey, data: char });
+      await new Promise(r => setTimeout(r, 30)); // 30ms per char
+    }
+    await new Promise(r => setTimeout(r, 300)); // wait before enter
+    
+    // Send ANSI Focus In (\x1b[I) to trick the TUI into thinking the terminal is focused
+    await invoke('write_to_pty', { sessionKey, data: '\x1b[I' });
+    await new Promise(r => setTimeout(r, 50));
+    
+    // Send the actual Carriage Return
+    await invoke('write_to_pty', { sessionKey, data: '\r' });
+  };
+
+  useEffect(() => {
+    const handleSendInput = (e: any) => {
+      if (e.detail.agentId === agentId) {
+        const timeSinceLastData = Date.now() - lastDataTimeRef.current;
+        if (timeSinceLastData > 1500 && sessionKeyRef.current) {
+          // Agent has been silent for >1.5s, send immediately
+          simulateTyping(e.detail.data, sessionKeyRef.current).catch(console.error);
+        } else {
+          // Agent is busy or booting, queue it for later flush
+          pendingInputRef.current = e.detail.data;
+        }
+      }
+    };
+    window.addEventListener('agent-tui-send-input', handleSendInput);
+    
+    const handleForceRedraw = (e: any) => {
+      if (e.detail.agentId === agentId && sessionKeyRef.current && fitAddonRef.current) {
+        const dims = fitAddonRef.current.proposeDimensions();
+        if (dims) {
+          // 1. Ensure backend is synced to the absolute correct dimensions
+          invoke('resize_pty', { sessionKey: sessionKeyRef.current, cols: dims.cols, rows: dims.rows }).catch(console.error);
+          
+          // 2. Send Ctrl+L (\x0C) to natively tell the TUI app (Claude Code/Ink/Bash) to completely clear the screen and redraw itself
+          invoke('write_to_pty', { sessionKey: sessionKeyRef.current, data: '\x0C' }).catch(console.error);
+        }
+      }
+    };
+    window.addEventListener('agent-tui-force-redraw', handleForceRedraw);
+    
+    return () => {
+      window.removeEventListener('agent-tui-send-input', handleSendInput);
+      window.removeEventListener('agent-tui-force-redraw', handleForceRedraw);
+    };
+  }, [agentId]);
 
   useEffect(() => {
     if (!terminalContainerRef.current) return;
@@ -164,19 +229,31 @@ const AgentTerminalInstance: React.FC<{
       return true;
     });
 
-    // 3. Set up resize → PTY
+    // 3. Set up resize → PTY with strict debounce to prevent conpty corruption
     let lastCols = 0;
     let lastRows = 0;
+    let ptyResizeTimeout: number | null = null;
+    
     const resizeDisposable = term.onResize(async (size) => {
       if (!sessionKeyRef.current) return;
       if (size.cols === lastCols && size.rows === lastRows) return;
       lastCols = size.cols;
       lastRows = size.rows;
-      try {
-        await invoke('resize_pty', { sessionKey: sessionKeyRef.current, cols: size.cols, rows: size.rows });
-      } catch (e) {
-        console.error('Failed to resize pty:', e);
-      }
+      
+      if (ptyResizeTimeout) window.clearTimeout(ptyResizeTimeout);
+      ptyResizeTimeout = window.setTimeout(async () => {
+        try {
+          await invoke('resize_pty', { sessionKey: sessionKeyRef.current, cols: size.cols, rows: size.rows });
+          // Auto-trigger a clean redraw 150ms after the resize is applied to conpty
+          setTimeout(() => {
+            if (sessionKeyRef.current) {
+              invoke('write_to_pty', { sessionKey: sessionKeyRef.current, data: '\x0C' }).catch(() => {});
+            }
+          }, 150);
+        } catch (e) {
+          console.error('Failed to resize pty:', e);
+        }
+      }, 300); // 300ms debounce prevents conpty tearing during window drags
     });
 
     // 4. Set up pty-data listener BEFORE spawning (critical: avoids race condition)
@@ -186,8 +263,7 @@ const AgentTerminalInstance: React.FC<{
     
     // Helper to trigger notifications
     const checkAndNotify = (isExit: boolean = false) => {
-      // Don't annoy the user if they are already actively looking at the window
-      if (document.hasFocus()) return;
+      const isFocused = document.hasFocus();
 
       const taskCompleteNotif = localStorage.getItem('mimi-notif-task-complete') !== 'false';
       const agentInterceptNotif = localStorage.getItem('mimi-notif-agent-intercept') !== 'false';
@@ -198,17 +274,18 @@ const AgentTerminalInstance: React.FC<{
       const isIntercept = dataBuffer.includes('Please review') || !!dataBuffer.match(/\([yY]\/[nN]\)/) || !!dataBuffer.match(/\[[yY]\/[nN]\]/) || dataBuffer.includes('人工确认') || dataBuffer.includes('Confirm') || dataBuffer.includes('Continue?');
 
       if (agentInterceptNotif && isIntercept) {
-        if (soundNotif) playNotificationSound();
-        showNotification('Mimicode Agent', 'Agent requires your review or input.');
+        if (soundNotif && !isFocused) playNotificationSound();
+        showNotification('Mimicode Agent', '智能体需要你的审核或输入。', 'agent', !isFocused);
       } else if (taskCompleteNotif && (isExit || isPrompt || dataBuffer.includes('任务完成') || dataBuffer.includes('Task Complete') || dataBuffer.includes('✨ Done'))) {
-        if (soundNotif) playNotificationSound();
-        showNotification('Mimicode Agent', isExit ? 'Agent has exited/completed the task.' : 'Agent has finished processing.');
+        if (soundNotif && !isFocused) playNotificationSound();
+        showNotification('Mimicode Agent', isExit ? '智能体已退出或完成任务。' : '智能体已处理完毕。', 'agent', !isFocused);
       }
       dataBuffer = ""; // Reset buffer after notification
     };
 
     listen<{ session_key: string; data: string }>('pty-data', (event) => {
       if (event.payload.session_key === sessionKeyRef.current && event.payload.data) {
+        lastDataTimeRef.current = Date.now();
         term.write(event.payload.data);
 
         // Parse Agent Outputs for Notifications
@@ -220,6 +297,12 @@ const AgentTerminalInstance: React.FC<{
         if ((window as any).agentNotifTimeout) clearTimeout((window as any).agentNotifTimeout);
         (window as any).agentNotifTimeout = setTimeout(() => {
           checkAndNotify(false);
+          
+          if (pendingInputRef.current && sessionKeyRef.current) {
+            const data = pendingInputRef.current;
+            pendingInputRef.current = null;
+            simulateTyping(data, sessionKeyRef.current).catch(console.error);
+          }
         }, 1500); // 1.5s of silence implies agent is waiting for input
       }
     }).then(fn => { unlistenTauri = fn; });
@@ -240,7 +323,7 @@ const AgentTerminalInstance: React.FC<{
           if (fitTimeout) window.clearTimeout(fitTimeout);
           fitTimeout = window.setTimeout(() => {
             try { fitAddonRef.current?.fit(); } catch (_) {}
-          }, 20); // Faster feedback to avoid visual lag, but still debounced
+          }, 50); // 50ms frontend debounce
         }
       });
       resizeObserver.observe(terminalContainerRef.current);
@@ -340,6 +423,61 @@ export const AgentTerminalPanel: React.FC<AgentTerminalPanelProps> = ({ projectP
   const [size, setSize] = useState({ width: 600, height: 480 });
   const [preMaxState, setPreMaxState] = useState<{ position: { x: number, y: number }, size: { width: number, height: number } } | null>(null);
   const [collapsedPos, setCollapsedPos] = useState({ x: window.innerWidth - 180, y: 60 });
+  const activeTabRef = useRef(activeTab);
+  const sessionsRef = useRef(sessions);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
+    sessionsRef.current = sessions;
+    window.dispatchEvent(new CustomEvent('agent-tui-status', {
+      detail: { hasActiveSessions: Object.keys(sessions).length > 0 }
+    }));
+  }, [sessions]);
+
+  useEffect(() => {
+    const handleSpawn = (e: any) => {
+      const { agentId, prompt } = e.detail;
+      setIsExpanded(true);
+      setSessions(prev => {
+        if (!prev[agentId]) {
+          return { ...prev, [agentId]: { sessionKey: '' } };
+        }
+        return prev;
+      });
+      setActiveTab(agentId);
+      setSelectedAgent(agentId);
+      
+      if (prompt) {
+        // Wait for React to mount the new AgentTerminalInstance before dispatching
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('agent-tui-send-input', {
+            detail: { agentId, data: prompt }
+          }));
+        }, 100);
+      }
+    };
+
+    const handleInput = (e: any) => {
+      const { data } = e.detail;
+      const currentTab = activeTabRef.current;
+      if (currentTab) {
+        window.dispatchEvent(new CustomEvent('agent-tui-send-input', {
+          detail: { agentId: currentTab, data }
+        }));
+      }
+    };
+
+    window.addEventListener('spawn-agent-tui', handleSpawn);
+    window.addEventListener('send-pty-input', handleInput);
+    
+    return () => {
+      window.removeEventListener('spawn-agent-tui', handleSpawn);
+      window.removeEventListener('send-pty-input', handleInput);
+    };
+  }, []);
 
   useEffect(() => {
     if (!startingAgent || !projectPath) return;
@@ -563,6 +701,15 @@ export const AgentTerminalPanel: React.FC<AgentTerminalPanelProps> = ({ projectP
             </div>
             
             <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className="pty-btn-close" 
+                title="强制重绘 (修复显示错乱)"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('agent-tui-force-redraw', { detail: { agentId: activeTabRef.current } }));
+                }}
+              >
+                <Icons.RefreshCw className="w-4 h-4" />
+              </button>
               <button className="pty-btn-close" onClick={toggleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
                 {isMaximized ? <Icons.Minimize2 className="w-4 h-4" /> : <Icons.Maximize2 className="w-4 h-4" />}
               </button>
@@ -633,6 +780,16 @@ export const AgentTerminalPanel: React.FC<AgentTerminalPanelProps> = ({ projectP
                               {agentData?.name}
                             </div>
                             <div className="pty-tile-actions">
+                              <button 
+                                className="pty-btn-close" 
+                                style={{ width: '20px', height: '20px', marginRight: '4px' }}
+                                title="强制重绘 (修复显示错乱)"
+                                onClick={() => {
+                                  window.dispatchEvent(new CustomEvent('agent-tui-force-redraw', { detail: { agentId } }));
+                                }}
+                              >
+                                <Icons.RefreshCw className="w-3 h-3" />
+                              </button>
                               <button 
                                 className="pty-btn-close" 
                                 style={{ width: '20px', height: '20px' }}

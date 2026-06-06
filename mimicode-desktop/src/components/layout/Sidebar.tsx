@@ -8,22 +8,23 @@ export const Sidebar: React.FC = () => {
     setViewState,
     tasks,
     selectedTaskId, setSelectedTaskId,
-    fetchTasks,
     setShowNewTaskModal,
     setShowWizard,
     language
   } = useAppContext();
 
   const appTranslations = {
-    'English': {
+      'English': {
       brandSubtitle: 'AI-Native Vibe Coding Studio',
       nav: {
+        Dashboard: 'CEO Dashboard',
         Chat: 'Chat',
         Tasks: 'Tasks',
         Agents: 'Agents',
         Worktrees: 'Worktrees',
         Specifications: 'Specifications',
         Prompts: 'Prompts',
+        Blueprints: 'Blueprints',
         Diagnostics: 'Diagnostics',
         Settings: 'Settings'
       },
@@ -34,12 +35,14 @@ export const Sidebar: React.FC = () => {
     '简体中文': {
       brandSubtitle: 'AI原生共振编程工作室',
       nav: {
+        Dashboard: 'CEO 总控台',
         Chat: '对话',
         Tasks: '任务中心',
         Agents: '智能体',
         Worktrees: '工作区',
         Specifications: '需求规格',
         Prompts: '提示词',
+        Blueprints: '工作流蓝图',
         Diagnostics: '系统诊断',
         Settings: '系统设置'
       },
@@ -65,29 +68,27 @@ export const Sidebar: React.FC = () => {
       
       <div className="sidebar-scrollable">
         <div className="nav-section">
-          <a href="#" className={`nav-item ${activeNav === 'Chat' ? 'active' : ''}`} onClick={() => { setActiveNav('Chat'); setViewState('list'); setSelectedTaskId(null); }}>
-            <div className="nav-item-left"><Icons.MessageSquare className="nav-icon" /><span>{t.nav.Chat}</span></div>
+          <a href="#" className={`nav-item ${activeNav === 'Dashboard' ? 'active' : ''}`} onClick={() => { setActiveNav('Dashboard'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.Activity className="nav-icon" /><span>{t.nav.Dashboard || 'CEO Dashboard'}</span></div>
           </a>
-          <a href="#" className={`nav-item ${activeNav === 'Tasks' ? 'active' : ''}`} onClick={() => { setActiveNav('Tasks'); setViewState('list'); fetchTasks(); }}>
-            <div className="nav-item-left"><Icons.CheckSquare className="nav-icon" /><span>{t.nav.Tasks}</span></div>
+          
+          <div className="section-header" style={{ marginTop: '16px', marginBottom: '8px' }}>
+            <span className="section-title">COMPANY LEADERS</span>
+          </div>
+
+          <a href="#" className={`nav-item ${activeNav === 'LeaderMarketing' ? 'active' : ''}`} onClick={() => { setActiveNav('LeaderMarketing'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.Users className="nav-icon" /><span>Marketing Leader</span></div>
           </a>
-          <a href="#" className={`nav-item ${activeNav === 'Agents' ? 'active' : ''}`} onClick={() => { setActiveNav('Agents'); setViewState('list'); }}>
-            <div className="nav-item-left"><Icons.Users className="nav-icon" /><span>{t.nav.Agents}</span></div>
+          <a href="#" className={`nav-item ${activeNav === 'LeaderEngineering' ? 'active' : ''}`} onClick={() => { setActiveNav('LeaderEngineering'); setViewState('list'); }}>
+            <div className="nav-item-left"><Icons.Network className="nav-icon" /><span>Engineering Leader</span></div>
           </a>
-          <a href="#" className={`nav-item ${activeNav === 'Worktrees' ? 'active' : ''}`} onClick={() => { setActiveNav('Worktrees'); setViewState('list'); }}>
-            <div className="nav-item-left"><Icons.GitBranch className="nav-icon" /><span>{t.nav.Worktrees}</span></div>
-          </a>
-          <a href="#" className={`nav-item ${activeNav === 'Specifications' ? 'active' : ''}`} onClick={() => { setActiveNav('Specifications'); setViewState('list'); }}>
-            <div className="nav-item-left"><Icons.BookOpen className="nav-icon" /><span>{t.nav.Specifications}</span></div>
-          </a>
-          <a href="#" className={`nav-item ${activeNav === 'Prompts' ? 'active' : ''}`} onClick={() => { setActiveNav('Prompts'); setViewState('list'); }}>
-            <div className="nav-item-left"><Icons.FileText className="nav-icon" /><span>{t.nav.Prompts}</span></div>
-          </a>
-          <a href="#" className={`nav-item ${activeNav === 'Diagnostics' ? 'active' : ''}`} onClick={() => { setActiveNav('Diagnostics'); setViewState('list'); }}>
-            <div className="nav-item-left"><Icons.Activity className="nav-icon" /><span>{t.nav.Diagnostics}</span></div>
-          </a>
+
+          <div className="section-header" style={{ marginTop: '16px', marginBottom: '8px' }}>
+            <span className="section-title">SYSTEM</span>
+          </div>
+
           <a href="#" className={`nav-item ${activeNav === 'Settings' ? 'active' : ''}`} onClick={() => { setActiveNav('Settings'); setViewState('list'); }}>
-            <div className="nav-item-left"><Icons.Settings className="nav-icon" /><span>{t.nav.Settings}</span></div>
+            <div className="nav-item-left"><Icons.Settings className="nav-icon" /><span>{t.nav.Settings || 'Settings'}</span></div>
           </a>
         </div>
 

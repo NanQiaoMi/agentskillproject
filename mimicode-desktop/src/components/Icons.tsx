@@ -6,12 +6,13 @@ import {
   Terminal, CheckCircle2, Copy, Search, RefreshCw, MoreHorizontal,
   Play, Edit2, ArrowLeft, BookOpen, Layout, Clock, ChevronRight, Link,
   Box, Trash2, Square, Grid, Maximize2, Minimize2, X, Bell, Command,
-  Info, XCircle, ArrowRight, Star, Lightbulb
+  Info, XCircle, ArrowRight, Star, Lightbulb, Network
 } from 'lucide-react';
 
 const SW = 1.75; // Premium stroke width
 
 export const Icons = {
+  Network: (props: React.SVGProps<SVGSVGElement>) => <Network strokeWidth={SW} {...props as any} />,
   // Sidebar Nav
   MessageSquare: (props: React.SVGProps<SVGSVGElement>) => <MessageSquare strokeWidth={SW} {...props as any} />,
   CheckSquare: (props: React.SVGProps<SVGSVGElement>) => <CheckSquare strokeWidth={SW} {...props as any} />,

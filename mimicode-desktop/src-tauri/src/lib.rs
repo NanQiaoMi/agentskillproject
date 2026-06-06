@@ -8,6 +8,10 @@ use chrono::Local;
 use tauri::Emitter;
 use tauri::Manager;
 
+pub mod blueprint;
+pub mod engine;
+pub mod store;
+
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
@@ -2421,12 +2425,40 @@ async fn initialize_project(project_path: String) -> Result<String, String> {
     Ok("Project initialized successfully".to_string())
 }
 
+#[tauri::command]
+fn save_blueprints(app_handle: tauri::AppHandle, data: String) -> Result<(), String> {
+    crate::store::save_json(&app_handle, "blueprints.json", &data)
+}
+
+#[tauri::command]
+fn load_blueprints(app_handle: tauri::AppHandle) -> Result<String, String> {
+    crate::store::load_json(&app_handle, "blueprints.json")
+}
+
+#[tauri::command]
+fn save_run_record(app_handle: tauri::AppHandle, run_data: String) -> Result<(), String> {
+    let existing = crate::store::load_json(&app_handle, "history.json").unwrap_or_else(|_| "[]".to_string());
+    let mut history: Vec<serde_json::Value> = serde_json::from_str(&existing).unwrap_or_default();
+    if let Ok(new_run) = serde_json::from_str::<serde_json::Value>(&run_data) {
+        history.push(new_run);
+        let updated = serde_json::to_string(&history).unwrap_or_else(|_| "[]".to_string());
+        crate::store::save_json(&app_handle, "history.json", &updated)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_run_history(app_handle: tauri::AppHandle) -> Result<String, String> {
+    crate::store::load_json(&app_handle, "history.json")
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|_app| {
+            _app.manage(engine::EngineState::default());
             // Set window icon from icons/icon.png
             // Try multiple possible locations for the icon file
             let possible_paths = vec![
@@ -2499,7 +2531,13 @@ pub fn run() {
             resize_pty,
             kill_pty,
             search_codebase,
-            open_file_in_editor
+            open_file_in_editor,
+            engine::run_blueprint_engine,
+            engine::resolve_approval,
+            save_blueprints,
+            load_blueprints,
+            save_run_record,
+            get_run_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

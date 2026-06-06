@@ -4,15 +4,10 @@ import { Icons } from "./components/Icons";
 import { EnvStatus } from "./types";
 
 // Import Views
-import { ChatView } from "./views/ChatView";
 import { TasksView } from "./views/TasksView";
-import { TaskDetailView } from "./views/TaskDetailView";
-import { AgentsView } from "./views/AgentsView";
-import { WorktreesView } from "./views/WorktreesView";
 import { DiagnosticsView } from "./views/DiagnosticsView";
 import { SettingsView } from "./views/SettingsView";
-import { SpecificationsView } from "./views/SpecificationsView";
-import { PromptsView } from "./views/PromptsView";
+import { BlueprintsView } from "./views/BlueprintsView";
 import { NewProjectWizard } from "./components/NewProjectWizard";
 import { AgentTerminalPanel } from "./components/AgentTerminalPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -32,14 +27,13 @@ function App() {
     projectPath, setProjectPath,
     envStatus, setEnvStatus,
     tasks,
-    selectedTaskId, setSelectedTaskId,
-    activeNav, setActiveNav,
+    setSelectedTaskId,
+    activeNav,
     viewState, setViewState,
-    chatInputText, setChatInputText,
     showSearchModal, setShowSearchModal,
     showWizard, setShowWizard,
-    fetchTasks, handleSelectDirectory,
-    toasts, addToast, removeToast,
+    fetchTasks,
+    toasts, removeToast,
     setLanguage
   } = useAppContext();
 
@@ -85,7 +79,6 @@ function App() {
 
   useEffect(() => {
     (window as any).setShowInterceptionModal = setShowInterceptionModal;
-    (window as any).showToast = addToast;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -120,34 +113,8 @@ function App() {
     }
   }
 
-  const selectedTask = tasks.find(t => t.id === selectedTaskId);
-
   const renderMainContent = () => {
-    if (activeNav === 'Chat') {
-      return (
-        <ChatView 
-          projectPath={projectPath}
-          selectedTask={selectedTask || null}
-          tasks={tasks}
-          setSelectedTaskId={setSelectedTaskId}
-          chatInputText={chatInputText}
-          setChatInputText={setChatInputText}
-          handleSelectDirectory={handleSelectDirectory}
-          fetchTasks={fetchTasks}
-          onNavigate={(nav: string) => setActiveNav(nav)}
-        />
-      );
-    } else if (activeNav === 'Tasks') {
-      if (viewState === 'detail' && selectedTask) {
-        return (
-          <TaskDetailView 
-            task={selectedTask} 
-            projectPath={projectPath}
-            fetchTasks={fetchTasks}
-            onBack={() => setViewState('list')} 
-          />
-        );
-      }
+    if (activeNav === 'Dashboard') {
       return (
         <TasksView 
           tasks={tasks} 
@@ -158,20 +125,18 @@ function App() {
           }} 
         />
       );
-    } else if (activeNav === 'Agents') {
-      return <AgentsView projectPath={projectPath} onNavigate={(nav) => setActiveNav(nav)} />;
-    } else if (activeNav === 'Worktrees') {
-      return <WorktreesView projectPath={projectPath} />;
-    } else if (activeNav === 'Specifications') {
-      return <SpecificationsView projectPath={projectPath} />;
-    } else if (activeNav === 'Prompts') {
-      return <PromptsView projectPath={projectPath} />;
-    } else if (activeNav === 'Diagnostics') {
-      return <DiagnosticsView envStatus={envStatus} projectPath={projectPath} />;
+    } else if (activeNav === 'LeaderMarketing' || activeNav === 'LeaderEngineering') {
+      // In a full implementation, we'd pass leaderId to load specific blueprints
+      // For now we'll just render BlueprintsView
+      return <BlueprintsView />;
     } else if (activeNav === 'Settings') {
       return <SettingsView projectPath={projectPath} />;
+    } else if (activeNav === 'Diagnostics') {
+      return <DiagnosticsView envStatus={envStatus} projectPath={projectPath} />;
     }
-    return <div className="view-container">Not Implemented</div>;
+    
+    // Fallback for old states
+    return <div className="view-container">Not Implemented / Changed in Phase 7</div>;
   };
 
   return (

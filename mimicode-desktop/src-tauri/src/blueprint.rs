@@ -11,6 +11,7 @@ pub enum BlueprintNodeType {
     Manager,
     ManagerSlot,
     Summary,
+    Loop,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]

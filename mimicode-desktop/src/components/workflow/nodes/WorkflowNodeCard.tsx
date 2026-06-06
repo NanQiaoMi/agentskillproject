@@ -11,10 +11,11 @@ import {
   Clock3,
   Network,
   Users,
-  Combine
+  Combine,
+  Repeat2
 } from "lucide-react";
 
-export type WorkflowNodeType = "trigger" | "agent" | "condition" | "approval" | "manager" | "manager_slot" | "summary";
+export type WorkflowNodeType = "trigger" | "agent" | "condition" | "approval" | "manager" | "manager_slot" | "summary" | "loop";
 export type WorkflowNodeRunStatus = "idle" | "running" | "succeeded" | "failed" | "waiting_approval" | "skipped";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
@@ -31,7 +32,8 @@ const typeIcon: Record<WorkflowNodeType, React.ElementType> = {
   approval: UserCheck,
   manager: Network,
   manager_slot: Users,
-  summary: Combine
+  summary: Combine,
+  loop: Repeat2
 };
 
 function statusIcon(status?: WorkflowNodeRunStatus) {

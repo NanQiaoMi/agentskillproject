@@ -2426,30 +2426,30 @@ async fn initialize_project(project_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn save_blueprints(app_handle: tauri::AppHandle, data: String) -> Result<(), String> {
-    crate::store::save_json(&app_handle, "blueprints.json", &data)
+fn save_blueprints(app_handle: tauri::AppHandle, company_id: String, data: String) -> Result<(), String> {
+    crate::store::save_json(&app_handle, Some(&company_id), "blueprints.json", &data)
 }
 
 #[tauri::command]
-fn load_blueprints(app_handle: tauri::AppHandle) -> Result<String, String> {
-    crate::store::load_json(&app_handle, "blueprints.json")
+fn load_blueprints(app_handle: tauri::AppHandle, company_id: String) -> Result<String, String> {
+    crate::store::load_json(&app_handle, Some(&company_id), "blueprints.json")
 }
 
 #[tauri::command]
-fn save_run_record(app_handle: tauri::AppHandle, run_data: String) -> Result<(), String> {
-    let existing = crate::store::load_json(&app_handle, "history.json").unwrap_or_else(|_| "[]".to_string());
+fn save_run_record(app_handle: tauri::AppHandle, company_id: String, run_data: String) -> Result<(), String> {
+    let existing = crate::store::load_json(&app_handle, Some(&company_id), "history.json").unwrap_or_else(|_| "[]".to_string());
     let mut history: Vec<serde_json::Value> = serde_json::from_str(&existing).unwrap_or_default();
     if let Ok(new_run) = serde_json::from_str::<serde_json::Value>(&run_data) {
         history.push(new_run);
         let updated = serde_json::to_string(&history).unwrap_or_else(|_| "[]".to_string());
-        crate::store::save_json(&app_handle, "history.json", &updated)?;
+        crate::store::save_json(&app_handle, Some(&company_id), "history.json", &updated)?;
     }
     Ok(())
 }
 
 #[tauri::command]
-fn get_run_history(app_handle: tauri::AppHandle) -> Result<String, String> {
-    crate::store::load_json(&app_handle, "history.json")
+fn get_run_history(app_handle: tauri::AppHandle, company_id: String) -> Result<String, String> {
+    crate::store::load_json(&app_handle, Some(&company_id), "history.json")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

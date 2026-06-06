@@ -51,7 +51,7 @@ export const BlueprintsView: React.FC = () => {
   const fetchHistory = useCallback(async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const hist = await invoke<string>('get_run_history');
+      const hist = await invoke<string>('get_run_history', { companyId: 'default_company' });
       setHistoryLogs(JSON.parse(hist));
     } catch (e) {
       console.error(e);
@@ -158,7 +158,7 @@ export const BlueprintsView: React.FC = () => {
             blueprintId: "default-blueprint",
             nodes: currentNodes.map(n => ({ id: n.id, label: n.data.label, status: n.data.status, output: n.data.output }))
           };
-          invoke('save_run_record', { runData: JSON.stringify(runRecord) });
+          invoke('save_run_record', { companyId: 'default_company', runData: JSON.stringify(runRecord) });
           return currentNodes;
         });
       }, 500);

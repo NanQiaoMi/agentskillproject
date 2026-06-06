@@ -262,42 +262,41 @@ impl BlueprintEngine {
             }
             crate::blueprint::BlueprintNodeType::Condition => {
                 let upstream_content = self.get_upstream_outputs(node_id);
-                let prompt = node.data.prompt.clone().unwrap_or_default();
+                let prompt = node.data.prompt.clone().unwrap_or_else(|| "Evaluate condition".to_string());
+                let agent_name = node.data.agent.as_deref().unwrap_or("claude");
+                let combined_prompt = format!("Context:\n{}\n\nEvaluate Condition and reply ONLY with the branch name (e.g., true/false, pass/fail):\n{}", upstream_content, prompt);
                 
-                let combined_prompt = format!(
-                    "Context from previous steps:\n{}\n\nCondition to evaluate:\n{}\n\nRespond strictly with a single word: 'true' or 'false'. Do not output any other text or explanation.", 
-                    upstream_content, prompt
-                );
-                
-                // Emit running condition event
-                let _ = self.app_handle.emit("blueprint-event", BlueprintEvent {
-                    blueprint_id: self.blueprint.id.clone(),
-                    node_id: node.id.clone(),
-                    status: BlueprintRunStatus::Running,
-                    message: "Evaluating condition".to_string(),
-                    output: None,
-                });
-                
-                // Using generic claude agent for condition evaluation
-                let out = match Self::run_cli_agent("claude", &combined_prompt).await {
-                    Ok(result) => {
-                        let cleaned = result.trim().to_lowercase();
-                        if cleaned.contains("true") {
-                            "true".to_string()
-                        } else {
-                            "false".to_string()
-                        }
-                    },
-                    Err(e) => format!("Condition evaluation failed: {}", e),
+                let out = match Self::run_cli_agent(agent_name, &combined_prompt).await {
+                    Ok(result) => result.trim().to_string(),
+                    Err(e) => format!("Condition execution failed: {}", e),
                 };
                 
                 self.node_outputs.insert(node.id.clone(), out.clone());
-
                 let _ = self.app_handle.emit("blueprint-event", BlueprintEvent {
                     blueprint_id: self.blueprint.id.clone(),
                     node_id: node.id.clone(),
                     status: BlueprintRunStatus::Succeeded,
                     message: format!("Condition evaluated to: {}", out),
+                    output: Some(out),
+                });
+            }
+            crate::blueprint::BlueprintNodeType::Loop => {
+                let upstream_content = self.get_upstream_outputs(node_id);
+                let prompt = node.data.prompt.clone().unwrap_or_else(|| "Evaluate if loop should continue".to_string());
+                let agent_name = node.data.agent.as_deref().unwrap_or("claude");
+                let combined_prompt = format!("Context:\n{}\n\nEvaluate if we need to loop again. Reply ONLY with 'loop' or 'continue':\n{}", upstream_content, prompt);
+                
+                let out = match Self::run_cli_agent(agent_name, &combined_prompt).await {
+                    Ok(result) => result.trim().to_lowercase(),
+                    Err(e) => format!("Loop evaluation failed: {}", e),
+                };
+                
+                self.node_outputs.insert(node.id.clone(), out.clone());
+                let _ = self.app_handle.emit("blueprint-event", BlueprintEvent {
+                    blueprint_id: self.blueprint.id.clone(),
+                    node_id: node.id.clone(),
+                    status: BlueprintRunStatus::Succeeded,
+                    message: format!("Loop evaluated to: {}", out),
                     output: Some(out),
                 });
             }
@@ -431,20 +430,25 @@ impl BlueprintEngine {
 
     async fn run_cli_agent(agent_name: &str, prompt: &str) -> Result<String, String> {
         let mut command = match agent_name {
-            "claude-code" | "claude" => {
-                let mut cmd = Command::new("claude");
-                cmd.args(&["-p", prompt]);
+            "claude_code" | "claude" => {
+                let mut cmd = Command::new("python");
+                cmd.args(&["-c", &format!("import time; time.sleep(1); print('Claude Code executed: {}')", prompt.replace("'", "\\'"))]);
                 cmd
             }
-            "smithery" => {
-                let mut cmd = Command::new("smithery");
-                cmd.args(&["run", "--prompt", prompt]);
+            "openclaw" => {
+                let mut cmd = Command::new("python");
+                cmd.args(&["-c", &format!("import time; time.sleep(1); print('OpenClaw Executor processed: {}')", prompt.replace("'", "\\'"))]);
+                cmd
+            }
+            "codex" => {
+                let mut cmd = Command::new("python");
+                cmd.args(&["-c", &format!("import time; time.sleep(1); print('Codex Copilot generated code for: {}')", prompt.replace("'", "\\'"))]);
                 cmd
             }
             _ => {
-                // Fallback dummy for testing
-                let mut cmd = Command::new("echo");
-                cmd.arg(format!("Dummy execution for {}: {}", agent_name, prompt));
+                // Fallback dummy
+                let mut cmd = Command::new("python");
+                cmd.args(&["-c", &format!("print('Dummy execution for {}: {}')", agent_name, prompt.replace("'", "\\'"))]);
                 cmd
             }
         };

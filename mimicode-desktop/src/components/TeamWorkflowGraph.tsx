@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { ReactFlow, Background, Handle, Position, Node, Edge, MarkerType, ReactFlowProvider, useReactFlow } from '@xyflow/react';
+import { ReactFlow, Background, Handle, Position, Node, Edge, MarkerType, ReactFlowProvider, useReactFlow, Controls } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Icons } from './Icons';
 import { FeedbackEdge } from './FeedbackEdge';
@@ -441,6 +441,7 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
         >
           <Background color="#D1D5DB" gap={24} size={2} />
           <FitViewHandler nodes={nodes} />
+          <Controls />
         </ReactFlow>
       </div>
       {/* Modern Terminal Console */}

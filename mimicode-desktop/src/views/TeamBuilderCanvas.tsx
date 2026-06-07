@@ -57,10 +57,15 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
   const [isDocScanning, setIsDocScanning] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
 
+  const nodesRef = useRef(nodes);
+  React.useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
   React.useEffect(() => {
     const handleEdit = (e: any) => {
       const id = e.detail.id;
-      const node = nodes.find(n => n.id === id);
+      const node = nodesRef.current.find(n => n.id === id);
       if (node) {
         setEditingNodeId(id);
         setTaskForm({
@@ -71,7 +76,7 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
     };
     window.addEventListener('edit-agent-node', handleEdit);
     return () => window.removeEventListener('edit-agent-node', handleEdit);
-  }, [nodes]);
+  }, []);
 
   React.useEffect(() => {
     localStorage.setItem('mimi-team-flow-nodes', JSON.stringify(nodes));

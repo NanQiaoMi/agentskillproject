@@ -124,17 +124,23 @@ const edgeTypes = {
   feedback: FeedbackEdge
 };
 
-const FitViewHandler: React.FC<{ nodes: Node[]; edges: Edge[] }> = ({ nodes, edges }) => {
+const FitViewHandler: React.FC<{ nodes: Node[] }> = ({ nodes }) => {
   const { fitView } = useReactFlow();
+
+  // Only trigger fitView when the actual graph structure (nodes list, layout positions) changes.
+  // This prevents resetting user's manual adjustments on execution event/active state updates.
+  const structureKey = useMemo(() => {
+    return nodes.map(n => `${n.id}:${Math.round(n.position.x)}:${Math.round(n.position.y)}`).join(',');
+  }, [nodes]);
 
   useEffect(() => {
     if (nodes.length > 0) {
       const timer = setTimeout(() => {
-        fitView({ padding: 0.15, duration: 400 });
-      }, 100);
+        fitView({ padding: 0.15, duration: 450 });
+      }, 150);
       return () => clearTimeout(timer);
     }
-  }, [nodes, edges, fitView]);
+  }, [structureKey, fitView]);
 
   return null;
 };
@@ -420,17 +426,21 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
           edgeTypes={edgeTypes}
           colorMode="light"
           proOptions={{ hideAttribution: true }}
-          nodesDraggable={false}
-          panOnDrag={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          zoomOnDoubleClick={false}
+          fitView
+          fitViewOptions={{ padding: 0.15 }}
+          minZoom={0.05}
+          maxZoom={2}
+          nodesDraggable={true}
+          panOnDrag={true}
+          zoomOnScroll={true}
+          zoomOnPinch={true}
+          zoomOnDoubleClick={true}
           nodesConnectable={false}
-          elementsSelectable={false}
-          preventScrolling={true}
+          elementsSelectable={true}
+          preventScrolling={false}
         >
           <Background color="#D1D5DB" gap={24} size={2} />
-          <FitViewHandler nodes={nodes} edges={edges} />
+          <FitViewHandler nodes={nodes} />
         </ReactFlow>
       </div>
       {/* Modern Terminal Console */}

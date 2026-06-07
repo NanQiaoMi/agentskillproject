@@ -11,6 +11,7 @@ import {
   Edge,
   Node,
   ReactFlowProvider,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Icons } from '../components/Icons';
@@ -19,6 +20,7 @@ import { FeedbackEdge } from '../components/FeedbackEdge';
 import { invoke } from '@tauri-apps/api/core';
 import { compileGraphToCrewAI } from '../utils/agentCompiler';
 import { TEAM_TEMPLATES, TeamTemplate } from '../utils/teamTemplates';
+import dagre from 'dagre';
 
 interface TeamBuilderCanvasProps {
   projectPath: string;
@@ -26,6 +28,34 @@ interface TeamBuilderCanvasProps {
 }
 
 const getId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+
+const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 100 });
+
+  nodes.forEach((node) => {
+    // Standard bounding box for AgentNode cards (220px width, 130px height)
+    dagreGraph.setNode(node.id, { width: 220, height: 130 });
+  });
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(dagreGraph);
+
+  return nodes.map((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    return {
+      ...node,
+      position: {
+        x: nodeWithPosition.x - 110, // Convert center back to top-left (half of 220px)
+        y: nodeWithPosition.y - 65,  // Convert center back to top-left (half of 130px)
+      },
+    };
+  });
+};
 
 const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath, onNavigateToTeam }) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -227,6 +257,19 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
       setEditingNodeId(null);
     }
   };
+
+  const { fitView } = useReactFlow();
+
+  const handleAutoLayout = useCallback(() => {
+    if (nodes.length === 0) return;
+    const layoutedNodes = getLayoutedElements(nodes, edges);
+    setNodes(layoutedNodes);
+    
+    // Automatically fit view after coordinates are updated
+    setTimeout(() => {
+      fitView({ padding: 0.15, duration: 450 });
+    }, 100);
+  }, [nodes, edges, setNodes, fitView]);
 
   const handleAiPlan = async () => {
     if (!globalGoal.trim()) {
@@ -750,6 +793,28 @@ Respond ONLY with a valid JSON object in this exact format:
             }}
           >
             <span style={{ fontSize: '14px', lineHeight: 1 }}>🤖</span> AI 一键规划任务
+          </button>
+
+          <button 
+            onClick={handleAutoLayout}
+            style={{
+              width: '100%', padding: '10px', borderRadius: '6px', 
+              border: '1px solid #E0F2FE', backgroundColor: '#FFFFFF',
+              color: '#0284C7', cursor: 'pointer', 
+              fontWeight: 600, fontSize: '13px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px',
+              transition: 'all 0.2s',
+              boxShadow: '0 1px 2px rgba(2, 132, 199, 0.05)'
+            }}
+            onMouseEnter={(e) => { 
+              e.currentTarget.style.backgroundColor = '#F0F9FF';
+              e.currentTarget.style.borderColor = '#7DD3FC';
+            }}
+            onMouseLeave={(e) => { 
+              e.currentTarget.style.backgroundColor = '#FFFFFF';
+              e.currentTarget.style.borderColor = '#E0F2FE';
+            }}
+          >
+            <Icons.Sparkles style={{ width: '14px', height: '14px', color: '#0284C7' }} /> 一键美化排版
           </button>
           
           <button 

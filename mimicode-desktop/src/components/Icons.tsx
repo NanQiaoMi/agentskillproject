@@ -6,12 +6,14 @@ import {
   Terminal, CheckCircle2, Copy, Search, RefreshCw, MoreHorizontal,
   Play, Edit2, ArrowLeft, BookOpen, Layout, Clock, ChevronRight, Link,
   Box, Trash2, Square, Grid, Maximize2, Minimize2, X, Bell, Command,
-  Info, XCircle, ArrowRight, Star, Lightbulb
+  Info, XCircle, ArrowRight, Star, Lightbulb, Brain, Bot, Sparkles
 } from 'lucide-react';
 
 const SW = 1.75; // Premium stroke width
 
 export const Icons = {
+  Brain: (props: React.SVGProps<SVGSVGElement>) => <Brain strokeWidth={SW} {...props as any} />,
+  Bot: (props: React.SVGProps<SVGSVGElement>) => <Bot strokeWidth={SW} {...props as any} />,
   // Sidebar Nav
   MessageSquare: (props: React.SVGProps<SVGSVGElement>) => <MessageSquare strokeWidth={SW} {...props as any} />,
   CheckSquare: (props: React.SVGProps<SVGSVGElement>) => <CheckSquare strokeWidth={SW} {...props as any} />,
@@ -67,4 +69,5 @@ export const Icons = {
   ArrowRight: (props: React.SVGProps<SVGSVGElement>) => <ArrowRight strokeWidth={SW} {...props as any} />,
   Star: (props: React.SVGProps<SVGSVGElement>) => <Star strokeWidth={SW} {...props as any} />,
   Lightbulb: (props: React.SVGProps<SVGSVGElement>) => <Lightbulb strokeWidth={SW} {...props as any} />,
+  Sparkles: (props: React.SVGProps<SVGSVGElement>) => <Sparkles strokeWidth={SW} {...props as any} />,
 };

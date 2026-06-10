@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   ReactFlow,
-  MiniMap,
   Controls,
   Background,
   useNodesState,
@@ -901,7 +900,12 @@ Respond ONLY with a valid JSON object in this exact format:
       </div>
 
       {/* Canvas Area */}
-      <div style={{ flex: 1, height: '100%' }} ref={reactFlowWrapper}>
+      <div style={{ 
+        flex: 1, 
+        height: '100%', 
+        background: 'radial-gradient(circle at 50% 50%, #1e1e24 0%, #0f0f13 100%)',
+        position: 'relative'
+      }} ref={reactFlowWrapper}>
         <ReactFlow
           nodes={nodes}
           edges={edges.map(e => {
@@ -931,9 +935,8 @@ Respond ONLY with a valid JSON object in this exact format:
           maxZoom={2}
           colorMode="dark"
         >
-          <Controls />
-          <MiniMap />
-          <Background variant={"dots" as any} gap={12} size={1} color="var(--color-text-muted)" />
+          <Controls style={{ backgroundColor: 'rgba(30, 32, 40, 0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', overflow: 'hidden' }} />
+          <Background variant={"dots" as any} gap={24} size={2} color="rgba(255, 255, 255, 0.05)" />
         </ReactFlow>
       </div>
     </div>

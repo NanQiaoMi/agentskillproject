@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
+import mermaid from 'mermaid';
 
 
 
@@ -177,7 +178,9 @@ const parseMarkdown = (md: string): string => {
     const placeholder = getPlaceholder(codeBlocks.length);
     const escapedCode = codeContent.replace(/&(?!lt;|gt;|amp;|quot;|apos;)/g, '&amp;');
     
-    const isMermaid = lang?.trim().toLowerCase() === 'mermaid';
+    const isMermaid = lang?.trim().toLowerCase() === 'mermaid' || 
+                      codeContent.trim().startsWith('graph ') || 
+                      codeContent.trim().startsWith('flowchart ');
     
     const html = isMermaid ? `
       <div class="mermaid" style="background-color: #0b1329; border: 1px solid var(--color-border); border-radius: 12px; padding: 24px; margin: 24px 0; display: flex; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow-x: auto; color: #E2E8F0;">
@@ -294,12 +297,6 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
     try { return localStorage.getItem('mimi-language') || '简体中文'; } catch { return '简体中文'; }
   });
 
-  useEffect(() => {
-    const handleLang = (e: any) => setLanguage(e.detail);
-    window.addEventListener('mimi-language-changed', handleLang);
-    return () => window.removeEventListener('mimi-language-changed', handleLang);
-  }, []);
-
   const [activeTab, setActiveTab] = useState('Architecture'); // PRD, Design, Architecture, API Contracts
   const [content, setContent] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -311,52 +308,53 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
   const [hasJsonError, setHasJsonError] = useState(false);
   const [activeSection, setActiveSection] = useState('系统架构总览');
 
-  // Dynamic loading and running of Mermaid
+  useEffect(() => {
+    const handleLang = (e: any) => setLanguage(e.detail);
+    window.addEventListener('mimi-language-changed', handleLang);
+    return () => window.removeEventListener('mimi-language-changed', handleLang);
+  }, []);
+
+  // Initialize Mermaid once on mount
+  useEffect(() => {
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        securityLevel: 'loose',
+        themeVariables: {
+          background: '#0b1329',
+          primaryColor: '#1e293b',
+          primaryTextColor: '#f8fafc',
+          lineColor: '#38bdf8',
+        }
+      });
+    } catch (e) {
+      console.error("Failed to initialize mermaid", e);
+    }
+  }, []);
+
+  // Run mermaid when content, activeTab, or editing status changes
   useEffect(() => {
     let active = true;
-    const initMermaid = async () => {
-      if (!(window as any).mermaid) {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
-        script.async = true;
-        script.onload = () => {
-          if (!active) return;
-          try {
-            (window as any).mermaid.initialize({
-              startOnLoad: false,
-              theme: 'dark',
-              securityLevel: 'loose',
-              themeVariables: {
-                background: '#0b1329',
-                primaryColor: '#1e293b',
-                primaryTextColor: '#f8fafc',
-                lineColor: '#38bdf8',
-              }
-            });
-            (window as any).mermaid.run().catch((err: any) => console.error("Mermaid run error", err));
-          } catch (e) {
-            console.error("Failed to initialize mermaid", e);
-          }
-        };
-        document.body.appendChild(script);
-      } else {
-        setTimeout(() => {
-          if (!active) return;
-          try {
-            (window as any).mermaid.run().catch((err: any) => console.error("Mermaid run error", err));
-          } catch (e) {
-            console.error("Failed to run mermaid", e);
-          }
-        }, 100);
+    const runMermaid = async () => {
+      // Small delay to ensure React has finished rendering the content in dangerouslySetInnerHTML
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      if (!active) return;
+      try {
+        await mermaid.run();
+      } catch (err) {
+        console.error("Mermaid run error:", err);
       }
     };
 
-    initMermaid();
+    runMermaid();
 
     return () => {
       active = false;
     };
   }, [content, editContent, activeTab, isEditing]);
+
+
 
   const handleSectionClick = (title: string) => {
     setActiveSection(title);

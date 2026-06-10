@@ -79,7 +79,7 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [taskForm, setTaskForm] = useState({ taskDescription: '', expectedOutput: '' });
+  const [taskForm, setTaskForm] = useState({ taskDescription: '', expectedOutput: '', asyncExecution: false });
   
   const [aiPlanModalOpen, setAiPlanModalOpen] = useState(false);
   const [globalGoal, setGlobalGoal] = useState('');
@@ -100,7 +100,8 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
         setEditingNodeId(id);
         setTaskForm({
           taskDescription: (node.data.taskDescription as string) || '',
-          expectedOutput: (node.data.expectedOutput as string) || ''
+          expectedOutput: (node.data.expectedOutput as string) || '',
+          asyncExecution: !!node.data.asyncExecution
         });
       }
     };
@@ -247,7 +248,8 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
               data: {
                 ...node.data,
                 taskDescription: taskForm.taskDescription,
-                expectedOutput: taskForm.expectedOutput
+                expectedOutput: taskForm.expectedOutput,
+                asyncExecution: taskForm.asyncExecution
               }
             };
           }
@@ -259,6 +261,26 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
   };
 
   const { fitView } = useReactFlow();
+
+  React.useEffect(() => {
+    const el = reactFlowWrapper.current;
+    if (!el) return;
+
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && lastWidth === 0) {
+          setTimeout(() => {
+            fitView({ padding: 0.15, duration: 450 });
+          }, 50);
+        }
+        lastWidth = entry.contentRect.width;
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fitView]);
 
   const handleAutoLayout = useCallback(() => {
     if (nodes.length === 0) return;
@@ -562,6 +584,19 @@ Respond ONLY with a valid JSON object in this exact format:
                   placeholder="例如：一份结构清晰的 Markdown 格式文档，包含 API 列表。"
                   style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '8px', border: '1px solid #D1D5DB', resize: 'vertical', fontFamily: 'inherit', fontSize: '14px' }}
                 />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <input 
+                  type="checkbox" 
+                  id="asyncExecutionToggle"
+                  checked={taskForm.asyncExecution}
+                  onChange={(e) => setTaskForm(prev => ({ ...prev, asyncExecution: e.target.checked }))}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <label htmlFor="asyncExecutionToggle" style={{ fontSize: '14px', fontWeight: 500, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  开启异步执行 (Async Execution)
+                  <span style={{ fontSize: '12px', color: '#9CA3AF', fontWeight: 'normal' }}>此节点将非阻塞并行执行。</span>
+                </label>
               </div>
             </div>
             <div style={{ padding: '16px 20px', backgroundColor: '#F9FAFB', borderTop: '1px solid #E5E7EB', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>

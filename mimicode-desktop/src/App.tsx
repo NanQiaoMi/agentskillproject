@@ -123,55 +123,79 @@ function App() {
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
   const renderMainContent = () => {
-    if (activeNav === 'Chat') {
-      return (
-        <ChatView 
-          projectPath={projectPath}
-          selectedTask={selectedTask || null}
-          tasks={tasks}
-          setSelectedTaskId={setSelectedTaskId}
-          chatInputText={chatInputText}
-          setChatInputText={setChatInputText}
-          handleSelectDirectory={handleSelectDirectory}
-          fetchTasks={fetchTasks}
-          onNavigate={(nav: string) => setActiveNav(nav)}
-        />
-      );
-    } else if (activeNav === 'Tasks') {
-      if (viewState === 'detail' && selectedTask) {
-        return (
-          <TaskDetailView 
-            task={selectedTask} 
+    return (
+      <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden', minHeight: 0, minWidth: 0 }}>
+        {/* Persisted Views */}
+        <div style={{ display: activeNav === 'Chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+          <ChatView 
             projectPath={projectPath}
+            selectedTask={selectedTask || null}
+            tasks={tasks}
+            setSelectedTaskId={setSelectedTaskId}
+            chatInputText={chatInputText}
+            setChatInputText={setChatInputText}
+            handleSelectDirectory={handleSelectDirectory}
             fetchTasks={fetchTasks}
-            onBack={() => setViewState('list')} 
+            onNavigate={(nav: string) => setActiveNav(nav)}
           />
-        );
-      }
-      return (
-        <TasksView 
-          tasks={tasks} 
-          fetchTasks={fetchTasks}
-          onSelectTask={(id) => {
-            setSelectedTaskId(id);
-            setViewState('detail');
-          }} 
-        />
-      );
-    } else if (activeNav === 'Agents') {
-      return <AgentsView projectPath={projectPath} onNavigate={(nav) => setActiveNav(nav)} />;
-    } else if (activeNav === 'Worktrees') {
-      return <WorktreesView projectPath={projectPath} />;
-    } else if (activeNav === 'Specifications') {
-      return <SpecificationsView projectPath={projectPath} />;
-    } else if (activeNav === 'Prompts') {
-      return <PromptsView projectPath={projectPath} />;
-    } else if (activeNav === 'Diagnostics') {
-      return <DiagnosticsView envStatus={envStatus} projectPath={projectPath} />;
-    } else if (activeNav === 'Settings') {
-      return <SettingsView projectPath={projectPath} />;
-    }
-    return <div className="view-container">Not Implemented</div>;
+        </div>
+
+        <div style={{ display: activeNav === 'Tasks' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+          {viewState === 'detail' && selectedTask ? (
+            <TaskDetailView 
+              task={selectedTask} 
+              projectPath={projectPath}
+              fetchTasks={fetchTasks}
+              onBack={() => setViewState('list')} 
+            />
+          ) : (
+            <TasksView 
+              tasks={tasks} 
+              fetchTasks={fetchTasks}
+              onSelectTask={(id) => {
+                setSelectedTaskId(id);
+                setViewState('detail');
+              }} 
+            />
+          )}
+        </div>
+
+        <div style={{ display: activeNav === 'Agents' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+          <AgentsView projectPath={projectPath} onNavigate={(nav) => setActiveNav(nav)} />
+        </div>
+
+        {/* Transient Views */}
+        {activeNav === 'Worktrees' && (
+          <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <WorktreesView projectPath={projectPath} />
+          </div>
+        )}
+        
+        {activeNav === 'Specifications' && (
+          <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <SpecificationsView projectPath={projectPath} />
+          </div>
+        )}
+
+        {activeNav === 'Prompts' && (
+          <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <PromptsView projectPath={projectPath} />
+          </div>
+        )}
+
+        {activeNav === 'Diagnostics' && (
+          <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <DiagnosticsView envStatus={envStatus} projectPath={projectPath} />
+          </div>
+        )}
+
+        {activeNav === 'Settings' && (
+          <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <SettingsView projectPath={projectPath} />
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -217,9 +241,7 @@ function App() {
           </button>
         </div>
 
-        <div key={`${activeNav}-${viewState}`} style={{ display: 'contents' }}>
-          {renderMainContent()}
-        </div>
+        {renderMainContent()}
       </main>
 
       <GlobalSearchModal isOpen={showSearchModal} onClose={() => setShowSearchModal(false)} projectPath={projectPath || ''} />

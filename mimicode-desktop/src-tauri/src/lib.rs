@@ -41,6 +41,11 @@ pub struct TaskProcessInfo {
 // ----------------------------------------------------
 // 1. Helper Functions
 // ----------------------------------------------------
+pub struct NativeAppState {
+    pub current_task_pid: std::sync::Mutex<Option<u32>>,
+    pub current_task_stdin: std::sync::Mutex<Option<std::process::ChildStdin>>,
+}
+
 fn generate_deterministic_uuid(input: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -204,6 +209,190 @@ fn check_environment(project_path: String) -> EnvStatus {
         venv_initialized,
         project_db_shared: true,
     }
+}
+
+#[tauri::command]
+async fn init_native_agentflow(project_path: String) -> Result<String, String> {
+    let native_dir = Path::new(&project_path).join(".agentflow").join("native");
+    if !native_dir.exists() {
+        fs::create_dir_all(&native_dir).map_err(|e| e.to_string())?;
+    }
+    
+    // Write requirements.txt
+    let req_content = include_str!("native_agentflow_templates/requirements.txt");
+    fs::write(native_dir.join("requirements.txt"), req_content).map_err(|e| e.to_string())?;
+
+    // Write agentflow_native.py
+    let py_content = include_str!("native_agentflow_templates/agentflow_native.py");
+    fs::write(native_dir.join("agentflow_native.py"), py_content).map_err(|e| e.to_string())?;
+
+    // Create venv and install
+    let venv_path = native_dir.join("venv");
+    if !venv_path.exists() {
+        let output = Command::new("uv")
+            .arg("venv")
+            .arg(venv_path.to_str().unwrap())
+            .output()
+            .map_err(|e| format!("Failed to spawn uv venv: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("uv venv failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+    }
+    
+    let output = Command::new("uv")
+        .arg("pip")
+        .arg("install")
+        .arg("-r")
+        .arg(native_dir.join("requirements.txt").to_str().unwrap())
+        .env("VIRTUAL_ENV", venv_path.to_str().unwrap())
+        .output()
+        .map_err(|e| format!("Failed to spawn uv pip: {}", e))?;
+        
+    if !output.status.success() {
+        return Err(format!("uv pip install failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+        
+    Ok("Native AgentFlow scaffolding initialized".to_string())
+}
+
+#[tauri::command]
+fn start_native_team_task(
+    state: tauri::State<'_, NativeAppState>,
+    app_handle: tauri::AppHandle, 
+    project_path: String, 
+    working_dir: Option<String>,
+    task_description: String,
+    openai_api_key: Option<String>,
+    openai_base_url: Option<String>,
+    openai_model: Option<String>
+) -> Result<String, String> {
+    let native_dir = Path::new(&project_path).join(".agentflow").join("native");
+    let venv_python = if cfg!(windows) {
+        native_dir.join("venv").join("Scripts").join("python.exe")
+    } else {
+        native_dir.join("venv").join("bin").join("python")
+    };
+
+    let script_path = native_dir.join("agentflow_native.py");
+
+    let actual_working_dir = working_dir.unwrap_or_else(|| project_path.clone());
+    
+    let mut cmd = Command::new(&venv_python);
+    cmd.arg(script_path.to_str().unwrap());
+    cmd.arg(&actual_working_dir);
+    cmd.arg(&task_description);
+    cmd.current_dir(&actual_working_dir);
+    
+    // Force Python to not buffer stdout/stderr
+    cmd.env("PYTHONUNBUFFERED", "1");
+    // Force UTF-8 encoding for Windows
+    cmd.env("PYTHONIOENCODING", "utf-8");
+    
+    // Inject API Keys from environment (fallback logic)
+    if let Some(key) = openai_api_key {
+        cmd.env("OPENAI_API_KEY", key);
+    } else {
+        cmd.env("OPENAI_API_KEY", std::env::var("OPENAI_API_KEY").unwrap_or_default());
+    }
+    
+    if let Some(base) = openai_base_url {
+        cmd.env("OPENAI_API_BASE", base);
+    }
+    
+    if let Some(model) = openai_model {
+        cmd.env("OPENAI_MODEL_NAME", model);
+    }
+    
+    cmd.env("ANTHROPIC_API_KEY", std::env::var("ANTHROPIC_API_KEY").unwrap_or_default());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    
+    if let Ok(mut pid_lock) = state.current_task_pid.lock() {
+        *pid_lock = Some(child.id());
+    }
+    
+    if let Ok(mut stdin_lock) = state.current_task_stdin.lock() {
+        *stdin_lock = child.stdin.take();
+    }
+    
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    
+    let app_handle_clone = app_handle.clone();
+    std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(l) = line {
+                // Emit each line as an event to the frontend
+                let _ = app_handle_clone.emit("agent-event", l);
+            }
+        }
+    });
+
+    let app_handle_err = app_handle.clone();
+    std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(l) = line {
+                println!("AgentFlow Native Log: {}", l);
+                let payload = format!(r#"{{"event": "system", "agent": "CrewAI", "message": "{}"}}"#, l.replace("\"", "\\\"").replace("\\", "\\\\"));
+                let _ = app_handle_err.emit("agent-event", payload);
+            }
+        }
+        let _ = child.wait();
+    });
+
+    Ok("Task Started".to_string())
+}
+
+#[tauri::command]
+fn answer_native_team_task(state: tauri::State<'_, NativeAppState>, answer: String) -> Result<String, String> {
+    use std::io::Write;
+    if let Ok(mut stdin_lock) = state.current_task_stdin.lock() {
+        if let Some(stdin) = stdin_lock.as_mut() {
+            let answer_with_newline = format!("{}\n", answer);
+            stdin.write_all(answer_with_newline.as_bytes()).map_err(|e| e.to_string())?;
+            stdin.flush().map_err(|e| e.to_string())?;
+            return Ok("Answer sent".to_string());
+        }
+    }
+    Err("No task running or stdin not available".to_string())
+}
+
+#[tauri::command]
+fn stop_native_team_task(state: tauri::State<'_, NativeAppState>) -> Result<String, String> {
+    if let Ok(mut pid_lock) = state.current_task_pid.lock() {
+        if let Some(pid) = *pid_lock {
+            #[cfg(windows)]
+            {
+                let _ = Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .output();
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = Command::new("kill")
+                    .args(["-9", &pid.to_string()])
+                    .output();
+            }
+            *pid_lock = None;
+            return Ok("Task stopped".to_string());
+        }
+    }
+    Err("No native task is currently running".to_string())
 }
 
 #[tauri::command]
@@ -409,10 +598,14 @@ fn manage_git_worktree(project_path: String, op: String, task_id: String) -> Res
             .output()
             .map_err(|e| e.to_string())?;
 
+        let stderr = String::from_utf8_lossy(&output.stderr);
         if !output.status.success() {
+            if stderr.contains("already exists") {
+                return Ok(worktree_dir.to_str().unwrap().to_string());
+            }
             return Err(format!(
                 "Failed to add Git Worktree: {}",
-                String::from_utf8_lossy(&output.stderr)
+                stderr
             ));
         }
 
@@ -437,11 +630,40 @@ fn manage_git_worktree(project_path: String, op: String, task_id: String) -> Res
 
         // Clean up branch
         Command::new("git")
-            .args(&["branch", "-d", &format!("feature/{}", task_id_lower)])
+            .args(&["branch", "-D", &format!("feature/{}", task_id_lower)])
             .current_dir(repo_dir)
             .output().ok();
 
         return Ok("Worktree removed successfully".to_string());
+    } else if op == "merge" {
+        let branch_name = format!("feature/{}", task_id_lower);
+        
+        // 1. Commit all changes in the worktree
+        let _ = Command::new("git")
+            .args(&["add", "."])
+            .current_dir(&worktree_dir)
+            .output();
+
+        let _ = Command::new("git")
+            .args(&["commit", "-m", &format!("Auto-commit sandbox changes for {}", task_id)])
+            .current_dir(&worktree_dir)
+            .output();
+
+        // 2. Merge it into current branch.
+        let output = Command::new("git")
+            .args(&["merge", &branch_name])
+            .current_dir(repo_dir)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "Failed to merge branch: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        return Ok(format!("Successfully merged {}", branch_name));
     }
 
     Err("Invalid operation. Choose either 'add' or 'remove'.".to_string())
@@ -2424,6 +2646,7 @@ async fn initialize_project(project_path: String) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(NativeAppState { current_task_pid: std::sync::Mutex::new(None), current_task_stdin: std::sync::Mutex::new(None) })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|_app| {
@@ -2457,6 +2680,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            init_native_agentflow,
+            start_native_team_task,
+            stop_native_team_task,
+            answer_native_team_task,
             check_environment,
             setup_environment,
             store_credential,

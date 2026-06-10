@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { ReactFlow, Background, Handle, Position, Node, Edge, MarkerType, ReactFlowProvider, useReactFlow, Controls } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Icons } from './Icons';
@@ -8,6 +8,7 @@ import { FeedbackEdge } from './FeedbackEdge';
 interface AgentEvent {
   event: string;
   agent: string;
+  message?: string;
   node_id?: string;
 }
 
@@ -124,7 +125,7 @@ const edgeTypes = {
   feedback: FeedbackEdge
 };
 
-const FitViewHandler: React.FC<{ nodes: Node[] }> = ({ nodes }) => {
+const FitViewHandler: React.FC<{ nodes: Node[], containerRef: React.RefObject<HTMLDivElement | null> }> = ({ nodes, containerRef }) => {
   const { fitView } = useReactFlow();
 
   // Only trigger fitView when the actual graph structure (nodes list, layout positions) changes.
@@ -142,10 +143,37 @@ const FitViewHandler: React.FC<{ nodes: Node[] }> = ({ nodes }) => {
     }
   }, [structureKey, fitView]);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && lastWidth === 0) {
+          fitView({ padding: 0.15, duration: 450 });
+        }
+        lastWidth = entry.contentRect.width;
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fitView, containerRef]);
+
   return null;
 };
 
 const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [events]);
+
   const [savedNodes, setSavedNodes] = useState<Node[]>(() => {
     try {
       const stored = localStorage.getItem('mimi-team-flow-nodes');
@@ -343,6 +371,38 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
         }
       });
 
+      // Add dynamic glowing edges for recent delegations
+      const recentDelegations = events.filter(e => e.event === 'agent_delegated');
+      if (recentDelegations.length > 0) {
+        // Show the 2 most recent delegations
+        const recent = recentDelegations.slice(-2);
+        recent.forEach((del, i) => {
+          const match = del.message?.match(/Delegating to ([^.]+)/);
+          if (match && match[1]) {
+            const callerName = del.agent;
+            const calleeName = match[1].trim();
+            const sourceNode = mappedNodes.find(n => (n.data as any).label === callerName || (n.data as any).name === callerName);
+            // Relaxed matching for callee
+            const targetNode = mappedNodes.find(n => (n.data as any).label === calleeName || (n.data as any).name === calleeName || ((n.data as any).label as string).toLowerCase().includes(calleeName.toLowerCase()));
+            
+            if (sourceNode && targetNode && sourceNode.id !== targetNode.id) {
+              // Ensure we don't duplicate existing identical edges
+              if (!finalEdges.find(e => e.source === sourceNode.id && e.target === targetNode.id && e.id.includes('delegation'))) {
+                finalEdges.push({
+                  id: `delegation-edge-${Date.now()}-${i}`,
+                  source: sourceNode.id,
+                  target: targetNode.id,
+                  type: 'default',
+                  style: { stroke: '#F59E0B', strokeWidth: 4, filter: 'drop-shadow(0 0 10px rgba(245, 158, 11, 0.9))' },
+                  markerEnd: { type: MarkerType.ArrowClosed, color: '#F59E0B', width: 20, height: 20 },
+                  animated: true
+                });
+              }
+            }
+          }
+        });
+      }
+
       return { nodes: mappedNodes, edges: finalEdges };
     }
 
@@ -417,8 +477,8 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
   const activeAgent = events.length > 0 ? events[events.length - 1].agent : '';
 
   return (
-    <div style={{ width: '100%', height: '100%', backgroundColor: '#F9FAFB', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1 }}>
+    <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: '#F9FAFB', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 0 }} ref={containerRef}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -440,60 +500,78 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
           preventScrolling={false}
         >
           <Background color="#D1D5DB" gap={24} size={2} />
-          <FitViewHandler nodes={nodes} />
+          <FitViewHandler nodes={nodes} containerRef={containerRef} />
           <Controls />
         </ReactFlow>
       </div>
-      {/* Modern Terminal Console */}
+      
+      {/* Real-time System Log Console */}
       <div style={{
-        margin: '16px', marginTop: '8px', backgroundColor: '#0A0F1C', border: '1px solid #1E293B',
+        flex: 1, margin: '16px', marginTop: '0', backgroundColor: '#0A0F1C', border: '1px solid #1E293B',
         borderRadius: '12px', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(30, 58, 138, 0.1)',
-        position: 'relative'
+        position: 'relative', display: 'flex', flexDirection: 'column', minHeight: 0
       }}>
         {/* Terminal Header */}
         <div style={{
-          height: '24px', backgroundColor: '#131C2F', borderBottom: '1px solid #1E293B',
-          display: 'flex', alignItems: 'center', padding: '0 12px', gap: '6px'
+          height: '32px', backgroundColor: '#131C2F', borderBottom: '1px solid #1E293B',
+          display: 'flex', alignItems: 'center', padding: '0 12px', gap: '6px', flexShrink: 0
         }}>
           <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'rgba(239, 68, 68, 0.8)' }}></div>
           <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'rgba(234, 179, 8, 0.8)' }}></div>
           <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'rgba(34, 197, 94, 0.8)' }}></div>
           <span style={{ marginLeft: '8px', fontSize: '10px', fontFamily: 'monospace', color: '#64748B', letterSpacing: '0.05em' }}>SYSTEM_LOG</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748B', fontFamily: 'monospace' }}>
+            {activeAgent ? (
+              <>
+                <span style={{ position: 'relative', display: 'flex', width: '8px', height: '8px', marginRight: '4px' }}>
+                  <span style={{ position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', backgroundColor: '#60A5FA', opacity: 0.75, animation: 'pulse 2s infinite' }}></span>
+                  <span style={{ position: 'relative', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3B82F6' }}></span>
+                </span>
+                <span>EXECUTING:</span>
+                <span style={{ color: '#FFFFFF', fontWeight: 700, marginLeft: '4px' }}>{activeAgent.toUpperCase()}</span>
+              </>
+            ) : (
+              <>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748B', marginRight: '4px' }}></span>
+                <span style={{ color: '#94A3B8' }}>AWAITING_TASKS</span>
+              </>
+            )}
+            <span style={{ color: '#475569', marginLeft: '8px' }}>
+              {new Date().toLocaleTimeString('en-US', { hour12: false, hour: 'numeric', minute: 'numeric', second: 'numeric' })}
+            </span>
+          </div>
         </div>
         
-        {/* Terminal Content */}
-        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: 'monospace', fontSize: '13px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: '#3B82F6', fontWeight: 700 }}>~</span>
-            <span style={{ color: '#64748B' }}>./agent_engine</span>
-            <span style={{ color: '#94A3B8' }}>--status</span>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px',
-              backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '4px 12px', borderRadius: '4px',
-              border: '1px solid rgba(59, 130, 246, 0.2)', color: '#60A5FA'
-            }}>
-              {activeAgent ? (
-                <>
-                  <span style={{ position: 'relative', display: 'flex', width: '8px', height: '8px', marginRight: '4px' }}>
-                    <span style={{ position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', backgroundColor: '#60A5FA', opacity: 0.75, animation: 'pulse 2s infinite' }}></span>
-                    <span style={{ position: 'relative', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3B82F6' }}></span>
+        {/* Terminal Content (Logs) */}
+        <div ref={scrollContainerRef} style={{ 
+          flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '6px', 
+          fontFamily: 'monospace', fontSize: '12px', overflowY: 'auto' 
+        }}>
+          {events.length === 0 ? (
+            <div style={{ color: '#64748B', fontStyle: 'italic' }}>Waiting for system events...</div>
+          ) : (
+            events.map((ev, i) => {
+              if (ev.event === 'user_input') return null;
+              
+              let color = '#3B82F6';
+              if (ev.event === 'error') color = '#EF4444';
+              else if (ev.event === 'success') color = '#10B981';
+              else if (ev.event === 'tool_execution' || ev.event === 'system') color = '#F59E0B';
+              
+              const message = ev.message || (ev as any).task || (ev as any).tool || ev.event;
+              
+              return (
+                <div key={i} style={{ display: 'flex', gap: '12px', lineHeight: '1.4' }}>
+                  <span style={{ color, fontWeight: 600, width: '110px', flexShrink: 0, textAlign: 'right' }}>
+                    [{ev.agent}]
                   </span>
-                  <span>EXECUTING:</span>
-                  <span style={{ color: '#FFFFFF', fontWeight: 700, marginLeft: '4px' }}>{activeAgent.toUpperCase()}</span>
-                </>
-              ) : (
-                <>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748B', marginRight: '4px' }}></span>
-                  <span style={{ color: '#94A3B8' }}>AWAITING_TASKS</span>
-                </>
-              )}
-            </div>
-            {activeAgent && <span style={{ color: '#60A5FA', animation: 'pulse 1s infinite' }}>_</span>}
-          </div>
-          
-          <div style={{ fontSize: '12px', color: '#475569', fontFamily: 'monospace' }}>
-            {new Date().toLocaleTimeString('en-US', { hour12: false, hour: 'numeric', minute: 'numeric', second: 'numeric' })}
-          </div>
+                  <span style={{ color: '#E2E8F0', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                    {message}
+                  </span>
+                </div>
+              );
+            })
+          )}
         </div>
         
         {/* Ambient Glow */}
@@ -507,6 +585,7 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
     </div>
   );
 };
+
 
 export const TeamWorkflowGraph: React.FC<TeamWorkflowGraphProps> = (props) => {
   return (

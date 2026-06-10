@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
+import { TeamView } from './TeamView';
+import { TeamBuilderCanvas } from './TeamBuilderCanvas';
 
 interface AgentsViewProps {
   projectPath: string;
@@ -72,6 +74,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath, onNavigate 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [settingsAgentId, setSettingsAgentId] = useState<string | null>(null);
   const [injectModalAgent, setInjectModalAgent] = useState<AgentConfig | null>(null);
+  const [viewMode, setViewMode] = useState<'classic' | 'team' | 'builder'>('classic');
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -196,160 +199,230 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ projectPath, onNavigate 
   const settingsAgent = agents.find(a => a.id === settingsAgentId);
 
   return (
-    <div className="view-container bg-panel">
-      <div className="view-header">
-        <div className="view-title-row">
+    <div className="view-container bg-panel" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      <div className="view-header" style={{ flexShrink: 0 }}>
+        <div className="view-title-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1 className="view-title">Agents</h1>
+          
+          <div style={{ 
+            display: 'flex', gap: '4px', backgroundColor: 'var(--bg-main)', 
+            padding: '4px', borderRadius: '10px', border: '1px solid var(--border-color)' 
+          }}>
+            <button 
+              onClick={() => setViewMode('classic')} 
+              style={{
+                padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                fontSize: '13px', fontWeight: 500, transition: 'all 0.2s',
+                backgroundColor: viewMode === 'classic' ? 'var(--bg-panel)' : 'transparent',
+                color: viewMode === 'classic' ? 'var(--color-text-main)' : 'var(--color-text-muted)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icons.Terminal style={{ width: '14px', height: '14px' }} />
+                <span>经典分离模式</span>
+              </div>
+            </button>
+            <button 
+              onClick={() => setViewMode('team')} 
+              style={{
+                padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                fontSize: '13px', fontWeight: 500, transition: 'all 0.2s',
+                backgroundColor: viewMode === 'team' ? 'var(--bg-panel)' : 'transparent',
+                color: viewMode === 'team' ? 'var(--color-text-main)' : 'var(--color-text-muted)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icons.Users style={{ width: '14px', height: '14px' }} />
+                团队协作
+              </div>
+            </button>
+            <button 
+              onClick={() => setViewMode('builder')} 
+              style={{
+                padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                fontSize: '13px', fontWeight: 500, transition: 'all 0.2s',
+                backgroundColor: viewMode === 'builder' ? 'var(--bg-panel)' : 'transparent',
+                color: viewMode === 'builder' ? 'var(--color-text-main)' : 'var(--color-text-muted)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icons.GitBranch style={{ width: '14px', height: '14px' }} />
+                画布编排
+              </div>
+            </button>
+          </div>
+
         </div>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '8px' }}>
           管理你的多智能体团队 · 工作目录: <span className="font-mono" style={{ color: 'var(--color-text-main)' }}>{projectPath || '未选择'}</span>
         </p>
       </div>
 
-      <div className="view-content" style={{ padding: '24px' }}>
-        <div className="agents-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '800px' }}>
-          {agents.map(agent => {
-            const isLaunching = launchingId === agent.id;
-            const isRunning = runningAgents[agent.id];
-
-            return (
-              <div key={agent.id} className="agent-list-card">
-                <div className="agent-list-left">
-                  {getAgentIcon(agent.id, agent.name, 'large')}
-                  <div className="agent-list-info">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="agent-name-large">{agent.name}</span>
-                      <span className="agent-role-badge">{agent.role}</span>
-                    </div>
-                    <div className="agent-desc">{agent.desc}</div>
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                      <span>Model: <span className="font-mono">{agent.model}</span></span>
-                      <span>·</span>
-                      <span>CLI: <span className="font-mono">{agent.cliCommand}</span></span>
-                    </div>
-                  </div>
-                </div>
-                <div className="agent-list-right" style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
-                  <span className={`agent-status-text ${isRunning ? 'success' : 'offline'}`} style={{ fontSize: '12px' }}>
-                    {isRunning ? 'Running' : 'Offline'}
-                  </span>
-
-                  {/* Launch Button */}
-                  <button
-                    className="btn-icon-ghost"
-                    title={`启动 ${agent.cliCommand}`}
-                    disabled={isLaunching}
-                    onClick={() => handleLaunch(agent)}
-                    style={{
-                      width: '32px', height: '32px', borderRadius: '8px',
-                      backgroundColor: isRunning ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                      color: isRunning ? '#10B981' : 'var(--color-text-muted)',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    {isLaunching
-                      ? <Icons.RefreshCw style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} />
-                      : <Icons.Play style={{ width: '14px', height: '14px' }} />
-                    }
-                  </button>
-
-                  {/* More Settings Button */}
-                  <button
-                    className="btn-icon-ghost"
-                    title="更多设置"
-                    onClick={() => setOpenMenuId(openMenuId === agent.id ? null : agent.id)}
-                    style={{ width: '32px', height: '32px', borderRadius: '8px' }}
-                  >
-                    <Icons.MoreHorizontal style={{ width: '14px', height: '14px' }} />
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {openMenuId === agent.id && (
-                    <div
-                      ref={menuRef}
-                      className="agent-dropdown-menu"
-                      style={{
-                        position: 'absolute',
-                        top: '40px',
-                        right: '0',
-                        width: '220px',
-                        backgroundColor: 'var(--bg-main)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '10px',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-                        zIndex: 100,
-                        overflow: 'hidden',
-                        padding: '4px 0',
-                      }}
-                    >
-                      <div
-                        className="dropdown-item"
-                        style={dropdownItemStyle}
-                        onClick={() => { handleLaunch(agent); setOpenMenuId(null); }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <Icons.Play style={{ width: '14px', height: '14px', marginRight: '10px', color: '#10B981' }} />
-                        启动 {agent.cliCommand}
+      {/* Strict Absolute Container for Content */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <div className="view-content" style={{ 
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+          display: 'flex', flexDirection: 'column' 
+        }}>
+          
+          {/* Classic View */}
+          <div style={{ display: viewMode === 'classic' ? 'block' : 'none', overflowY: 'auto', flex: 1 }}>
+            <div style={{ padding: '24px' }}>
+              <div className="agents-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '800px' }}>
+                {agents.map(agent => {
+                  const isLaunching = launchingId === agent.id;
+                  const isRunning = runningAgents[agent.id];
+                  
+                  return (
+                    <div key={agent.id} className="agent-list-card">
+                      <div className="agent-list-left">
+                        {getAgentIcon(agent.id, agent.name)}
+                        <div className="agent-list-info">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="agent-name-large">{agent.name}</span>
+                            <span className="agent-role-badge">{agent.role}</span>
+                          </div>
+                          <div className="agent-desc">{agent.desc}</div>
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                            <span>Model: <span className="font-mono">{agent.model}</span></span>
+                            <span>·</span>
+                            <span>CLI: <span className="font-mono">{agent.cliCommand}</span></span>
+                          </div>
+                        </div>
                       </div>
+                      <div className="agent-list-right" style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
+                        <span className={`agent-status-text ${isRunning ? 'success' : 'offline'}`} style={{ fontSize: '12px' }}>
+                          {isRunning ? 'Running' : 'Offline'}
+                        </span>
 
-                      <div
-                        className="dropdown-item"
-                        style={dropdownItemStyle}
-                        onClick={() => { setSettingsAgentId(agent.id); setOpenMenuId(null); }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <Icons.Settings style={{ width: '14px', height: '14px', marginRight: '10px', color: 'var(--color-text-muted)' }} />
-                        Agent 设置
-                      </div>
-
-                      <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
-
-                      <div
-                        className="dropdown-item"
-                        style={dropdownItemStyle}
-                        onClick={() => { 
-                          setOpenMenuId(null);
-                          if (onNavigate) onNavigate('Logs');
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <Icons.FileText style={{ width: '14px', height: '14px', marginRight: '10px', color: 'var(--color-text-muted)' }} />
-                        查看日志
-                      </div>
-
-                      <div
-                        className="dropdown-item"
-                        style={dropdownItemStyle}
-                        onClick={async () => {
-                          if (isRunning) {
-                            try {
-                              // Find PID — we'll attempt to stop by agent id
-                              // The check_agent_clis_running returns a map; we need PID from process
-                              await invoke('run_shell_command', { command: `taskkill /IM ${agent.cliCommand}.exe /F`, cwd: projectPath });
-                            } catch (err) {
-                              console.error('Failed to stop agent:', err);
-                            }
-                            setRunningAgents(prev => ({ ...prev, [agent.id]: false }));
+                        {/* Launch Button */}
+                        <button
+                          className="btn-icon-ghost"
+                          title={`启动 ${agent.cliCommand}`}
+                          disabled={isLaunching}
+                          onClick={() => handleLaunch(agent)}
+                          style={{
+                            width: '32px', height: '32px', borderRadius: '8px',
+                            backgroundColor: isRunning ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                            color: isRunning ? '#10B981' : 'var(--color-text-muted)',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          {isLaunching
+                            ? <Icons.RefreshCw style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} />
+                            : <Icons.Play style={{ width: '14px', height: '14px' }} />
                           }
-                          setOpenMenuId(null);
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <Icons.Square style={{ width: '14px', height: '14px', marginRight: '10px', color: '#EF4444' }} />
-                        停止 Agent
+                        </button>
+
+                        {/* More Settings Button */}
+                        <button
+                          className="btn-icon-ghost"
+                          title="更多设置"
+                          onClick={() => setOpenMenuId(openMenuId === agent.id ? null : agent.id)}
+                          style={{ width: '32px', height: '32px', borderRadius: '8px' }}
+                        >
+                          <Icons.MoreHorizontal style={{ width: '14px', height: '14px' }} />
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {openMenuId === agent.id && (
+                          <div
+                            ref={menuRef}
+                            className="agent-dropdown-menu"
+                            style={{
+                              position: 'absolute',
+                              top: '40px',
+                              right: '0',
+                              width: '220px',
+                              backgroundColor: 'var(--bg-main)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                              zIndex: 100,
+                              overflow: 'hidden',
+                              padding: '4px 0',
+                            }}
+                          >
+                            <div
+                              className="dropdown-item"
+                              style={dropdownItemStyle}
+                              onClick={() => { handleLaunch(agent); setOpenMenuId(null); }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                            >
+                              <Icons.Play style={{ width: '14px', height: '14px', marginRight: '10px', color: '#10B981' }} />
+                              启动 {agent.cliCommand}
+                            </div>
+
+                            <div
+                              className="dropdown-item"
+                              style={dropdownItemStyle}
+                              onClick={() => { setSettingsAgentId(agent.id); setOpenMenuId(null); }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                            >
+                              <Icons.Settings style={{ width: '14px', height: '14px', marginRight: '10px', color: 'var(--color-text-muted)' }} />
+                              Agent 设置
+                            </div>
+
+                            <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
+
+                            <div
+                              className="dropdown-item"
+                              style={dropdownItemStyle}
+                              onClick={() => { 
+                                setOpenMenuId(null);
+                                if (onNavigate) onNavigate('Logs');
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                            >
+                              <Icons.FileText style={{ width: '14px', height: '14px', marginRight: '10px', color: 'var(--color-text-muted)' }} />
+                              查看日志
+                            </div>
+
+                            <div
+                              className="dropdown-item"
+                              style={dropdownItemStyle}
+                              onClick={async () => {
+                                if (isRunning) {
+                                  try {
+                                    await invoke('run_shell_command', { command: `taskkill /IM ${agent.cliCommand}.exe /F`, cwd: projectPath });
+                                  } catch (err) {
+                                    console.error('Failed to stop agent:', err);
+                                  }
+                                  setRunningAgents(prev => ({ ...prev, [agent.id]: false }));
+                                }
+                                setOpenMenuId(null);
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-panel)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                            >
+                              <Icons.Square style={{ width: '14px', height: '14px', marginRight: '10px', color: '#EF4444' }} />
+                              停止 Agent
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          </div>
+
+          {/* Team View */}
+          <div style={{ display: viewMode === 'team' ? 'block' : 'none', flex: 1, overflow: 'hidden' }}>
+            <TeamView projectPath={projectPath} />
+          </div>
+
+          {/* Builder Canvas View */}
+          <div style={{ display: viewMode === 'builder' ? 'block' : 'none', flex: 1, overflow: 'hidden' }}>
+            <TeamBuilderCanvas projectPath={projectPath} onNavigateToTeam={() => setViewMode('team')} />
+          </div>
+
         </div>
-      </div>
+        </div>
 
       {/* Settings Modal */}
       {settingsAgent && (

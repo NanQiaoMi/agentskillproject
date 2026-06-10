@@ -51,3 +51,21 @@ export interface ChatSession {
   comments: Comment[];
   updatedAt: string;
 }
+
+export interface AgentEvent {
+  event: 'system' | 'agent_started' | 'agent_action' | 'agent_finished' | 'success' | 'error' | 'user_input' | 'ask_human' | 'agent_delegated';
+  agent: string;
+  message?: string;
+  task?: string;
+  tool?: string;
+  file?: string;
+  result?: string;
+  node_id?: string;
+}
+
+export interface TeamSession {
+  id: string;
+  title: string;
+  events: AgentEvent[];
+  updatedAt: string;
+}

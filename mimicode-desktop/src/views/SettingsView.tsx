@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
+import { AgentApiConfigPanel } from '../components/AgentApiConfigPanel';
 
 // --- localStorage helper ---
 function lsGet(key: string, fallback: string): string {
@@ -50,6 +51,7 @@ const translations = {
     tabs: {
       General: 'General',
       Agents: 'Agents',
+      AgentAPI: 'AgentTeam Config',
       Models: 'Models',
       Editor: 'Editor',
       Terminal: 'Terminal',
@@ -59,6 +61,7 @@ const translations = {
     subtitles: {
       General: 'Manage your basic preferences, API keys, and language settings.',
       Agents: 'Configure built-in and custom AI agents.',
+      AgentAPI: 'Customize independent API endpoints, models, and keys for subagents.',
       Models: 'Set up LLM providers and fallback strategies.',
       Editor: 'Customize the built-in code editor behavior and appearance.',
       Terminal: 'Configure terminal display and default shell.',
@@ -83,7 +86,9 @@ const translations = {
       baseUrlPlaceholder: 'Base URL (e.g. https://api.openai.com/v1)',
       modelPlaceholder: 'Model',
       deepseekTitle: 'DeepSeek API Key',
-      deepseekDesc: 'Required for DeepSeek models.'
+      deepseekDesc: 'Required for DeepSeek models.',
+      lyclaudeTitle: 'LyClaude API Configuration',
+      lyclaudeDesc: 'Required for LyClaude API endpoints.'
     },
     agents: {
       addCustom: 'Add Custom Agent',
@@ -152,6 +157,7 @@ const translations = {
     tabs: {
       General: '常规',
       Agents: '智能体',
+      AgentAPI: '子智能体接口',
       Models: '模型',
       Editor: '编辑器',
       Terminal: '终端',
@@ -161,6 +167,7 @@ const translations = {
     subtitles: {
       General: '管理基础偏好设置、API密钥以及界面语言。',
       Agents: '配置内置智能体和自定义智能体。',
+      AgentAPI: '为每个子智能体配置独立的 API、模型与密钥，支持异构团队。',
       Models: '设置LLM供应商及模型降级回退策略。',
       Editor: '自定义内置代码编辑器的行为与外观。',
       Terminal: '配置终端显示样式及默认Shell解释器。',
@@ -180,12 +187,14 @@ const translations = {
       save: '保存',
       saveSuccess: 'API 密钥保存成功',
       saveFail: '保存失败: ',
-      openaiTitle: 'OpenAI 兼容配置',
-      openaiDesc: '配置兼容 OpenAI 的 API 密钥、基础 URL 和默认模型。',
+      openaiTitle: 'Agent API 接口配置',
+      openaiDesc: '多智能体团队协作 (CrewAI) 所使用的默认大模型接口配置（兼容 OpenAI 格式）。',
       baseUrlPlaceholder: '基础 URL (如: https://api.openai.com/v1)',
-      modelPlaceholder: '模型名称',
+      modelPlaceholder: '模型名称 (如: gpt-4o)',
       deepseekTitle: 'DeepSeek API 密钥',
-      deepseekDesc: 'DeepSeek 系列模型必需。'
+      deepseekDesc: 'DeepSeek 系列模型必需。',
+      lyclaudeTitle: 'LyClaude API 接口配置',
+      lyclaudeDesc: '用于 LyClaude 代理服务商（支持 Claude 等模型）。'
     },
     agents: {
       addCustom: '添加自定义智能体',
@@ -263,6 +272,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
   const [deepseekKey, setDeepseekKey] = useState('');
   const [openAIBaseUrl, setOpenAIBaseUrl] = useState(() => lsGet('mimi-openai-base-url', 'https://token.sensenova.cn/v1'));
   const [openAIModel, setOpenAIModel] = useState(() => lsGet('mimi-openai-model', 'deepseek-v4-flash'));
+  const [lyclaudeKey, setLyclaudeKey] = useState('');
+  const [lyclaudeBaseUrl, setLyclaudeBaseUrl] = useState(() => lsGet('mimi-lyclaude-base-url', 'https://free.lyclaude.site/v1'));
+  const [lyclaudeModel, setLyclaudeModel] = useState(() => lsGet('mimi-lyclaude-model', 'claude-3-5-sonnet-20241022'));
   const [isSaving, setIsSaving] = useState(false);
 
   // --- Test Connection ---
@@ -313,6 +325,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
       try { const anthropic = await invoke("get_credential", { service: "anthropic", username: "default" }); if (anthropic) setAnthropicKey(anthropic as string); } catch (e) {}
       try { const openai = await invoke("get_credential", { service: "openai", username: "default" }); if (openai) setOpenAIKey(openai as string); } catch (e) {}
       try { const deepseek = await invoke("get_credential", { service: "deepseek", username: "default" }); if (deepseek) setDeepseekKey(deepseek as string); } catch (e) {}
+      try { const lyclaude = await invoke("get_credential", { service: "lyclaude", username: "default" }); if (lyclaude) setLyclaudeKey(lyclaude as string); } catch (e) {}
     };
     loadKeys();
   }, []);
@@ -445,12 +458,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
   };
 
   return (
-    <div className="view-container bg-panel" style={{ padding: '24px 32px' }}>
-      <div className="settings-container">
+    <div className="view-container bg-panel" style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column' }}>
+      <div className="settings-container" style={{ flex: 1, minHeight: 0 }}>
         {/* Sidebar */}
         <div className="settings-sidebar">
           <div className="settings-sidebar-header">{t.settingsTitle}</div>
-          {['General', 'Agents', 'Models', 'Editor', 'Terminal', 'Notifications', 'Advanced'].map(tab => (
+          {['General', 'Agents', 'AgentAPI', 'Models', 'Editor', 'Terminal', 'Notifications', 'Advanced'].map(tab => (
             <div 
               key={tab} 
               className={`settings-nav-item ${activeTab === tab ? 'active' : ''}`}
@@ -458,6 +471,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
             >
               {tab === 'General' && <Icons.Settings className="settings-nav-icon" />}
               {tab === 'Agents' && <Icons.Users className="settings-nav-icon" />}
+              {tab === 'AgentAPI' && <Icons.GitBranch className="settings-nav-icon" />}
               {tab === 'Models' && <Icons.Activity className="settings-nav-icon" />}
               {tab === 'Editor' && <Icons.Edit2 className="settings-nav-icon" />}
               {tab === 'Terminal' && <Icons.Terminal className="settings-nav-icon" />}
@@ -519,21 +533,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
               <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
                 <div className="settings-group-info" style={{ maxWidth: '100%' }}>
-                  <div className="settings-group-title">{t.general.openaiTitle}</div>
-                  <div className="settings-group-desc">{t.general.openaiDesc}</div>
-                </div>
-                <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                  <input type="text" className="modern-input" placeholder={t.general.baseUrlPlaceholder} value={openAIBaseUrl} onChange={e => { setOpenAIBaseUrl(e.target.value); lsSet('mimi-openai-base-url', e.target.value); }} />
-                  <input type="text" className="modern-input" style={{ maxWidth: '200px' }} placeholder={t.general.modelPlaceholder} value={openAIModel} onChange={e => { setOpenAIModel(e.target.value); lsSet('mimi-openai-model', e.target.value); }} />
-                </div>
-                <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                  <input type="password" className="modern-input" placeholder="sk-..." value={openAIKey} onChange={e => setOpenAIKey(e.target.value)} />
-                  <button className="modern-btn" onClick={() => handleSaveKey('openai', openAIKey)} disabled={isSaving}>{t.general.save}</button>
-                </div>
-              </div>
-
-              <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
-                <div className="settings-group-info" style={{ maxWidth: '100%' }}>
                   <div className="settings-group-title">{t.general.deepseekTitle}</div>
                   <div className="settings-group-desc">{t.general.deepseekDesc}</div>
                 </div>
@@ -542,11 +541,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                   <button className="modern-btn" onClick={() => handleSaveKey('deepseek', deepseekKey)} disabled={isSaving}>{t.general.save}</button>
                 </div>
               </div>
+
+              <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
+                <div className="settings-group-info" style={{ maxWidth: '100%' }}>
+                  <div className="settings-group-title">{t.general.lyclaudeTitle}</div>
+                  <div className="settings-group-desc">{t.general.lyclaudeDesc}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                  <input type="text" className="modern-input" placeholder={t.general.baseUrlPlaceholder} value={lyclaudeBaseUrl} onChange={e => { setLyclaudeBaseUrl(e.target.value); lsSet('mimi-lyclaude-base-url', e.target.value); }} />
+                  <input type="text" className="modern-input" style={{ maxWidth: '200px' }} placeholder={t.general.modelPlaceholder} value={lyclaudeModel} onChange={e => { setLyclaudeModel(e.target.value); lsSet('mimi-lyclaude-model', e.target.value); }} />
+                </div>
+                <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                  <input type="password" className="modern-input" placeholder="sk-..." value={lyclaudeKey} onChange={e => setLyclaudeKey(e.target.value)} />
+                  <button className="modern-btn" onClick={() => handleSaveKey('lyclaude', lyclaudeKey)} disabled={isSaving}>{t.general.save}</button>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === 'Agents' && (
             <div>
+              <div className="settings-card" style={{ marginBottom: '24px' }}>
+                <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
+                  <div className="settings-group-info" style={{ maxWidth: '100%' }}>
+                    <div className="settings-group-title">{t.general.openaiTitle}</div>
+                    <div className="settings-group-desc">{t.general.openaiDesc}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                    <input type="text" className="modern-input" placeholder={t.general.baseUrlPlaceholder} value={openAIBaseUrl} onChange={e => { setOpenAIBaseUrl(e.target.value); lsSet('mimi-openai-base-url', e.target.value); }} />
+                    <input type="text" className="modern-input" style={{ maxWidth: '200px' }} placeholder={t.general.modelPlaceholder} value={openAIModel} onChange={e => { setOpenAIModel(e.target.value); lsSet('mimi-openai-model', e.target.value); }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                    <input type="password" className="modern-input" placeholder="sk-..." value={openAIKey} onChange={e => setOpenAIKey(e.target.value)} />
+                    <button className="modern-btn" onClick={() => handleSaveKey('openai', openAIKey)} disabled={isSaving}>{t.general.save}</button>
+                  </div>
+                </div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
                 <button className="modern-btn" onClick={() => setShowAddAgent(true)}>
                   <Icons.Plus style={{ width: '16px', height: '16px' }}/> {t.agents.addCustom}
@@ -611,6 +641,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 ))}
               </div>
             </div>
+          )}
+
+          {activeTab === 'AgentAPI' && (
+            <AgentApiConfigPanel />
           )}
 
           {activeTab === 'Models' && (

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "TASK-001",
+    "title": "TASK-TEST",
+    "description": "编写一个简单的 React 登录组件",
+    "assignee": "user",
+    "status": "todo",
+    "creator": "user",
+    "dependencies": [],
+    "affected_files": [],
+    "comments": [],
+    "history": [
+      {
+        "time": "2026-06-09T18:04:42.873692",
+        "from": "none",
+        "to": "todo",
+        "operator": "user",
+        "message": "创建任务"
+      }
+    ]
+  }
+]

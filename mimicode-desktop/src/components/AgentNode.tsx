@@ -1,10 +1,50 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { Icons } from '../components/Icons';
 
 export const AgentNode = memo(({ id, data }: any) => {
   const { setNodes, setEdges } = useReactFlow();
   const [isHovered, setIsHovered] = useState(false);
+  const [actualModel, setActualModel] = useState(data.model || 'gpt-4o');
+
+  useEffect(() => {
+    const updateModel = () => {
+      try {
+        const saved = localStorage.getItem('mimi-subagent-configs');
+        if (saved) {
+          const configs = JSON.parse(saved);
+          const rLower = (data.role || '').toLowerCase();
+          const nLower = (data.label || '').toLowerCase();
+
+          let match = null;
+          if (rLower.includes('manager') || rLower.includes('leader') || rLower.includes('pm') || rLower.includes('planner') || rLower.includes('架构') || rLower.includes('architect') || rLower.includes('负责人') || rLower.includes('owner') || rLower.includes('主控') || rLower.includes('调研') || rLower.includes('research') || nLower.includes('hermes')) {
+            match = configs.find((c: any) => c.id === '1' || c.name.toLowerCase().includes('hermes') || c.role.toLowerCase().includes('manager') || c.role.toLowerCase().includes('leader'));
+          } else if (rLower.includes('frontend') || rLower.includes('ui') || rLower.includes('ux') || rLower.includes('designer') || rLower.includes('前端') || rLower.includes('视觉') || rLower.includes('报告') || rLower.includes('可视化') || nLower.includes('antigravity')) {
+            match = configs.find((c: any) => c.id === '2' || c.name.toLowerCase().includes('antigravity') || c.role.toLowerCase().includes('frontend'));
+          } else if (rLower.includes('backend') || rLower.includes('api') || rLower.includes('database') || rLower.includes('db') || rLower.includes('后端') || rLower.includes('data') || rLower.includes('数据') || rLower.includes('采集') || rLower.includes('分析') || rLower.includes('worker') || rLower.includes('执行') || rLower.includes('writer') || rLower.includes('创作') || nLower.includes('codex')) {
+            match = configs.find((c: any) => c.id === '3' || c.name.toLowerCase().includes('codex') || c.role.toLowerCase().includes('backend'));
+          } else if (rLower.includes('qa') || rLower.includes('test') || rLower.includes('audit') || rLower.includes('cve') || rLower.includes('security') || rLower.includes('测试') || rLower.includes('审计') || rLower.includes('review') || rLower.includes('评审') || rLower.includes('editor') || rLower.includes('编辑') || rLower.includes('审稿') || rLower.includes('cleaner') || rLower.includes('清洗') || nLower.includes('claude') || nLower.includes('qa')) {
+            match = configs.find((c: any) => c.id === '4' || c.name.toLowerCase().includes('qa') || c.name.toLowerCase().includes('claude') || c.role.toLowerCase().includes('tester') || c.role.toLowerCase().includes('auditor'));
+          } else if (rLower.includes('devops') || rLower.includes('ops') || rLower.includes('deploy') || rLower.includes('docker') || rLower.includes('k8s') || rLower.includes('运维') || rLower.includes('seo') || rLower.includes('优化') || rLower.includes('specialist') || nLower.includes('devops')) {
+            match = configs.find((c: any) => c.id === '5' || c.name.toLowerCase().includes('devops') || c.role.toLowerCase().includes('devops'));
+          } else {
+            match = configs.find((c: any) => nLower.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(nLower)) || 
+                    configs.find((c: any) => rLower.includes(c.role.toLowerCase()) || c.role.toLowerCase().includes(rLower));
+          }
+
+          if (match && match.model) {
+            setActualModel(match.model);
+            return;
+          }
+        }
+      } catch (e) {}
+      setActualModel(data.model || 'gpt-4o');
+    };
+
+    updateModel();
+    window.addEventListener('mimi-subagent-configs-updated', updateModel);
+    return () => window.removeEventListener('mimi-subagent-configs-updated', updateModel);
+  }, [data.role, data.label, data.model]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -16,6 +56,7 @@ export const AgentNode = memo(({ id, data }: any) => {
     <div 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onDoubleClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('edit-agent-node', { detail: { id } })); }}
       style={{
         padding: '16px',
         borderRadius: '12px',
@@ -32,6 +73,34 @@ export const AgentNode = memo(({ id, data }: any) => {
         position: 'relative'
       }}
     >
+      {/* Settings Button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('edit-agent-node', { detail: { id } })); }}
+        style={{
+          position: 'absolute',
+          top: '-10px',
+          right: '20px',
+          width: '24px',
+          height: '24px',
+          borderRadius: '12px',
+          backgroundColor: '#3B82F6',
+          color: '#fff',
+          border: 'none',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          cursor: 'pointer',
+          opacity: isHovered ? 1 : 0,
+          transform: isHovered ? 'scale(1)' : 'scale(0.8)',
+          transition: 'all 0.2s',
+          boxShadow: '0 2px 8px rgba(59, 130, 246, 0.4)',
+          zIndex: 10
+        }}
+        title="设置任务属性"
+      >
+        <Icons.Settings style={{ width: '12px', height: '12px' }} />
+      </button>
+
       {/* Delete Button */}
       <button
         onClick={handleDelete}
@@ -100,7 +169,7 @@ export const AgentNode = memo(({ id, data }: any) => {
       }}>
         <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981', boxShadow: '0 0 8px #10B981' }}></div>
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace' }}>
-          {data.model || 'gpt-4o'}
+          {actualModel}
         </div>
       </div>
 

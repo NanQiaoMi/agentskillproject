@@ -84,12 +84,16 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
   const [isRepairModalOpen, setIsRepairModalOpen] = useState(false);
 
   // Logs tab state
-  const [agentFilter, setAgentFilter] = useState('All Agents');
+  const [selectedSource, setSelectedSource] = useState<{ type: 'task' | 'daemon'; id: string }>({ type: 'task', id: 'latest' });
   const [levelFilter, setLevelFilter] = useState('All Levels');
-  const [dateFilter, setDateFilter] = useState('Today');
   const [searchText, setSearchText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const consoleBottomRef = useRef<HTMLDivElement>(null);
+
+  const [availableTasks, setAvailableTasks] = useState<string[]>(['latest']);
+  const [terminalInputText, setTerminalInputText] = useState('');
+  const [hoveredSource, setHoveredSource] = useState<string | null>(null);
 
   // Language setup
   const lsGet = (key: string, def: string) => {
@@ -115,9 +119,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     if (autoScroll && logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
-  }, [logs, autoScroll, agentFilter, levelFilter, searchText]);
-
-
+  }, [logs, autoScroll, levelFilter, searchText, selectedSource]);
 
   const fetchAgentStatus = async () => {
     try {
@@ -154,50 +156,103 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     }
   };
 
-
-
-  // Load logs when Logs tab is activated
-  useEffect(() => {
-    if (activeTab === 'Logs') {
-      const loadLogs = async () => {
-        try {
-          const logContent: string = await invoke('read_task_log', {
-            projectPath,
-            taskId: 'latest',
-          });
-          setLogs(logContent);
-        } catch (_e) {
-          setLogs('No logs available');
-        }
-      };
-      loadLogs();
+  // Scan available tasks from .agentflow/logs/test_*.log
+  const fetchAvailableTasks = useCallback(async () => {
+    if (!projectPath) return;
+    try {
+      const isWindows = !projectPath.startsWith('/');
+      const command = isWindows 
+        ? 'dir /B .agentflow\\logs\\test_*.log' 
+        : 'find .agentflow/logs -name "test_*.log" -exec basename {} \\;';
+      
+      const output = await invoke<string>('run_shell_command', {
+        command,
+        cwd: projectPath
+      });
+      
+      if (output) {
+        const lines = output.split(/\r?\n/);
+        const taskIds = lines
+          .map(line => {
+            const cleanLine = line.trim();
+            const filename = cleanLine.split(/[\/\\]/).pop() || '';
+            const match = filename.match(/^test_(.+)\.log$/);
+            return match ? match[1] : '';
+          })
+          .filter(id => id && id !== 'latest');
+        
+        const uniqueTaskIds = Array.from(new Set(taskIds)).sort();
+        setAvailableTasks(['latest', ...uniqueTaskIds]);
+      }
+    } catch (err) {
+      console.error('Failed to list historical tasks:', err);
     }
-  }, [activeTab, projectPath]);
+  }, [projectPath]);
+
+  // Load logs
+  const fetchLogs = useCallback(async () => {
+    if (!projectPath) return;
+    try {
+      const separator = projectPath.includes('/') ? '/' : '\\';
+      if (selectedSource.type === 'daemon') {
+        const logFilePath = `${projectPath}${separator}.agentflow${separator}logs${separator}agent_${selectedSource.id}.log`;
+        const content = await invoke<string | null>('read_file_content', { path: logFilePath });
+        if (content) {
+          setLogs(content);
+        } else {
+          setLogs(`Daemon log not created yet for ${selectedSource.id}. Waiting for agent to spawn...`);
+        }
+      } else {
+        const taskLog = await invoke<string>('read_task_log', {
+          projectPath,
+          taskId: selectedSource.id,
+        });
+        setLogs(taskLog);
+      }
+    } catch (_e) {
+      setLogs('No logs available');
+    }
+  }, [projectPath, selectedSource]);
+
+  // Poll log sources and states
+  useEffect(() => {
+    if (activeTab !== 'Logs' || !projectPath) return;
+
+    fetchAgentStatus();
+    fetchAvailableTasks();
+    fetchLogs();
+
+    const statusTimer = setInterval(() => {
+      fetchAgentStatus();
+      fetchAvailableTasks();
+    }, 3000);
+
+    const logsTimer = setInterval(() => {
+      fetchLogs();
+    }, 1500);
+
+    return () => {
+      clearInterval(statusTimer);
+      clearInterval(logsTimer);
+    };
+  }, [activeTab, projectPath, fetchAvailableTasks, fetchLogs]);
+
+  // Fetch immediately when selected source changes
+  useEffect(() => {
+    if (activeTab === 'Logs' && projectPath) {
+      fetchLogs();
+    }
+  }, [selectedSource, activeTab, projectPath, fetchLogs]);
 
   const getFilteredLogs = useCallback((): string => {
     if (!logs) return '';
     let lines = logs.split('\n');
 
-    // Agent filter
-    if (agentFilter !== 'All Agents') {
-      const agentLower = agentFilter.toLowerCase();
-      lines = lines.filter(
-        (line) => line.toLowerCase().includes(agentLower) || !line.match(/\[(INFO|ERROR|WARN|DEBUG)\]/)
-      );
-    }
-
     // Level filter
     if (levelFilter !== 'All Levels') {
       lines = lines.filter(
-        (line) => line.includes(`[${levelFilter}]`) || !line.match(/\[(INFO|ERROR|WARN|DEBUG)\]/)
+        (line) => line.includes(`[${levelFilter}]`) || line.includes(`[${levelFilter.toLowerCase()}]`)
       );
-    }
-
-    // Date filter
-    if (dateFilter === 'Today') {
-      // Show all lines for today (no date-based filtering needed for current logs)
-    } else if (dateFilter === 'Yesterday') {
-      // For log data without date stamps, show all
     }
 
     // Text search
@@ -207,7 +262,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     }
 
     return lines.join('\n');
-  }, [logs, agentFilter, levelFilter, dateFilter, searchText]);
+  }, [logs, levelFilter, searchText]);
 
   const handleExport = () => {
     const content = getFilteredLogs();
@@ -215,11 +270,163 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `diagnostics-logs-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `logs-${selectedSource.type}-${selectedSource.id}-${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleClear = async () => {
+    if (!projectPath) return;
+    try {
+      const separator = projectPath.includes('/') ? '/' : '\\';
+      let logFilePath = '';
+      if (selectedSource.type === 'daemon') {
+        logFilePath = `${projectPath}${separator}.agentflow${separator}logs${separator}agent_${selectedSource.id}.log`;
+      } else {
+        logFilePath = `${projectPath}${separator}.agentflow${separator}logs${separator}test_${selectedSource.id}.log`;
+      }
+      await invoke('write_file_content', { path: logFilePath, content: '' });
+      setLogs('');
+      addToast(language === '简体中文' ? '日志已成功清空' : 'Logs successfully cleared', 'success');
+    } catch (err) {
+      console.error('Failed to clear logs:', err);
+      setLogs('');
+    }
+  };
+
+  const handleCommandSubmit = async () => {
+    const cmd = terminalInputText.trim();
+    if (!cmd || !projectPath || selectedSource.type !== 'daemon') return;
+
+    setTerminalInputText('');
+    try {
+      await invoke('send_agent_stdin', {
+        cliName: selectedSource.id,
+        projectPath,
+        input: cmd,
+      });
+      setTimeout(fetchLogs, 200);
+    } catch (err: any) {
+      addToast(`[Error] ${err?.toString() || 'Failed to send command'}`, 'error');
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCommandSubmit();
+    }
+  };
+
+  const daemonAgents = [
+    { id: 'hermes', name: 'Hermes Agent', icon: Icons.Users, desc: language === '简体中文' ? '团队协作调度器' : 'Team orchestrator' },
+    { id: 'antigravity', name: 'Antigravity', icon: Icons.Zap, desc: language === '简体中文' ? '交互式解题智能体' : 'Interactive solver' },
+    { id: 'codex', name: 'Codex', icon: Icons.Code, desc: language === '简体中文' ? '代码生成引擎' : 'Code generation engine' },
+    { id: 'claudecode', name: 'Claude Code', icon: Icons.Shield, desc: language === '简体中文' ? '高级代码重构' : 'Advanced refactoring' },
+    { id: 'opencode', name: 'OpenCode CLI', icon: Icons.Activity, desc: language === '简体中文' ? '执行时环境' : 'Execution runtime' },
+  ];
+
+  const renderLogLines = () => {
+    if (!logs) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '200px', color: 'var(--color-text-muted)', gap: '12px', opacity: 0.8 }}>
+          <Icons.Terminal style={{ width: '40px', height: '40px', strokeWidth: 1.5, opacity: 0.5 }} />
+          <div style={{ fontSize: '13px', fontFamily: 'var(--font-mono)' }}>
+            {language === '简体中文' ? '未检测到日志输出... 等待智能体启动' : 'No log output detected... Waiting for agent to spawn.'}
+          </div>
+        </div>
+      );
+    }
+
+    const filtered = getFilteredLogs();
+    if (!filtered) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '200px', color: 'var(--color-text-muted)', fontSize: '13px', fontFamily: 'var(--font-mono)' }}>
+          {language === '简体中文' ? '无匹配的日志记录' : 'No matching log entries.'}
+        </div>
+      );
+    }
+
+    const lines = filtered.split('\n');
+    return lines.map((line, index) => {
+      if (index === lines.length - 1 && !line.trim()) return null;
+
+      const levelMatch = line.match(/\[(INFO|WARN|ERROR|DEBUG)\]/i);
+      let level = '';
+      if (levelMatch) {
+        level = levelMatch[1].toUpperCase();
+      }
+
+      const isStdinEcho = line.trim().startsWith('➜') || line.trim().startsWith('[Stdin]');
+
+      let levelColor = '#D1D5DB';
+      if (isStdinEcho) {
+        levelColor = '#38BDF8';
+      } else if (level === 'INFO') {
+        levelColor = '#10B981';
+      } else if (level === 'WARN') {
+        levelColor = '#FBBF24';
+      } else if (level === 'ERROR') {
+        levelColor = '#F43F5E';
+      } else if (level === 'DEBUG') {
+        levelColor = '#A78BFA';
+      }
+
+      let timestamp = '';
+      let logText = line;
+      
+      const timeMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2},\d{3}|\d{2}:\d{2}:\d{2})\s*(.*)$/);
+      if (timeMatch) {
+        timestamp = timeMatch[1];
+        logText = timeMatch[2];
+      }
+
+      return (
+        <div 
+          key={index} 
+          style={{ 
+            display: 'flex', 
+            minHeight: '22px', 
+            fontFamily: 'var(--font-mono)', 
+            fontSize: '12px',
+            borderBottom: '1px solid rgba(255,255,255,0.02)',
+            padding: '2px 0'
+          }}
+        >
+          <div 
+            style={{ 
+              width: '45px', 
+              textAlign: 'right', 
+              color: '#475569', 
+              paddingRight: '12px', 
+              userSelect: 'none',
+              borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+              flexShrink: 0
+            }}
+          >
+            {index + 1}
+          </div>
+
+          <div style={{ paddingLeft: '12px', flex: 1, wordBreak: 'break-all', whiteSpace: 'pre-wrap', color: isStdinEcho ? '#38BDF8' : '#D1D5DB' }}>
+            {timestamp && (
+              <span style={{ color: '#475569', marginRight: '8px', userSelect: 'none' }}>
+                {timestamp}
+              </span>
+            )}
+            {level && (
+              <span style={{ color: levelColor, fontWeight: 'bold', marginRight: '8px' }}>
+                [{level}]
+              </span>
+            )}
+            <span>
+              {logText}
+            </span>
+          </div>
+        </div>
+      );
+    });
   };
 
   const agentSummary = getAgentSummary();
@@ -356,72 +563,350 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
         )}
 
         {activeTab === 'Logs' && (
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: 'calc(100% - 10px)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <select
-                  className="form-select"
-                  style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--color-text-main)' }}
-                  value={agentFilter}
-                  onChange={(e) => setAgentFilter(e.target.value)}
-                >
-                  <option value="All Agents">{t.allAgents}</option>
-                  <option value="Codex">Codex</option>
-                  <option value="Antigravity">Antigravity</option>
-                </select>
-                <select
-                  className="form-select"
-                  style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--color-text-main)' }}
-                  value={levelFilter}
-                  onChange={(e) => setLevelFilter(e.target.value)}
-                >
-                  <option value="All Levels">{t.allLevels}</option>
-                  <option value="INFO">INFO</option>
-                  <option value="ERROR">ERROR</option>
-                </select>
-                <select
-                  className="form-select"
-                  style={{ padding: '6px 12px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--color-text-main)' }}
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                >
-                  <option value="Today">{t.today}</option>
-                  <option value="Yesterday">{t.yesterday}</option>
-                </select>
-              </div>
-              <input
-                type="text"
-                className="form-select"
-                style={{ width: '200px', padding: '6px 12px', fontSize: '12px', border: '1px solid var(--color-border)', borderRadius: '4px', backgroundColor: 'var(--bg-main)', color: 'var(--color-text-main)' }}
-                placeholder={t.searchLogs}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
-            </div>
-
-            <div
-              ref={logContainerRef}
-              style={{
-                flex: 1, backgroundColor: '#1E1E1E', color: '#A9FFB2', fontFamily: 'var(--font-mono)',
-                fontSize: '12px', padding: '16px', borderRadius: '8px', overflowY: 'auto', whiteSpace: 'pre-wrap',
-                border: '1px solid var(--color-border)', minHeight: '280px'
+          <div style={{ display: 'flex', gap: '20px', padding: '24px', height: 'calc(100% - 20px)', boxSizing: 'border-box', overflow: 'hidden' }}>
+            {/* Sidebar (Left) */}
+            <div 
+              className="logs-sidebar" 
+              style={{ 
+                width: '260px', 
+                flexShrink: 0, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '8px', 
+                background: 'var(--bg-main)', 
+                border: '1px solid var(--color-border)', 
+                borderRadius: '12px', 
+                padding: '16px',
+                boxSizing: 'border-box',
+                overflowY: 'auto'
               }}
             >
-              {getFilteredLogs()}
+              <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', paddingBottom: '4px' }}>
+                {language === '简体中文' ? '任务执行日志' : 'Task Run Logs'}
+              </div>
+              <div
+                className={`logs-agent-item ${selectedSource.type === 'task' ? 'active' : ''}`}
+                onClick={() => setSelectedSource({ type: 'task', id: 'latest' })}
+                onMouseEnter={() => setHoveredSource('task')}
+                onMouseLeave={() => setHoveredSource(null)}
+                style={{
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
+                  background: selectedSource.type === 'task' 
+                    ? 'rgba(232, 104, 74, 0.08)' 
+                    : hoveredSource === 'task' 
+                      ? 'var(--bg-hover)' 
+                      : 'transparent',
+                  border: selectedSource.type === 'task' ? '1px solid rgba(232, 104, 74, 0.2)' : '1px solid transparent'
+                }}
+              >
+                <Icons.Terminal style={{ width: '16px', height: '16px', color: selectedSource.type === 'task' ? 'var(--color-primary-orange)' : 'var(--color-text-secondary)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: selectedSource.type === 'task' ? 600 : 500, color: selectedSource.type === 'task' ? 'var(--color-primary-orange)' : 'var(--color-text-main)' }}>
+                    {language === '简体中文' ? '智能体任务执行' : 'All Agents Tasks'}
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                    {language === '简体中文' ? '历史与最新任务输出' : 'History & latest runs'}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ height: '1px', background: 'var(--color-border)', margin: '8px 0' }} />
+
+              <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', paddingBottom: '4px' }}>
+                {language === '简体中文' ? '智能体后台服务' : 'Agent Daemon Services'}
+              </div>
+              
+              {daemonAgents.map(agent => {
+                const IconComponent = agent.icon;
+                const isSelected = selectedSource.type === 'daemon' && selectedSource.id === agent.id;
+                const isHovered = hoveredSource === agent.id;
+                const isRunning = agentStatus[agent.id] ?? false;
+
+                return (
+                  <div
+                    key={agent.id}
+                    className={`logs-agent-item ${isSelected ? 'active' : ''}`}
+                    onClick={() => setSelectedSource({ type: 'daemon', id: agent.id })}
+                    onMouseEnter={() => setHoveredSource(agent.id)}
+                    onMouseLeave={() => setHoveredSource(null)}
+                    style={{
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      transition: 'all 0.2s',
+                      background: isSelected 
+                        ? 'rgba(232, 104, 74, 0.08)' 
+                        : isHovered 
+                          ? 'var(--bg-hover)' 
+                          : 'transparent',
+                      border: isSelected ? '1px solid rgba(232, 104, 74, 0.2)' : '1px solid transparent'
+                    }}
+                  >
+                    <IconComponent style={{ width: '16px', height: '16px', color: isSelected ? 'var(--color-primary-orange)' : 'var(--color-text-secondary)' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: isSelected ? 600 : 500, color: isSelected ? 'var(--color-primary-orange)' : 'var(--color-text-main)' }}>
+                          {agent.name}
+                        </span>
+                        {/* Status glow dot */}
+                        <span 
+                          style={{
+                            display: 'inline-block',
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: isRunning ? '#10B981' : '#64748B',
+                            boxShadow: isRunning ? '0 0 6px #10B981' : 'none',
+                            transition: 'all 0.3s'
+                          }} 
+                        />
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                        {agent.desc}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', alignItems: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                <input
-                  type="checkbox"
-                  checked={autoScroll}
-                  onChange={(e) => setAutoScroll(e.target.checked)}
-                /> {t.autoScroll}
-              </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setLogs('')}>{t.clear}</button>
-                <button className="btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={handleExport}>{t.export}</button>
+            {/* Terminal Main Window (Right) */}
+            <div 
+              style={{ 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                background: '#090D16', 
+                border: '1px solid var(--color-border)', 
+                borderRadius: '12px', 
+                overflow: 'hidden', 
+                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                boxSizing: 'border-box'
+              }}
+            >
+              {/* Terminal Window Header */}
+              <div 
+                style={{ 
+                  height: '42px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between', 
+                  padding: '0 16px', 
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)', 
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  userSelect: 'none'
+                }}
+              >
+                {/* macOS Control Dots */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <div style={{ width: '11px', height: '11px', borderRadius: '50%', backgroundColor: '#EF4444', opacity: 0.8 }} />
+                  <div style={{ width: '11px', height: '11px', borderRadius: '50%', backgroundColor: '#F59E0B', opacity: 0.8 }} />
+                  <div style={{ width: '11px', height: '11px', borderRadius: '50%', backgroundColor: '#10B981', opacity: 0.8 }} />
+                  <span style={{ marginLeft: '12px', color: '#64748B', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>
+                    {selectedSource.type === 'task' 
+                      ? `.agentflow/logs/test_${selectedSource.id}.log` 
+                      : `.agentflow/logs/agent_${selectedSource.id}.log`}
+                  </span>
+                </div>
+
+                {/* Quick actions (Right side of header) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748B', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                    <input
+                      type="checkbox"
+                      checked={autoScroll}
+                      onChange={(e) => setAutoScroll(e.target.checked)}
+                      style={{ accentColor: 'var(--color-primary-orange)' }}
+                    />
+                    {t.autoScroll}
+                  </label>
+                  <button 
+                    onClick={handleClear} 
+                    style={{ background: 'none', border: 'none', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--font-mono)', padding: '2px 4px', borderRadius: '4px', transition: 'all 0.2s' }}
+                    title={t.clear}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#F8FAFC'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
+                  >
+                    <Icons.Trash2 style={{ width: '12px', height: '12px' }} />
+                    {t.clear}
+                  </button>
+                  <button 
+                    onClick={handleExport} 
+                    style={{ background: 'none', border: 'none', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--font-mono)', padding: '2px 4px', borderRadius: '4px', transition: 'all 0.2s' }}
+                    title={t.export}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#F8FAFC'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
+                  >
+                    <Icons.FileText style={{ width: '12px', height: '12px' }} />
+                    {t.export}
+                  </button>
+                </div>
               </div>
+
+              {/* Log Filter Toolbar */}
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between', 
+                  padding: '8px 16px', 
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)', 
+                  background: 'rgba(9, 13, 22, 0.8)' 
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {/* Task ID Dropdown (only visible when type === 'task') */}
+                  {selectedSource.type === 'task' && (
+                    <select
+                      className="form-select"
+                      style={{ 
+                        padding: '4px 8px', 
+                        fontSize: '11px', 
+                        border: '1px solid rgba(255,255,255,0.1)', 
+                        borderRadius: '6px', 
+                        backgroundColor: '#0F172A', 
+                        color: '#E2E8F0',
+                        fontFamily: 'var(--font-mono)',
+                        height: '26px'
+                      }}
+                      value={selectedSource.id}
+                      onChange={(e) => setSelectedSource({ type: 'task', id: e.target.value })}
+                    >
+                      {availableTasks.map(task => (
+                        <option key={task} value={task}>Task: {task === 'latest' ? 'latest (最新)' : task}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Level dropdown */}
+                  <select
+                    className="form-select"
+                    style={{ 
+                      padding: '4px 8px', 
+                      fontSize: '11px', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '6px', 
+                      backgroundColor: '#0F172A', 
+                      color: '#E2E8F0',
+                      fontFamily: 'var(--font-mono)',
+                      height: '26px'
+                    }}
+                    value={levelFilter}
+                    onChange={(e) => setLevelFilter(e.target.value)}
+                  >
+                    <option value="All Levels">{t.allLevels}</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARN">WARN</option>
+                    <option value="ERROR">ERROR</option>
+                    <option value="DEBUG">DEBUG</option>
+                  </select>
+                </div>
+
+                {/* Search Field */}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <Icons.Search style={{ position: 'absolute', left: '8px', width: '12px', height: '12px', color: '#64748B' }} />
+                  <input
+                    type="text"
+                    className="form-select"
+                    style={{ 
+                      width: '180px', 
+                      padding: '4px 8px 4px 26px', 
+                      fontSize: '11px', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '6px', 
+                      backgroundColor: '#0F172A', 
+                      color: '#E2E8F0',
+                      height: '26px',
+                      fontFamily: 'var(--font-mono)'
+                    }}
+                    placeholder={t.searchLogs}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Console Viewport */}
+              <div
+                ref={logContainerRef}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#060913',
+                  padding: '16px',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  minHeight: '200px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1px'
+                }}
+              >
+                {renderLogLines()}
+                <div ref={consoleBottomRef} />
+              </div>
+
+              {/* Interactive Stdin Bar (visible only for active daemons) */}
+              {selectedSource.type === 'daemon' && (
+                <div 
+                  style={{ 
+                    padding: '12px 16px', 
+                    borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
+                    background: 'rgba(15, 23, 42, 0.8)', 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                >
+                  {agentStatus[selectedSource.id] ? (
+                    <>
+                      <span style={{ color: '#38BDF8', fontSize: '14px', fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>➜</span>
+                      <input 
+                        type="text" 
+                        className="rp-term-input-field" 
+                        style={{
+                          flex: 1,
+                          background: 'transparent',
+                          border: 'none',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '13px',
+                          color: '#F8FAFC',
+                          outline: 'none'
+                        }}
+                        placeholder={
+                          language === '简体中文' 
+                            ? `向 ${selectedSource.id} 智能体输入指令...` 
+                            : `Send instruction to ${selectedSource.id} agent...`
+                        }
+                        value={terminalInputText}
+                        onChange={(e) => setTerminalInputText(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                      />
+                      <Icons.Send
+                        style={{ color: '#38BDF8', cursor: 'pointer', width: '16px', height: '16px' }}
+                        onClick={handleCommandSubmit}
+                      />
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748B', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
+                      <Icons.AlertTriangle style={{ width: '14px', height: '14px', color: '#F59E0B' }} />
+                      <span>
+                        {language === '简体中文' 
+                          ? '当前智能体后台服务未运行。输入不可用。' 
+                          : 'Daemon is currently not running. Stdin input disabled.'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

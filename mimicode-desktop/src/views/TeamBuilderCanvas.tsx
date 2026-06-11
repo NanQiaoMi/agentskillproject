@@ -6,7 +6,6 @@ import {
   useNodesState,
   useEdgesState,
   addEdge,
-  Connection,
   Edge,
   Node,
   ReactFlowProvider,
@@ -16,6 +15,9 @@ import '@xyflow/react/dist/style.css';
 import { Icons } from '../components/Icons';
 import { AgentNode } from '../components/AgentNode';
 import { FeedbackEdge } from '../components/FeedbackEdge';
+import { InputNode } from '../components/nodes/InputNode';
+import { ToolNode } from '../components/nodes/ToolNode';
+import { RouterNode } from '../components/nodes/RouterNode';
 import { invoke } from '@tauri-apps/api/core';
 import { compileGraphToCrewAI } from '../utils/agentCompiler';
 import { TEAM_TEMPLATES, TeamTemplate } from '../utils/teamTemplates';
@@ -138,8 +140,30 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
     return () => window.removeEventListener('mimi-subagent-configs-updated', handleUpdate);
   }, []);
 
-  const nodeTypes = useMemo(() => ({ agentNode: AgentNode }), []);
+  const nodeTypes = useMemo(() => ({ 
+    agentNode: AgentNode,
+    inputNode: InputNode,
+    toolNode: ToolNode,
+    routerNode: RouterNode
+  }), []);
   const edgeTypes = useMemo(() => ({ feedback: FeedbackEdge }), []);
+
+  const onAddSpecialNode = useCallback(
+    (type: string) => {
+      const offset = nodes.length * 30;
+      const position = { x: 100 + offset, y: 100 + offset };
+      
+      const newNode: Node = {
+        id: getId(),
+        type,
+        position,
+        data: {},
+      };
+      
+      setNodes((nds) => nds.concat(newNode));
+    },
+    [nodes.length, setNodes]
+  );
 
   const onAddAgent = useCallback(
     (agentData: any) => {
@@ -733,6 +757,13 @@ Respond ONLY with a valid JSON object in this exact format:
         </div>
 
         <div style={{ marginBottom: '12px' }}>
+          <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-muted)', margin: '0 0 12px 0' }}>流程节点 (Nodes)</h2>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <button onClick={() => onAddSpecialNode('inputNode')} style={{ flex: 1, padding: '8px', background: '#DD6B20', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Input</button>
+            <button onClick={() => onAddSpecialNode('toolNode')} style={{ flex: 1, padding: '8px', background: '#3182CE', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Tool</button>
+            <button onClick={() => onAddSpecialNode('routerNode')} style={{ flex: 1, padding: '8px', background: '#805AD5', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Router</button>
+          </div>
+
           <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-muted)', margin: '0 0 12px 0' }}>可用智能体</h2>
         </div>
         

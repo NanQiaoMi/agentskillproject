@@ -1,10 +1,21 @@
-// React import removed
-import { Handle, Position } from '@xyflow/react';
+import { useState } from 'react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { Icons } from '../Icons';
 
-export function RouterNode({ data }: any) {
+export function RouterNode({ id, data }: any) {
+  const { setNodes, setEdges, updateNodeData } = useReactFlow();
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleDelete = () => {
+    setNodes((nodes) => nodes.filter((n) => n.id !== id));
+    setEdges((edges) => edges.filter((e) => e.source !== id && e.target !== id));
+  };
+
   return (
-    <div style={{
+    <div 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
       background: '#282828',
       border: '1px solid #3f3f3f',
       borderRadius: '6px',
@@ -22,13 +33,20 @@ export function RouterNode({ data }: any) {
         borderTopRightRadius: '5px',
         display: 'flex',
         alignItems: 'center',
-        gap: '6px',
+        justifyContent: 'space-between',
         fontWeight: 600,
         fontSize: '14px',
         color: '#fff'
       }}>
-        <Icons.Activity style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
-        <span>Router</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Icons.Activity style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
+          <span>Router</span>
+        </div>
+        {isHovered && (
+          <div onClick={handleDelete} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <Icons.X style={{ width: '14px', height: '14px' }} />
+          </div>
+        )}
       </div>
       
       <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -56,7 +74,8 @@ export function RouterNode({ data }: any) {
             outline: 'none',
             boxSizing: 'border-box'
           }}
-          defaultValue={data?.condition || ''}
+          value={data?.condition || ''}
+          onChange={(e) => updateNodeData(id, { condition: e.target.value })}
         />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' }}>

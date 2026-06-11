@@ -759,9 +759,9 @@ Respond ONLY with a valid JSON object in this exact format:
         <div style={{ marginBottom: '12px' }}>
           <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-muted)', margin: '0 0 12px 0' }}>流程节点 (Nodes)</h2>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button onClick={() => onAddSpecialNode('inputNode')} style={{ flex: 1, padding: '8px', background: '#DD6B20', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Input</button>
-            <button onClick={() => onAddSpecialNode('toolNode')} style={{ flex: 1, padding: '8px', background: '#3182CE', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Tool</button>
-            <button onClick={() => onAddSpecialNode('routerNode')} style={{ flex: 1, padding: '8px', background: '#805AD5', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Router</button>
+            <button onClick={() => onAddSpecialNode('inputNode')} style={{ flex: 1, padding: '8px', background: '#DD6B20', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 输入</button>
+            <button onClick={() => onAddSpecialNode('toolNode')} style={{ flex: 1, padding: '8px', background: '#3182CE', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 工具</button>
+            <button onClick={() => onAddSpecialNode('routerNode')} style={{ flex: 1, padding: '8px', background: '#805AD5', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 路由</button>
           </div>
 
           <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-muted)', margin: '0 0 12px 0' }}>可用智能体</h2>

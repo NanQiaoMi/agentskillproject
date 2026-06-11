@@ -40,8 +40,8 @@ export function ToolNode({ id, data }: any) {
         color: '#fff'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Icons.Settings style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
-          <span>Tool</span>
+          <Icons.Tool style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
+          <span>工具</span>
         </div>
         {isHovered && (
           <button 
@@ -63,16 +63,41 @@ export function ToolNode({ id, data }: any) {
       </div>
       
       <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', position: 'relative' }}>
           <Handle
             type="target"
             position={Position.Left}
             id="target-input"
             style={{ background: '#63B3ED', left: '-10px' }}
           />
-          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>Parameters</span>
-          
-          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>Result</span>
+          <div style={{ color: '#E2E8F0', fontSize: '13px', marginLeft: '4px' }}>
+            输入
+          </div>
+        </div>
+
+        <select 
+          style={{
+            background: '#1A202C',
+            color: '#E2E8F0',
+            border: '1px solid #4A5568',
+            borderRadius: '4px',
+            padding: '6px',
+            fontSize: '12px',
+            width: '100%',
+            outline: 'none',
+          }}
+          value={data?.tool || 'web_search'}
+          onChange={(e) => updateNodeData(id, { tool: e.target.value })}
+        >
+          <option value="web_search">网络搜索 (Web Search)</option>
+          <option value="file_system">文件系统 (File System)</option>
+          <option value="code_interpreter">代码解释器 (Code Interpreter)</option>
+        </select>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', position: 'relative' }}>
+          <div style={{ color: '#E2E8F0', fontSize: '13px', marginRight: '4px' }}>
+            执行结果
+          </div>
           <Handle
             type="source"
             position={Position.Right}
@@ -80,26 +105,6 @@ export function ToolNode({ id, data }: any) {
             style={{ background: '#F6E05E', right: '-10px' }}
           />
         </div>
-
-        <select 
-          style={{
-            background: '#1A202C',
-            color: '#e2e8f0',
-            border: '1px solid #4a5568',
-            borderRadius: '4px',
-            padding: '6px',
-            fontSize: '12px',
-            width: '100%',
-            outline: 'none',
-            boxSizing: 'border-box'
-          }}
-          value={data?.tool || 'web_search'}
-          onChange={(e) => updateNodeData(id, { tool: e.target.value })}
-        >
-          <option value="web_search">Web Search</option>
-          <option value="file_system">File System</option>
-          <option value="code_interpreter">Code Interpreter</option>
-        </select>
       </div>
     </div>
   );

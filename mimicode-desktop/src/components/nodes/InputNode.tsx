@@ -41,7 +41,7 @@ export function InputNode({ id, data }: any) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Icons.FileText style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
-          <span>Input</span>
+          <span>输入</span>
         </div>
         
         {isHovered && (
@@ -89,7 +89,9 @@ export function InputNode({ id, data }: any) {
         />
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' }}>
-          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>Data Out</span>
+          <div style={{ color: '#A0AEC0', fontSize: '12px', marginRight: '4px' }}>
+            输出
+          </div>
           <Handle
             type="source"
             position={Position.Right}

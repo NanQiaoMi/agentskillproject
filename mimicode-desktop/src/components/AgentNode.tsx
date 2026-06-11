@@ -216,19 +216,19 @@ export const AgentNode = memo(({ id, data }: any) => {
           if (isManager) {
             return (
               <>
-                {renderHandle('target', 'in-goal', 'Goal', '#9F7AEA', 0, false)}
-                {renderHandle('target', 'in-feedback', 'Feedback', '#ED8936', 1, false)}
+                {renderHandle('target', 'in-goal', '目标', '#9F7AEA', 0, false)}
+                {renderHandle('target', 'in-feedback', '反馈', '#ED8936', 1, false)}
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
-                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Strategy</div>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>策略</div>
                   <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
-                    <option>Sequential</option>
-                    <option>Parallel</option>
+                    <option>串行</option>
+                    <option>并行</option>
                   </select>
                 </div>
 
-                {renderHandle('source', 'out-tasks', 'Assigned Tasks', '#63B3ED', 0, true)}
-                {renderHandle('source', 'out-approved', 'Approved Result', '#48BB78', 1, true)}
+                {renderHandle('source', 'out-tasks', '分配任务', '#63B3ED', 0, true)}
+                {renderHandle('source', 'out-approved', '审批结果', '#48BB78', 1, true)}
               </>
             );
           }
@@ -236,11 +236,11 @@ export const AgentNode = memo(({ id, data }: any) => {
           if (isFrontend) {
             return (
               <>
-                {renderHandle('target', 'in-specs', 'Specs', '#63B3ED', 0, false)}
-                {renderHandle('target', 'in-assets', 'Assets', '#F6E05E', 1, false)}
+                {renderHandle('target', 'in-specs', '需求文档', '#63B3ED', 0, false)}
+                {renderHandle('target', 'in-assets', '素材', '#F6E05E', 1, false)}
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
-                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Framework</div>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>框架</div>
                   <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
                     <option>React</option>
                     <option>Vue</option>
@@ -248,8 +248,8 @@ export const AgentNode = memo(({ id, data }: any) => {
                   </select>
                 </div>
 
-                {renderHandle('source', 'out-code', 'Code / PR', '#48BB78', 0, true)}
-                {renderHandle('source', 'out-questions', 'Questions', '#F56565', 1, true)}
+                {renderHandle('source', 'out-code', '代码', '#48BB78', 0, true)}
+                {renderHandle('source', 'out-questions', '疑问', '#F56565', 1, true)}
               </>
             );
           }
@@ -257,19 +257,19 @@ export const AgentNode = memo(({ id, data }: any) => {
           if (isTester) {
             return (
               <>
-                {renderHandle('target', 'in-code', 'Implementation', '#48BB78', 0, false)}
-                {renderHandle('target', 'in-cases', 'Test Cases', '#ED8936', 1, false)}
+                {renderHandle('target', 'in-code', '待测代码', '#48BB78', 0, false)}
+                {renderHandle('target', 'in-cases', '测试用例', '#ED8936', 1, false)}
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
-                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Mode</div>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>模式</div>
                   <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
-                    <option>Standard</option>
-                    <option>Strict (E2E)</option>
+                    <option>标准</option>
+                    <option>严格 (E2E)</option>
                   </select>
                 </div>
 
-                {renderHandle('source', 'out-report', 'Test Report', '#63B3ED', 0, true)}
-                {renderHandle('source', 'out-bugs', 'Bugs', '#F56565', 1, true)}
+                {renderHandle('source', 'out-report', '测试报告', '#63B3ED', 0, true)}
+                {renderHandle('source', 'out-bugs', 'Bug', '#F56565', 1, true)}
               </>
             );
           }
@@ -277,37 +277,37 @@ export const AgentNode = memo(({ id, data }: any) => {
           if (isDevOps) {
             return (
               <>
-                {renderHandle('target', 'in-codebase', 'Codebase', '#48BB78', 0, false)}
-                {renderHandle('target', 'in-config', 'Config', '#A0AEC0', 1, false)}
+                {renderHandle('target', 'in-codebase', '代码库', '#48BB78', 0, false)}
+                {renderHandle('target', 'in-config', '配置', '#A0AEC0', 1, false)}
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
-                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Env</div>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>环境</div>
                   <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
-                    <option>Staging</option>
-                    <option>Production</option>
+                    <option>预发布</option>
+                    <option>生产</option>
                   </select>
                 </div>
 
-                {renderHandle('source', 'out-url', 'Deploy URL', '#63B3ED', 0, true)}
-                {renderHandle('source', 'out-logs', 'Build Logs', '#F6E05E', 1, true)}
+                {renderHandle('source', 'out-url', '部署地址', '#63B3ED', 0, true)}
+                {renderHandle('source', 'out-logs', '构建日志', '#F6E05E', 1, true)}
               </>
             );
           }
 
           // Default Fallback
           return (
-            <>
-              {renderHandle('target', 'target-input', 'Dependencies', '#63B3ED', 0, false)}
+              <>
+              {renderHandle('target', 'target-input', '输入', '#63B3ED', 0, false)}
               
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Role</div>
+                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>角色</div>
                 <div style={{ color: '#E2E8F0', fontSize: '12px', maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>
-                  {data.role || 'Agent'}
+                  {data.role || '智能体'}
                 </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Model</div>
+                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>模型</div>
                 <select
                   value={actualModel}
                   onChange={(e) => setActualModel(e.target.value)}
@@ -321,7 +321,7 @@ export const AgentNode = memo(({ id, data }: any) => {
                 </select>
               </div>
 
-              {renderHandle('source', 'source-output', 'Result', '#F6E05E', 0, true)}
+              {renderHandle('source', 'source-output', '输出', '#F6E05E', 0, true)}
             </>
           );
         })()}

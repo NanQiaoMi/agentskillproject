@@ -39,8 +39,8 @@ export function RouterNode({ id, data }: any) {
         color: '#fff'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Icons.Activity style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
-          <span>Router</span>
+          <Icons.GitBranch style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
+          <span>路由 / 分发</span>
         </div>
         {isHovered && (
           <div onClick={handleDelete} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -57,44 +57,53 @@ export function RouterNode({ id, data }: any) {
             id="target-input"
             style={{ background: '#63B3ED', left: '-10px' }}
           />
-          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>Data In</span>
+          <div style={{ color: '#E2E8F0', fontSize: '13px', marginLeft: '4px' }}>
+            输入
+          </div>
         </div>
 
-        <input 
-          type="text"
-          placeholder="Condition..."
-          style={{
-            background: '#1A202C',
-            color: '#e2e8f0',
-            border: '1px solid #4a5568',
-            borderRadius: '4px',
-            padding: '6px',
-            fontSize: '12px',
-            width: '100%',
-            outline: 'none',
-            boxSizing: 'border-box'
-          }}
-          value={data?.condition || ''}
-          onChange={(e) => updateNodeData(id, { condition: e.target.value })}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ color: '#A0AEC0', fontSize: '12px' }}>条件</div>
+          <input 
+            type="text"
+            placeholder="例如：is_approved == true"
+            style={{
+              background: '#1A202C',
+              color: '#e2e8f0',
+              border: '1px solid #4a5568',
+              borderRadius: '4px',
+              padding: '6px',
+              fontSize: '12px',
+              width: '100%',
+              outline: 'none',
+              boxSizing: 'border-box'
+            }}
+            value={data?.condition || ''}
+            onChange={(e) => updateNodeData(id, { condition: e.target.value })}
+          />
+        </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' }}>
-          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>True</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', position: 'relative' }}>
+          <div style={{ color: '#48BB78', fontSize: '13px', marginRight: '4px', fontWeight: 600 }}>
+            是 (True)
+          </div>
           <Handle
             type="source"
             position={Position.Right}
             id="source-true"
-            style={{ background: '#68D391', right: '-10px' }}
+            style={{ right: '-18px', width: '12px', height: '12px', background: '#48BB78', border: '2px solid #282828' }}
           />
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' }}>
-          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>False</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', position: 'relative', marginTop: '4px' }}>
+          <div style={{ color: '#F56565', fontSize: '13px', marginRight: '4px', fontWeight: 600 }}>
+            否 (False)
+          </div>
           <Handle
             type="source"
             position={Position.Right}
             id="source-false"
-            style={{ background: '#FC8181', right: '-10px' }}
+            style={{ right: '-18px', width: '12px', height: '12px', background: '#F56565', border: '2px solid #282828' }}
           />
         </div>
       </div>

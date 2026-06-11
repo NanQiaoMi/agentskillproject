@@ -2,6 +2,45 @@ import React, { memo, useState, useEffect } from 'react';
 import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { Icons } from '../components/Icons';
 
+const getIconConfig = (iconType: string, roleName: string, labelName: string) => {
+  const role = (roleName || '').toLowerCase();
+  const label = (labelName || '').toLowerCase();
+  
+  if (label.includes('hermes') || role.includes('planner') || role.includes('manager') || role.includes('leader') || role.includes('pm') || iconType === 'manager') {
+    return { Icon: Icons.Shield, bg: '#EF4444' };
+  }
+  if (label.includes('opencode') || role.includes('refactor')) {
+    return { Icon: Icons.Activity, bg: '#8B5CF6' };
+  }
+  if (label.includes('codex') || role.includes('backend') || role.includes('后端')) {
+    return { Icon: Icons.Database, bg: '#10B981' };
+  }
+  if (label.includes('claude') || role.includes('qa') || role.includes('test') || role.includes('测试')) {
+    return { Icon: Icons.TestTube, bg: '#F59E0B' };
+  }
+  if (label.includes('antigravity') || role.includes('frontend') || role.includes('前端')) {
+    return { Icon: Icons.Monitor, bg: '#3B82F6' };
+  }
+
+  if (role.includes('research') || role.includes('调研')) {
+    return { Icon: Icons.Search, bg: '#8B5CF6' };
+  }
+  if (role.includes('writer') || role.includes('creat') || role.includes('撰写') || role.includes('创作者')) {
+    return { Icon: Icons.PenTool, bg: '#10B981' };
+  }
+  if (role.includes('editor') || role.includes('review') || role.includes('审核') || role.includes('编辑')) {
+    return { Icon: Icons.FileCheck, bg: '#F43F5E' };
+  }
+  if (role.includes('seo') || role.includes('market') || role.includes('运营') || role.includes('营销')) {
+    return { Icon: Icons.TrendingUp, bg: '#6366F1' };
+  }
+  if (role.includes('devops') || role.includes('ops') || role.includes('运维')) {
+    return { Icon: Icons.Server, bg: '#64748B' };
+  }
+  
+  return { Icon: Icons.Code, bg: '#3B82F6' };
+};
+
 export const AgentNode = memo(({ id, data }: any) => {
   const { setNodes, setEdges } = useReactFlow();
   const [isHovered, setIsHovered] = useState(false);
@@ -58,19 +97,20 @@ export const AgentNode = memo(({ id, data }: any) => {
       onMouseLeave={() => setIsHovered(false)}
       onDoubleClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('edit-agent-node', { detail: { id } })); }}
       style={{
-        padding: '16px',
-        borderRadius: '12px',
-        backgroundColor: 'rgba(25, 25, 30, 0.7)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border: `1px solid ${isHovered ? 'rgba(59, 130, 246, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-        boxShadow: isHovered ? '0 8px 32px rgba(59, 130, 246, 0.2)' : '0 4px 20px rgba(0,0,0,0.3)',
-        minWidth: '220px',
+        padding: '20px',
+        borderRadius: '16px',
+        background: '#ffffff',
+        border: `1px solid ${isHovered ? '#6366f1' : '#e2e8f0'}`,
+        boxShadow: isHovered 
+          ? '0 10px 25px -5px rgba(0, 0, 0, 0.08)' 
+          : '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+        minWidth: '240px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
-        position: 'relative'
+        gap: '16px',
+        transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        position: 'relative',
+        transform: isHovered ? 'translateY(-4px)' : 'translateY(0)'
       }}
     >
       {/* Settings Button */}
@@ -78,27 +118,27 @@ export const AgentNode = memo(({ id, data }: any) => {
         onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('edit-agent-node', { detail: { id } })); }}
         style={{
           position: 'absolute',
-          top: '-10px',
-          right: '20px',
-          width: '24px',
-          height: '24px',
-          borderRadius: '12px',
-          backgroundColor: '#3B82F6',
-          color: '#fff',
+          top: '-12px',
+          right: '24px',
+          width: '28px',
+          height: '28px',
+          borderRadius: '50%',
+          background: '#6366f1',
+          color: '#ffffff',
           border: 'none',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           cursor: 'pointer',
           opacity: isHovered ? 1 : 0,
-          transform: isHovered ? 'scale(1)' : 'scale(0.8)',
-          transition: 'all 0.2s',
-          boxShadow: '0 2px 8px rgba(59, 130, 246, 0.4)',
+          transform: isHovered ? 'scale(1) rotate(0deg)' : 'scale(0.5) rotate(-45deg)',
+          transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          boxShadow: '0 2px 4px rgba(99, 102, 241, 0.3)',
           zIndex: 10
         }}
         title="设置任务属性"
       >
-        <Icons.Settings style={{ width: '12px', height: '12px' }} />
+        <Icons.Settings style={{ width: '14px', height: '14px' }} />
       </button>
 
       {/* Delete Button */}
@@ -106,74 +146,102 @@ export const AgentNode = memo(({ id, data }: any) => {
         onClick={handleDelete}
         style={{
           position: 'absolute',
-          top: '-10px',
-          right: '-10px',
-          width: '24px',
-          height: '24px',
-          borderRadius: '12px',
-          backgroundColor: 'var(--color-danger)',
-          color: '#fff',
+          top: '-12px',
+          right: '-12px',
+          width: '28px',
+          height: '28px',
+          borderRadius: '50%',
+          background: '#f43f5e',
+          color: '#ffffff',
           border: 'none',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           cursor: 'pointer',
           opacity: isHovered ? 1 : 0,
-          transform: isHovered ? 'scale(1)' : 'scale(0.8)',
-          transition: 'all 0.2s',
-          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+          transform: isHovered ? 'scale(1) rotate(0deg)' : 'scale(0.5) rotate(-45deg)',
+          transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          transitionDelay: '0.05s',
+          boxShadow: '0 2px 4px rgba(244, 63, 94, 0.3)',
           zIndex: 10
         }}
         title="删除节点"
       >
-        <Icons.X style={{ width: '12px', height: '12px' }} />
+        <Icons.X style={{ width: '14px', height: '14px' }} />
       </button>
 
       {/* Top Edge */}
-      <Handle id="top-target" type="target" position={Position.Top} style={{ left: 'calc(50% - 10px)', background: '#3B82F6', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(59, 130, 246, 0.5)' }} />
-      <Handle id="top-source" type="source" position={Position.Top} style={{ left: 'calc(50% + 10px)', background: '#10B981', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(16, 185, 129, 0.5)' }} />
+      <Handle id="top-target" type="target" position={Position.Top} style={{ left: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
+      <Handle id="top-source" type="source" position={Position.Top} style={{ left: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
 
       {/* Bottom Edge */}
-      <Handle id="bottom-target" type="target" position={Position.Bottom} style={{ left: 'calc(50% - 10px)', background: '#3B82F6', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(59, 130, 246, 0.5)' }} />
-      <Handle id="bottom-source" type="source" position={Position.Bottom} style={{ left: 'calc(50% + 10px)', background: '#10B981', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(16, 185, 129, 0.5)' }} />
+      <Handle id="bottom-target" type="target" position={Position.Bottom} style={{ left: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
+      <Handle id="bottom-source" type="source" position={Position.Bottom} style={{ left: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
 
       {/* Left Edge */}
-      <Handle id="left-target" type="target" position={Position.Left} style={{ top: 'calc(50% - 10px)', background: '#3B82F6', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(59, 130, 246, 0.5)' }} />
-      <Handle id="left-source" type="source" position={Position.Left} style={{ top: 'calc(50% + 10px)', background: '#10B981', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(16, 185, 129, 0.5)' }} />
+      <Handle id="left-target" type="target" position={Position.Left} style={{ top: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
+      <Handle id="left-source" type="source" position={Position.Left} style={{ top: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
 
       {/* Right Edge */}
-      <Handle id="right-target" type="target" position={Position.Right} style={{ top: 'calc(50% - 10px)', background: '#3B82F6', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(59, 130, 246, 0.5)' }} />
-      <Handle id="right-source" type="source" position={Position.Right} style={{ top: 'calc(50% + 10px)', background: '#10B981', width: '10px', height: '10px', border: '2px solid #1e1e1e', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 0 4px rgba(16, 185, 129, 0.5)' }} />
+      <Handle id="right-target" type="target" position={Position.Right} style={{ top: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
+      <Handle id="right-source" type="source" position={Position.Right} style={{ top: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
       
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ 
-          width: '36px', height: '36px', borderRadius: '10px', 
-          background: data.icon === 'manager' 
-            ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' 
-            : 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
-          display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff',
-          boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.2)'
-        }}>
-          {data.icon === 'manager' ? <Icons.Shield style={{ width: '18px', height: '18px' }}/> : <Icons.Code style={{ width: '18px', height: '18px' }} />}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{data.label}</div>
-          <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{data.role}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {(() => {
+          const config = getIconConfig(data.icon, data.role, data.label);
+          const IconComp = config.Icon;
+          return (
+            <div style={{ 
+              width: '46px', height: '46px', borderRadius: '12px', 
+              backgroundColor: config.bg,
+              display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff',
+              flexShrink: 0
+            }}>
+              <IconComp style={{ width: '22px', height: '22px' }} />
+            </div>
+          );
+        })()}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ 
+            fontSize: '17px', 
+            fontWeight: 700, 
+            color: '#0f172a', 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis', 
+            letterSpacing: '0.4px', 
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            WebkitFontSmoothing: 'antialiased',
+            MozOsxFontSmoothing: 'grayscale'
+          }}>
+            {data.label}
+          </div>
+          <div style={{ 
+            fontSize: '14px', 
+            fontWeight: 500, 
+            color: '#64748b', 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis', 
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            WebkitFontSmoothing: 'antialiased'
+          }}>
+            {data.role}
+          </div>
         </div>
       </div>
 
       <div style={{ 
-        display: 'flex', alignItems: 'center', gap: '6px', 
-        padding: '6px 8px', backgroundColor: 'rgba(0,0,0,0.3)', 
-        borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)'
+        display: 'flex', alignItems: 'center', gap: '8px', 
+        padding: '6px 10px', 
+        backgroundColor: '#f1f5f9', 
+        borderRadius: '6px', 
       }}>
-        <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981', boxShadow: '0 0 8px #10B981' }}></div>
-        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace' }}>
+        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981' }}></div>
+        <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.5px' }}>
           {actualModel}
         </div>
       </div>
-
-
     </div>
   );
 });

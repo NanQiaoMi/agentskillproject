@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
-import mermaid from 'mermaid';
 
-
+import { parseMarkdown } from '../utils/markdownParser';
+import { runMermaidSafely } from '../utils/mermaidRunner';
 
 export interface ArchNode {
   id: string;
@@ -113,173 +113,6 @@ const TEMPLATES: Record<string, string> = {
 系统部署拓扑及生产环境要求。`
 };
 
-const renderHtmlTable = (rows: string[]): string => {
-  if (rows.length === 0) return '';
-  
-  const parseRow = (row: string) => {
-    const cells = row.split('|').map(c => c.trim());
-    if (cells[0] === '') cells.shift();
-    if (cells[cells.length - 1] === '') cells.pop();
-    return cells;
-  };
-
-  const headerCells = parseRow(rows[0]);
-  
-  let dataStartIndex = 1;
-  if (rows.length > 1 && rows[1].includes('-')) {
-    dataStartIndex = 2;
-  }
-
-  const ths = headerCells.map(cell => {
-    return `<th style="padding: 10px 14px; border-bottom: 2px solid var(--color-border); background-color: var(--bg-hover); color: var(--color-text-main); font-weight: 600; text-align: left; font-size: 13px;">${cell}</th>`;
-  }).join('');
-  
-  const trs = rows.slice(dataStartIndex).map((row, idx) => {
-    const cells = parseRow(row);
-    while (cells.length < headerCells.length) {
-      cells.push('');
-    }
-    const tds = cells.map(cell => {
-      return `<td style="padding: 10px 14px; border-bottom: 1px solid var(--color-border); font-size: 13px; color: var(--color-text-secondary);">${cell}</td>`;
-    }).join('');
-    const rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.015)';
-    return `<tr style="background-color: ${rowBg};">${tds}</tr>`;
-  }).join('');
-
-  return `
-    <div style="overflow-x: auto; margin: 24px 0; border: 1px solid var(--color-border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); max-width: 100%;">
-      <table style="width: 100%; border-collapse: collapse; text-align: left;">
-        <thead><tr>${ths}</tr></thead>
-        <tbody>${trs}</tbody>
-      </table>
-    </div>
-  `;
-};
-
-const parseMarkdown = (md: string): string => {
-  if (!md) return '<div class="text-muted" style="padding:20px;text-align:center;">此规范文档目前为空，点击编辑以添加内容。</div>';
-  
-  // Hide embedded json diagram
-  let cleanMd = md.replace(/<!--\s*architecture_diagram[\s\S]*?-->/g, '');
-  
-  // 1. Escape HTML tags right after stripping out architecture_diagram (XSS Prevention)
-  let text = cleanMd.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  
-  // Normalize windows newlines
-  text = text.replace(/\r\n/g, '\n');
-
-  // Prefix salt for code blocks (Regex Placeholder Salting)
-  const salt = Math.random().toString(36).substring(2, 9);
-  const getPlaceholder = (idx: number) => `__CODE_BLOCK_${salt}_${idx}__`;
-
-  // 2. Extract code blocks
-  const codeBlocks: string[] = [];
-  text = text.replace(/```(.*?)\n([\s\S]*?)```/g, (_, lang, codeContent) => {
-    const placeholder = getPlaceholder(codeBlocks.length);
-    const escapedCode = codeContent.replace(/&(?!lt;|gt;|amp;|quot;|apos;)/g, '&amp;');
-    
-    const isMermaid = lang?.trim().toLowerCase() === 'mermaid' || 
-                      codeContent.trim().startsWith('graph ') || 
-                      codeContent.trim().startsWith('flowchart ');
-    
-    const html = isMermaid ? `
-      <div class="mermaid" style="background-color: #0b1329; border: 1px solid var(--color-border); border-radius: 12px; padding: 24px; margin: 24px 0; display: flex; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow-x: auto; color: #E2E8F0;">
-        ${codeContent.trim()}
-      </div>
-    ` : `
-      <div style="background-color: var(--bg-panel); border: 1px solid var(--color-border); border-radius: 12px; margin: 24px 0; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); background-color: rgba(255,255,255,0.015);">
-          <div style="display: flex; gap: 6px;">
-            <div style="width: 10px; height: 10px; border-radius: 50%; background-color: #FF5F56; opacity: 0.8;"></div>
-            <div style="width: 10px; height: 10px; border-radius: 50%; background-color: #FFBD2E; opacity: 0.8;"></div>
-            <div style="width: 10px; height: 10px; border-radius: 50%; background-color: #27C93F; opacity: 0.8;"></div>
-          </div>
-          <div style="font-family: var(--font-mono, 'Fira Code', Consolas, monospace); font-size: 11px; color: var(--color-text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
-            ${lang || 'CODE'}
-          </div>
-        </div>
-        <pre style="margin: 0; padding: 20px; overflow-x: auto; background-color: #0f172a; font-family: var(--font-mono, 'Fira Code', Consolas, monospace); font-size: 13px; line-height: 1.6; color: #E2E8F0;">
-          <code class="language-${lang || ''}" style="font-family: inherit;">${escapedCode}</code>
-        </pre>
-      </div>
-    `.replace(/\n/g, '').trim();
-    codeBlocks.push(html);
-    return `\n\n${placeholder}\n\n`;
-  });
-
-  // Parse tables
-  const lines = text.split('\n');
-  let inTable = false;
-  let tableRows: string[] = [];
-  const processedLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith('|')) {
-      if (!inTable) {
-        inTable = true;
-        tableRows = [];
-      }
-      tableRows.push(lines[i]);
-    } else {
-      if (inTable) {
-        processedLines.push(renderHtmlTable(tableRows));
-        inTable = false;
-      }
-      processedLines.push(lines[i]);
-    }
-  }
-  if (inTable) {
-    processedLines.push(renderHtmlTable(tableRows));
-  }
-  text = processedLines.join('\n');
-
-  // Preprocess input text to ensure headers and lists are parsed correctly as block elements (Heading/List Spacing Preprocessing)
-  text = text.replace(/^(#+ .*?)$/gm, '\n\n$1\n\n');
-  text = text.replace(/^(- .*?)$/gm, '\n\n$1\n\n');
-  text = text.replace(/^(\d+\.\s*.*?)$/gm, '\n\n$1\n\n');
-  text = text.replace(/^(---)$/gm, '\n\n$1\n\n');
-  text = text.replace(/\n{3,}/g, '\n\n');
-
-  // 3. Perform other markdown conversions
-  let html = text
-    .replace(/^# (.*?)$/gm, '<h1 class="markdown-h1" style="font-size: 20px; font-weight: 600; color: var(--color-text-main); margin-bottom: 16px; border-bottom: 1px solid var(--color-border); padding-bottom: 8px; margin-top: 16px;">$1</h1>')
-    .replace(/^## (.*?)$/gm, '<h2 class="markdown-h2" style="font-size: 16px; font-weight: 600; color: var(--color-text-main); margin-top: 24px; margin-bottom: 12px;">$1</h2>')
-    .replace(/^### (.*?)$/gm, '<h3 class="markdown-h3" style="font-size: 14px; font-weight: 600; color: var(--color-text-main); margin-top: 16px; margin-bottom: 8px;">$1</h3>')
-    .replace(/^#### (.*?)$/gm, '<h4 class="markdown-h4" style="font-size: 13px; font-weight: 600; color: var(--color-text-main); margin-top: 12px; margin-bottom: 6px;">$1</h4>')
-    .replace(/^- \[ \] (.*?)$/gm, '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" disabled style="accent-color:var(--color-primary-orange)" /><span>$1</span></div>')
-    .replace(/^- \[x\] (.*?)$/gm, '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;opacity:0.6;text-decoration:line-through;"><input type="checkbox" checked disabled style="accent-color:var(--color-primary-orange)" /><span>$1</span></div>')
-    .replace(/^- (.*?)$/gm, '<li style="margin-left: 20px; margin-bottom: 6px; color: var(--color-text-secondary);">$1</li>')
-    .replace(/^\d+\.\s*(.*?)$/gm, '<li style="margin-left: 20px; margin-bottom: 6px; color: var(--color-text-secondary); list-style-type: decimal;">$1</li>')
-    .replace(/^&gt;\s*(.*?)$/gm, '<blockquote style="border-left: 4px solid var(--color-primary-orange); padding-left: 16px; margin: 16px 0; color: var(--color-text-muted); font-style: italic;">$1</blockquote>')
-    .replace(/^---$/gm, '<hr style="border: 0; border-top: 1px solid var(--color-border); margin: 24px 0;" />')
-    .replace(/\*\*(.*?)\*\*/g, '<strong style="color: var(--color-text-main); font-weight: 600;">$1</strong>')
-    .replace(/`(.*?)`/g, '<code style="font-family: var(--font-mono, &quot;Fira Code&quot;, Consolas, monospace); font-size: 12px; background-color: var(--bg-hover); padding: 2px 6px; border-radius: 4px; color: var(--color-primary-orange);">$1</code>')
-    .replace(/\[(.*?)\]\((.*?)\)/g, (_, linkText, url) => {
-      const escapedUrl = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      const sanitizedUrl = escapedUrl.trim().toLowerCase().startsWith('javascript:') ? '#' : escapedUrl;
-      return `<a href="${sanitizedUrl}" target="_blank" style="color: var(--color-primary-orange); text-decoration: none;">${linkText}</a>`;
-    });
-
-  // 4. Paragraph wrapping for loose lines
-  html = html.split('\n\n').map(p => {
-    const trimmed = p.trim();
-    if (!trimmed) return '';
-    if (trimmed.startsWith('<h') || trimmed.startsWith('<div') || trimmed.startsWith('<li') || trimmed.startsWith('<pre') || trimmed.startsWith('<ul') || trimmed.startsWith('<ol') || trimmed.startsWith('<blockquote') || trimmed.startsWith('<hr') || trimmed.startsWith('<table') || trimmed.startsWith(`__CODE_BLOCK_${salt}_`)) {
-      return trimmed;
-    }
-    return `<p style="margin-bottom: 12px; line-height: 1.6; color: var(--color-text-secondary);">${trimmed}</p>`;
-  }).join('\n');
-
-  // 5. Restore code blocks
-  codeBlocks.forEach((codeHtml, idx) => {
-    const placeholder = getPlaceholder(idx);
-    html = html.replace(placeholder, codeHtml);
-  });
-
-  return html;
-};
-
 const SECTIONS = [
   { title: '系统架构总览', subtitle: 'System Overview' },
   { title: '模块设计', subtitle: 'Modules' },
@@ -314,24 +147,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
     return () => window.removeEventListener('mimi-language-changed', handleLang);
   }, []);
 
-  // Initialize Mermaid once on mount
-  useEffect(() => {
-    try {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: 'dark',
-        securityLevel: 'loose',
-        themeVariables: {
-          background: '#0b1329',
-          primaryColor: '#1e293b',
-          primaryTextColor: '#f8fafc',
-          lineColor: '#38bdf8',
-        }
-      });
-    } catch (e) {
-      console.error("Failed to initialize mermaid", e);
-    }
-  }, []);
+
 
   // Run mermaid when content, activeTab, or editing status changes
   useEffect(() => {
@@ -341,7 +157,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
       await new Promise((resolve) => setTimeout(resolve, 80));
       if (!active) return;
       try {
-        await mermaid.run();
+        await runMermaidSafely();
       } catch (err) {
         console.error("Mermaid run error:", err);
       }
@@ -353,6 +169,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
       active = false;
     };
   }, [content, editContent, activeTab, isEditing]);
+
 
 
 
@@ -682,9 +499,20 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
             <h1 className="view-title">{language === '简体中文' ? '需求规范 (Specifications)' : 'Specifications'}</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div className="header-right-users" style={{ display: 'flex' }}>
-              <div className="user-avatar" style={{ backgroundColor: '#FDE68A' }}></div>
-              <div className="user-avatar" style={{ backgroundColor: '#FECACA', marginLeft: '-8px' }}></div>
+            <div className="header-right-users" style={{ display: 'flex', alignItems: 'center', marginRight: '8px' }}>
+              <div className="user-avatar" style={{ 
+                background: 'linear-gradient(135deg, #FDE68A 0%, #F59E0B 100%)', 
+                border: '2px solid var(--bg-main)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                zIndex: 2
+              }}></div>
+              <div className="user-avatar" style={{ 
+                background: 'linear-gradient(135deg, #FECACA 0%, #EF4444 100%)', 
+                marginLeft: '-10px',
+                border: '2px solid var(--bg-main)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                zIndex: 1
+              }}></div>
             </div>
             
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -831,11 +659,11 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                   <div dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }} />
 
                   {activeTab === 'Architecture' && (
-                    <div className="arch-diagram-container" style={{ marginTop: '32px' }}>
+                    <div className="arch-diagram-container" style={{ marginTop: '32px', fontFamily: 'var(--font-mono)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', width: '100%' }}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <h3 style={{ fontSize: '15px', color: 'var(--color-text-main)', fontWeight: 600, margin: 0 }}>交互式系统架构拓扑 (Interactive Topology)</h3>
-                          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>点击节点卡片编辑属性，或在此处添加新节点</span>
+                          <h3 style={{ fontSize: '15px', color: 'var(--color-text-main)', fontWeight: 600, margin: 0, fontFamily: 'var(--font-mono)' }}>交互式系统架构拓扑 (Interactive Topology)</h3>
+                          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>点击节点卡片编辑属性，或在此处添加新节点</span>
                         </div>
                         <button 
                           className="btn btn-primary" 
@@ -844,6 +672,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                           style={{ 
                             padding: '6px 12px', 
                             fontSize: '12px',
+                            fontFamily: 'var(--font-mono)',
                             opacity: hasJsonError ? 0.5 : 1,
                             cursor: hasJsonError ? 'not-allowed' : 'pointer'
                           }}
@@ -867,7 +696,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                           gap: '8px'
                         }}>
                           <Icons.AlertTriangle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
-                          <span>架构配置文件格式错误，请检查 ARCHITECTURE.md 尾部的 JSON 数据。已禁用架构图编辑以防数据覆盖。</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>架构配置文件格式错误，请检查 ARCHITECTURE.md 尾部的 JSON 数据。已禁用架构图编辑以防数据覆盖。</span>
                         </div>
                       )}
 
@@ -884,7 +713,7 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                       }}>
                         {/* Column 1: Frontend */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Frontend</div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px', fontFamily: 'var(--font-mono)' }}>Frontend</div>
                           {frontendNodes.map(node => (
                             <div 
                               key={node.id} 
@@ -895,18 +724,18 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                                 opacity: hasJsonError ? 0.8 : 1 
                               }}
                             >
-                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
-                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
+                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.title}</div>
+                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.subtitle}</div>
                             </div>
                           ))}
-                          {frontendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                          {frontendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic', fontFamily: 'var(--font-mono)' }}>Empty</div>}
                         </div>
 
                         <Icons.ArrowRight style={{ color: 'var(--color-text-muted)' }} />
 
                         {/* Column 2: Gateway */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Gateway</div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px', fontFamily: 'var(--font-mono)' }}>Gateway</div>
                           {gatewayNodes.map(node => (
                             <div 
                               key={node.id} 
@@ -917,18 +746,18 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                                 opacity: hasJsonError ? 0.8 : 1 
                               }}
                             >
-                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
-                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
+                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.title}</div>
+                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.subtitle}</div>
                             </div>
                           ))}
-                          {gatewayNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                          {gatewayNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic', fontFamily: 'var(--font-mono)' }}>Empty</div>}
                         </div>
 
                         <Icons.ArrowRight style={{ color: 'var(--color-text-muted)' }} />
 
                         {/* Column 3: Backend */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Backend</div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px', fontFamily: 'var(--font-mono)' }}>Backend</div>
                           {backendNodes.map(node => (
                             <div 
                               key={node.id} 
@@ -939,33 +768,43 @@ export const SpecificationsView: React.FC<SpecificationsViewProps> = ({ projectP
                                 opacity: hasJsonError ? 0.8 : 1 
                               }}
                             >
-                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
-                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
+                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.title}</div>
+                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.subtitle}</div>
                             </div>
                           ))}
-                          {backendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                          {backendNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic', fontFamily: 'var(--font-mono)' }}>Empty</div>}
                         </div>
 
                         <Icons.ArrowRight style={{ color: 'var(--color-text-muted)' }} />
 
                         {/* Column 4: Resources */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>Resources</div>
-                          {resourceNodes.map(node => (
-                            <div 
-                              key={node.id} 
-                              className={`arch-node ${node.type}`} 
-                              onClick={() => !hasJsonError && setEditingNode(node)} 
-                              style={{ 
-                                cursor: hasJsonError ? 'not-allowed' : 'pointer', 
-                                opacity: hasJsonError ? 0.8 : 1 
-                              }}
-                            >
-                              <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.title}</div>
-                              <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>{node.subtitle}</div>
-                            </div>
-                          ))}
-                          {resourceNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>Empty</div>}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: '0.05em', marginBottom: '16px', fontFamily: 'var(--font-mono)' }}>Resources</div>
+                          <div style={{ 
+                            display: 'flex', flexDirection: 'column', gap: '16px', 
+                            padding: '16px', 
+                            border: '1px dashed var(--color-border)', 
+                            borderRadius: 'var(--radius-lg)',
+                            position: 'relative'
+                          }}>
+                            {/* A dot on the left border to receive the arrow cleanly */}
+                            <div style={{ position: 'absolute', left: '-4px', top: '50%', transform: 'translateY(-50%)', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-text-muted)' }}></div>
+                            {resourceNodes.map(node => (
+                              <div 
+                                key={node.id} 
+                                className={`arch-node ${node.type}`} 
+                                onClick={() => !hasJsonError && setEditingNode(node)} 
+                                style={{ 
+                                  cursor: hasJsonError ? 'not-allowed' : 'pointer', 
+                                  opacity: hasJsonError ? 0.8 : 1 
+                                }}
+                              >
+                                <div className="arch-node-title" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.title}</div>
+                                <div className="arch-node-subtitle" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{node.subtitle}</div>
+                              </div>
+                            ))}
+                            {resourceNodes.length === 0 && <div className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic', fontFamily: 'var(--font-mono)' }}>Empty</div>}
+                          </div>
                         </div>
                       </div>
                     </div>

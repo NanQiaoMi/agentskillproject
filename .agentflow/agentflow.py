@@ -433,7 +433,7 @@ def cmd_start(args):
             return
             
     # Git 分支自动化支持
-    if is_git_repo():
+    if is_git_repo() and not getattr(args, 'no_checkout', False):
         branch_name = f"feature/{task['id'].lower()}"
         print(f"[*] 检测到本地 Git 仓库，正在切入特征分支: {branch_name}...")
         ok, _, err = run_git_cmd(["checkout", "-b", branch_name])
@@ -907,6 +907,7 @@ def main():
     p_start = subparsers.add_parser("start", help="将任务设为进行中")
     p_start.add_argument("id", help="任务 ID")
     p_start.add_argument("--operator", help="操作人名字 (默认使用任务指派人)")
+    p_start.add_argument("--no-checkout", action="store_true", help="不自动执行 git checkout (适用于使用 Worktree 的场景)")
     
     # submit
     p_submit = subparsers.add_parser("submit", help="提交任务进入审查阶段")

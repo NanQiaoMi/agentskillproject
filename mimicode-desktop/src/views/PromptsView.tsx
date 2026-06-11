@@ -5,7 +5,7 @@ import { Icons } from '../components/Icons';
 interface AgentInfo {
   id: string;
   name: string;
-  icon: string;
+  icon: React.ReactNode;
   color: string;
   role: string;
   filename: string;
@@ -29,7 +29,7 @@ const AGENTS_LIST: AgentInfo[] = [
   {
     id: 'hermes',
     name: 'Hermes Agent',
-    icon: '🪐',
+    icon: <Icons.Brain />,
     color: '#ec4899',
     role: '需求路由与总规划师',
     filename: 'hermes.md',
@@ -55,7 +55,7 @@ const AGENTS_LIST: AgentInfo[] = [
   {
     id: 'gemini',
     name: 'Gemini (Antigravity)',
-    icon: '✨',
+    icon: <Icons.Sparkles />,
     color: '#10b981',
     role: '前端开发与 UI 专家',
     filename: 'antigravity.md',
@@ -81,7 +81,7 @@ const AGENTS_LIST: AgentInfo[] = [
   {
     id: 'codex',
     name: 'Codex',
-    icon: '💻',
+    icon: <Icons.Database />,
     color: '#8b5cf6',
     role: '后端服务与逻辑实现',
     filename: 'codex.md',
@@ -107,7 +107,7 @@ const AGENTS_LIST: AgentInfo[] = [
   {
     id: 'opencode',
     name: 'OpenCode',
-    icon: '⚡',
+    icon: <Icons.Zap />,
     color: '#3b82f6',
     role: '代码重构与系统调优',
     filename: 'opencode.md',
@@ -133,7 +133,7 @@ const AGENTS_LIST: AgentInfo[] = [
   {
     id: 'claudecode',
     name: 'Claude Code',
-    icon: '©',
+    icon: <Icons.Shield />,
     color: '#f97316',
     role: '代码质量把关与审计',
     filename: 'claudecode.md',
@@ -249,17 +249,20 @@ export const PromptsView: React.FC<PromptsViewProps> = ({ projectPath }) => {
   const currentFilePath = `${projectPath}${separator}.agentflow${separator}prompts${separator}${activeAgent.filename}`;
 
   return (
-    <div className="view-container bg-panel">
-      <div className="view-header" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
-        <h1 className="view-title">提示词中心 (Prompts Hub)</h1>
-        <p className="text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>
+    <div className="view-container bg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="view-header" style={{ padding: '24px 32px 16px', flexShrink: 0 }}>
+        <h1 className="view-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Icons.Terminal style={{ width: '24px', height: '24px', color: 'var(--color-primary-orange)' }} />
+          提示词中心 (Prompts Hub)
+        </h1>
+        <p className="text-muted" style={{ fontSize: '13px', marginTop: '8px' }}>
           在这里定制所有协同开发智能体的系统 Prompt 规程。提示词与当前项目的 <code>.agentflow/prompts/</code> 目录保持同步。
         </p>
       </div>
 
-      <div className="view-content" style={{ display: 'flex', gap: '24px', padding: '24px', height: 'calc(100% - 80px)', overflow: 'hidden' }}>
+      <div className="view-content" style={{ display: 'flex', gap: '24px', padding: '24px 32px 32px', flex: 1, minHeight: 0 }}>
         {/* Left Agent List */}
-        <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+        <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', paddingRight: '8px', paddingBottom: '20px' }}>
           {AGENTS_LIST.map(agent => {
             const isActive = agent.id === selectedAgentId;
             return (
@@ -267,20 +270,49 @@ export const PromptsView: React.FC<PromptsViewProps> = ({ projectPath }) => {
                 key={agent.id}
                 onClick={() => setSelectedAgentId(agent.id)}
                 style={{
-                  padding: '16px',
-                  borderRadius: 'var(--radius-lg)',
-                  border: `1px solid ${isActive ? 'var(--color-primary-orange)' : 'var(--color-border)'}`,
-                  backgroundColor: isActive ? 'rgba(249, 115, 22, 0.08)' : 'var(--bg-main)',
+                  position: 'relative',
+                  padding: '16px 18px',
+                  borderRadius: '14px',
+                  border: `1px solid ${isActive ? `color-mix(in srgb, ${agent.color} 50%, transparent)` : 'var(--color-border)'}`,
+                  background: isActive ? `linear-gradient(145deg, color-mix(in srgb, ${agent.color} 10%, transparent) 0%, color-mix(in srgb, ${agent.color} 2%, transparent) 100%)` : 'var(--bg-main)',
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isActive ? '0 4px 12px rgba(249, 115, 22, 0.1)' : 'var(--shadow-soft)'
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: isActive ? `0 8px 24px color-mix(in srgb, ${agent.color} 15%, transparent), 0 2px 4px color-mix(in srgb, ${agent.color} 10%, transparent)` : '0 2px 8px rgba(0,0,0,0.02)',
+                  overflow: 'hidden'
+                }}
+                className={isActive ? '' : 'hover:border-[var(--color-border-hover)] hover:shadow-md'}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '20px' }}>{agent.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-text-main)' }}>{agent.name}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{agent.role}</div>
+                {isActive && (
+                  <div style={{
+                    position: 'absolute', left: 0, top: '15%', bottom: '15%', width: '4px',
+                    borderRadius: '0 4px 4px 0', backgroundColor: agent.color,
+                    boxShadow: `0 0 10px ${agent.color}`
+                  }} />
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ 
+                    width: '42px', height: '42px', borderRadius: '12px', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px',
+                    background: `linear-gradient(135deg, color-mix(in srgb, ${agent.color} 20%, transparent) 0%, color-mix(in srgb, ${agent.color} 5%, transparent) 100%)`,
+                    border: `1px solid color-mix(in srgb, ${agent.color} 30%, transparent)`,
+                    boxShadow: isActive ? `0 4px 12px color-mix(in srgb, ${agent.color} 20%, transparent)` : 'none',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    {agent.icon}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: '15px', color: isActive ? 'var(--color-text-main)' : 'var(--color-text-main)', letterSpacing: '-0.01em', transition: 'color 0.3s ease' }}>
+                      {agent.name}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px', fontWeight: 500 }}>
+                      {agent.role}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -289,85 +321,116 @@ export const PromptsView: React.FC<PromptsViewProps> = ({ projectPath }) => {
         </div>
 
         {/* Right Content Area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', paddingRight: '4px' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto', paddingRight: '8px', paddingBottom: '20px' }}>
           {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--color-text-muted)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)' }}>
               加载提示词配置中...
             </div>
           ) : (
-            <div className="spec-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', background: 'rgba(255,255,255,0.02)', backdropFilter: 'blur(10px)' }}>
+            <div className="spec-card" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', background: 'var(--bg-main)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-soft)' }}>
               {/* Agent Intro Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <span style={{ fontSize: '32px' }}>{activeAgent.icon}</span>
+              <div style={{ display: 'flex', justifyItems: 'center', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <div style={{ 
+                    width: '56px', height: '56px', borderRadius: '16px', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px',
+                    background: `linear-gradient(135deg, color-mix(in srgb, ${activeAgent.color} 20%, transparent) 0%, color-mix(in srgb, ${activeAgent.color} 5%, transparent) 100%)`,
+                    border: `1px solid color-mix(in srgb, ${activeAgent.color} 40%, transparent)`,
+                    boxShadow: `0 8px 24px color-mix(in srgb, ${activeAgent.color} 20%, transparent), inset 0 1px 1px rgba(255,255,255,0.1)`
+                  }}>
+                    {activeAgent.icon}
+                  </div>
                   <div>
-                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--color-text-main)' }}>{activeAgent.name} - 系统提示词规程</h2>
-                    <div style={{ fontSize: '12px', color: 'var(--color-primary-orange)', fontWeight: 600, marginTop: '4px' }}>角色定位：{activeAgent.role}</div>
+                    <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-text-main)', letterSpacing: '-0.02em' }}>{activeAgent.name} - 系统提示词规程</h2>
+                    <div style={{ fontSize: '13px', color: activeAgent.color, fontWeight: 600, marginTop: '6px' }}>角色定位：{activeAgent.role}</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button className="btn btn-ghost" onClick={() => handleReset(activeAgent.id)} style={{ padding: '6px 12px', fontSize: '12px' }}>
-                    <Icons.RefreshCw style={{ width: '12px', height: '12px', marginRight: '6px' }} /> 重置默认
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button className="modern-btn" onClick={() => handleReset(activeAgent.id)} style={{ padding: '8px 16px', backgroundColor: 'var(--bg-panel)', color: 'var(--color-text-main)' }}>
+                    <Icons.RefreshCw style={{ width: '14px', height: '14px' }} /> 重置默认
                   </button>
                   <button
-                    className="btn btn-primary"
+                    className="modern-btn"
                     onClick={() => handleSave(activeAgent.id)}
                     disabled={savingAgentId === activeAgent.id}
-                    style={{ padding: '6px 16px', fontSize: '12px' }}
+                    style={{ padding: '8px 20px', background: `linear-gradient(135deg, ${activeAgent.color} 0%, color-mix(in srgb, ${activeAgent.color} 80%, black) 100%)`, color: '#fff', border: 'none' }}
                   >
-                    {savingAgentId === activeAgent.id ? '正在保存...' : (
-                      <>
-                        <Icons.CheckCircle2 style={{ width: '12px', height: '12px', marginRight: '6px' }} /> 保存修改
-                      </>
+                    {savingAgentId === activeAgent.id ? (
+                      <><Icons.RefreshCw style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} /> 正在保存...</>
+                    ) : (
+                      <><Icons.CheckCircle2 style={{ width: '14px', height: '14px' }} /> 保存修改</>
                     )}
                   </button>
                 </div>
               </div>
 
               {/* Agent Description */}
-              <div style={{ backgroundColor: 'var(--bg-panel)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '6px' }}>功能说明：</div>
-                <div style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', lineHeight: '1.6' }}>{activeAgent.desc}</div>
+              <div style={{ 
+                backgroundColor: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-lg)', 
+                border: '1px solid var(--color-border)', borderLeft: `4px solid ${activeAgent.color}` 
+              }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '8px' }}>功能说明：</div>
+                <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.6' }}>{activeAgent.desc}</div>
               </div>
 
               {/* Edit Prompt Area */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-main)' }}>核心系统提示词配置 (System Prompt Markdown)：</label>
-                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>配置文件路径：<code>{currentFilePath.length > 50 ? '...' + currentFilePath.substring(currentFilePath.length - 47) : currentFilePath}</code></span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: `color-mix(in srgb, ${activeAgent.color} 15%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icons.Terminal style={{ width: '14px', height: '14px', color: activeAgent.color }} />
+                    </div>
+                    核心系统提示词配置 (System Prompt Markdown)：
+                  </label>
+                  <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>配置文件路径：<code style={{ background: 'var(--bg-panel)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>{currentFilePath.length > 50 ? '...' + currentFilePath.substring(currentFilePath.length - 47) : currentFilePath}</code></span>
                 </div>
-                <textarea
-                  className="intercept-input bg-panel"
-                  style={{
-                    width: '100%',
-                    height: '280px',
-                    fontFamily: 'var(--font-mono, monospace)',
-                    fontSize: '12.5px',
-                    lineHeight: '1.6',
-                    padding: '16px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text-main)',
-                    resize: 'vertical'
-                  }}
-                  value={prompts[activeAgent.id] || ''}
-                  onChange={e => setPrompts(prev => ({ ...prev, [activeAgent.id]: e.target.value }))}
-                />
+                <div style={{ 
+                  position: 'relative', 
+                  borderRadius: 'var(--radius-lg)', 
+                  padding: '1px', 
+                  background: `linear-gradient(180deg, color-mix(in srgb, ${activeAgent.color} 30%, transparent) 0%, transparent 100%)`,
+                  boxShadow: 'var(--shadow-soft)' 
+                }}>
+                  <textarea
+                    className="intercept-input"
+                    style={{
+                      width: '100%',
+                      height: '320px',
+                      fontFamily: 'var(--font-mono, monospace)',
+                      fontSize: '13px',
+                      lineHeight: '1.7',
+                      padding: '20px',
+                      borderRadius: 'calc(var(--radius-lg) - 1px)',
+                      border: 'none',
+                      backgroundColor: 'var(--bg-terminal)',
+                      color: '#f8fafc', // Fixed light color for visibility on dark terminal background
+                      resize: 'vertical',
+                      outline: 'none'
+                    }}
+                    value={prompts[activeAgent.id] || ''}
+                    onChange={e => setPrompts(prev => ({ ...prev, [activeAgent.id]: e.target.value }))}
+                    spellCheck={false}
+                  />
+                </div>
               </div>
 
               {/* Trigger & Dev Workflows */}
-              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Icons.Zap style={{ width: '16px', height: '16px', color: 'var(--color-primary-orange)' }} />
-                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-main)' }}>后续开发工作流 (Workflows)</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: `color-mix(in srgb, ${activeAgent.color} 15%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icons.Zap style={{ width: '18px', height: '18px', color: activeAgent.color }} />
+                  </div>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-main)', letterSpacing: '-0.01em' }}>后续开发工作流 (Workflows)</span>
                 </div>
                 
                 {/* Trigger */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '16px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                  <Icons.Play style={{ width: '16px', height: '16px', color: 'var(--color-text-muted)', marginTop: '2px' }} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', padding: '20px', backgroundColor: 'var(--bg-panel)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                  <div style={{ background: 'var(--bg-main)', padding: '6px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                    <Icons.Play style={{ width: '16px', height: '16px', color: activeAgent.color }} />
+                  </div>
                   <div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '4px' }}>触发方式</div>
-                    <div style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: activeAgent.workflow.trigger.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; color: var(--color-primary-orange)">$1</code>') }} />
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '6px' }}>触发方式</div>
+                    <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: activeAgent.workflow.trigger.replace(/`([^`]+)`/g, `<code style="background: color-mix(in srgb, ${activeAgent.color} 10%, transparent); padding: 2px 6px; border-radius: 4px; color: ${activeAgent.color}">$1</code>`) }} />
                   </div>
                 </div>
 
@@ -438,27 +501,31 @@ export const PromptsView: React.FC<PromptsViewProps> = ({ projectPath }) => {
 
                 {/* SOP Timeline */}
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Icons.GitBranch style={{ width: '14px', height: '14px', color: '#10B981' }} /> 标准化工程生命周期 (SOP Timeline)
+                  <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: `color-mix(in srgb, ${activeAgent.color} 15%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icons.GitBranch style={{ width: '14px', height: '14px', color: activeAgent.color }} />
+                    </div>
+                    标准化工程生命周期 (SOP Timeline)
                   </div>
                   <div style={{ position: 'relative', paddingLeft: '14px' }}>
                     {/* Timeline Line */}
-                    <div style={{ position: 'absolute', left: '18px', top: '10px', bottom: '10px', width: '2px', backgroundColor: 'var(--color-border)', borderRadius: '2px' }} />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ position: 'absolute', left: '19px', top: '10px', bottom: '10px', width: '2px', backgroundColor: 'var(--color-border)', borderRadius: '2px' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                       {activeAgent.sopTimeline.map((step, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', position: 'relative' }}>
+                        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '20px', position: 'relative' }}>
                           {/* Timeline dot */}
                           <div style={{ 
-                            width: '10px', height: '10px', borderRadius: '50%', 
-                            backgroundColor: 'var(--bg-panel)', border: `2px solid ${activeAgent.color}`, 
-                            position: 'relative', zIndex: 1, marginTop: '4px', flexShrink: 0
+                            width: '12px', height: '12px', borderRadius: '50%', 
+                            backgroundColor: 'var(--bg-main)', border: `2px solid ${activeAgent.color}`, 
+                            position: 'relative', zIndex: 1, marginTop: '6px', flexShrink: 0,
+                            boxShadow: `0 0 8px color-mix(in srgb, ${activeAgent.color} 50%, transparent)`
                           }} />
-                          <div style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.02)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', transition: 'all 0.2s' }} className="hover:border-[var(--color-primary-orange)]">
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
-                              <span style={{ color: activeAgent.color, marginRight: '8px', fontSize: '12px', opacity: 0.8 }}>0{idx + 1}</span> 
+                          <div style={{ flex: 1, backgroundColor: 'var(--bg-panel)', padding: '16px 20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', transition: 'all 0.2s', boxShadow: 'var(--shadow-sm)' }} className={`hover:border-[${activeAgent.color}] hover:shadow-md`}>
+                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '6px', display: 'flex', alignItems: 'center' }}>
+                              <span style={{ color: activeAgent.color, marginRight: '10px', fontSize: '13px', opacity: 0.9, fontWeight: 700 }}>0{idx + 1}</span> 
                               {step.phase}
                             </div>
-                            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: '1.5' }}>
+                            <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.6' }}>
                               {step.desc}
                             </div>
                           </div>
@@ -469,12 +536,12 @@ export const PromptsView: React.FC<PromptsViewProps> = ({ projectPath }) => {
                 </div>
 
                 {/* Suggestion */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                  <Icons.Lightbulb style={{ width: '16px', height: '16px', color: '#3B82F6', marginTop: '2px', flexShrink: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', padding: '16px 20px', background: `linear-gradient(135deg, color-mix(in srgb, ${activeAgent.color} 8%, transparent) 0%, color-mix(in srgb, ${activeAgent.color} 2%, transparent) 100%)`, borderRadius: 'var(--radius-lg)', border: `1px solid color-mix(in srgb, ${activeAgent.color} 20%, transparent)` }}>
+                  <Icons.Lightbulb style={{ width: '18px', height: '18px', color: activeAgent.color, marginTop: '2px', flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: '12.5px', color: 'var(--color-text-main)', lineHeight: '1.6' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--color-text-main)', lineHeight: '1.6' }}>
                       <span style={{ fontWeight: 600, marginRight: '6px' }}>使用建议：</span>
-                      <span dangerouslySetInnerHTML={{ __html: activeAgent.workflow.suggestion.replace(/`([^`]+)`/g, '<code style="background: rgba(59, 130, 246, 0.1); padding: 2px 4px; border-radius: 4px; color: #3B82F6">$1</code>') }} />
+                      <span dangerouslySetInnerHTML={{ __html: activeAgent.workflow.suggestion.replace(/`([^`]+)`/g, `<code style="background: color-mix(in srgb, ${activeAgent.color} 15%, transparent); padding: 2px 6px; border-radius: 4px; color: ${activeAgent.color}">$1</code>`) }} />
                     </div>
                   </div>
                 </div>

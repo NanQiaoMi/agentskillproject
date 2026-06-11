@@ -393,49 +393,54 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
       const strokeDashoffset = Math.round(94 - (healthIndex / 100) * 94);
 
       return (
-        <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '16px', backgroundColor: 'var(--bg-panel)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Icons.Activity style={{ width: '14px', height: '14px', color: 'var(--color-primary-orange)' }} />
-              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                开发环境健康诊断 (Environment Diagnostics)
+        <div style={{ border: '1px solid rgba(128,128,128,0.15)', borderRadius: '16px', padding: '20px', background: 'linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-main) 100%)', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.08), inset 0 1px 2px rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Subtle Grid Background */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.04, backgroundImage: 'linear-gradient(rgba(128,128,128,1) 1px, transparent 1px), linear-gradient(90deg, rgba(128,128,128,1) 1px, transparent 1px)', backgroundSize: '16px 16px', pointerEvents: 'none' }}></div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-primary-orange)' }}>
+                <Icons.Activity style={{ width: '14px', height: '14px' }} />
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-main)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                开发环境健康诊断
               </span>
             </div>
-            <span style={{ fontSize: '10px', color: healthColor, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: healthColor, display: 'inline-block' }} className="pulse-dot-green"></span>
+            <span style={{ fontSize: '10.5px', color: healthColor, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: `${healthColor}15`, padding: '4px 10px', borderRadius: '12px', border: `1px solid ${healthColor}30` }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: healthColor, display: 'inline-block', boxShadow: `0 0 6px ${healthColor}` }} className="pulse-dot-green"></span>
               {healthIndex >= 75 ? '系统就绪' : '发现异常'}
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div style={{ backgroundColor: 'var(--bg-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ position: 'relative', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="36" height="36" viewBox="0 0 36 36">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ backgroundColor: 'var(--bg-main)', border: '1px solid rgba(0,0,0,0.05)', borderRadius: '12px', padding: '12px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.6), 0 2px 4px rgba(0,0,0,0.02)' }}>
+              <div style={{ position: 'relative', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="44" height="44" viewBox="0 0 36 36">
                   <circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-border)" strokeWidth="3" />
                   <circle cx="18" cy="18" r="15" fill="none" stroke={healthColor} strokeWidth="3" strokeDasharray="94" strokeDashoffset={String(strokeDashoffset)} strokeLinecap="round" transform="rotate(-90 18 18)" />
                 </svg>
-                <span style={{ position: 'absolute', fontSize: '10px', fontWeight: 700, color: 'var(--color-text-main)' }}>
+                <span style={{ position: 'absolute', fontSize: '11px', fontWeight: 800, color: 'var(--color-text-main)' }}>
                   {healthIndex}%
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-main)' }}>健康指数</span>
-                <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>状态：{healthLevel}</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-main)' }}>健康指数</span>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>状态：{healthLevel}</span>
               </div>
             </div>
 
-            <div style={{ backgroundColor: 'var(--bg-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(59, 130, 246, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3B82F6' }}>
-                <Icons.FolderOpen style={{ width: '18px', height: '18px' }} />
+            <div style={{ backgroundColor: 'var(--bg-main)', border: '1px solid rgba(0,0,0,0.05)', borderRadius: '12px', padding: '12px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.6), 0 2px 4px rgba(0,0,0,0.02)' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: 'rgba(59, 130, 246, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3B82F6' }}>
+                <Icons.FolderOpen style={{ width: '20px', height: '20px' }} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-main)' }}>库容量</span>
-                <span style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>{fileCount > 0 ? `${fileCount} 个源文件` : '读取中...'}</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-main)' }}>库容量</span>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{fileCount > 0 ? `${fileCount} 个源文件` : '读取中...'}</span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', backgroundColor: 'var(--bg-main)', padding: '10px', borderRadius: '6px', border: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', background: 'rgba(0,0,0,0.02)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', marginTop: '6px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ color: 'var(--color-text-secondary)' }}>分支同步状态:</span>
               <span style={{ fontWeight: 600, color: syncStatusText.includes('落后') || syncStatusText.includes('冲突') ? '#F59E0B' : '#10B981' }}>{syncStatusText}</span>
@@ -467,20 +472,24 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
     const centerY = height / 2;
     
     return (
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '16px', backgroundColor: 'var(--bg-panel)', position: 'relative' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Icons.GitBranch style={{ width: '14px', height: '14px', color: 'var(--color-primary-orange)' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Git 工作区环境拓扑网络 (Environment Topology)
+      <div style={{ border: '1px solid rgba(128,128,128,0.15)', borderRadius: '16px', padding: '20px', background: 'linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-main) 100%)', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.08), inset 0 1px 2px rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.04, backgroundImage: 'linear-gradient(rgba(128,128,128,1) 1px, transparent 1px), linear-gradient(90deg, rgba(128,128,128,1) 1px, transparent 1px)', backgroundSize: '16px 16px', pointerEvents: 'none' }}></div>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-primary-orange)' }}>
+              <Icons.GitBranch style={{ width: '14px', height: '14px' }} />
+            </div>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-main)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Git 工作区环境拓扑网络
             </span>
           </div>
-          <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', backgroundColor: 'rgba(128,128,128,0.08)', padding: '4px 10px', borderRadius: '12px' }}>
             点击节点切换选中工作区
           </span>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '150px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '150px', position: 'relative', zIndex: 1 }}>
           <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
             <defs>
               <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -718,13 +727,22 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
           animation: pulse-blue 2s infinite;
         }
         .wt-details-card {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          border: 1px solid var(--color-border);
-          border-radius: 12px;
-          background-color: var(--bg-main);
-          box-shadow: 0 4px 20px -2px rgba(17, 24, 39, 0.02), 0 2px 6px -1px rgba(17, 24, 39, 0.01);
+          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          border: 1px solid rgba(128, 128, 128, 0.15);
+          border-radius: 16px;
+          background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-main) 100%);
+          box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.1), 0 2px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 2px rgba(255, 255, 255, 0.05);
           animation: fade-in-scale 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           opacity: 0;
+          position: relative;
+          overflow: hidden;
+        }
+        .wt-details-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+          z-index: 10;
         }
         .wt-details-card:nth-child(1) { animation-delay: 0.05s; }
         .wt-details-card:nth-child(2) { animation-delay: 0.1s; }
@@ -732,20 +750,21 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
         .wt-details-card:nth-child(4) { animation-delay: 0.2s; }
 
         .wt-details-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 16px 32px rgba(232, 104, 74, 0.1), 0 4px 12px rgba(0, 0, 0, 0.03);
-          border-color: rgba(232, 104, 74, 0.5) !important;
+          transform: translateY(-2px);
+          box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+          border-color: rgba(245, 158, 11, 0.3) !important;
         }
         .wt-btn-action {
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
           overflow: hidden;
+          background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
         }
         .wt-btn-action::after {
           content: '';
           position: absolute;
           top: 0; left: -100%; width: 100%; height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
           transition: 0.5s;
         }
         .wt-btn-action:hover::after {
@@ -753,13 +772,15 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
         }
         .wt-btn-action:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+          box-shadow: 0 8px 16px -4px rgba(0,0,0,0.1);
           background-color: var(--bg-hover) !important;
+          border-color: rgba(128,128,128,0.25) !important;
         }
         .wt-file-item {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           animation: slide-up-fade 0.4s ease-out forwards;
           opacity: 0;
+          background: linear-gradient(90deg, rgba(128,128,128,0.02) 0%, transparent 100%);
         }
         .wt-file-item:nth-child(1) { animation-delay: 0.05s; }
         .wt-file-item:nth-child(2) { animation-delay: 0.1s; }
@@ -769,10 +790,10 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
         .wt-file-item:nth-child(n+6) { animation-delay: 0.3s; }
         
         .wt-file-item:hover {
-          transform: translateX(6px) scale(1.01);
-          border-color: var(--color-primary-orange) !important;
-          background-color: var(--bg-hover) !important;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+          transform: translateX(4px) scale(1.005);
+          border-color: rgba(245, 158, 11, 0.4) !important;
+          background-color: rgba(245, 158, 11, 0.03) !important;
+          box-shadow: 0 4px 12px -4px rgba(0,0,0,0.08);
         }
         .wt-commit-item {
           transition: all 0.2s ease;
@@ -792,28 +813,28 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
           border-radius: 6px;
         }
         .heatmap-square {
-          width: 9.5px;
-          height: 9.5px;
+          width: 10px;
+          height: 10px;
           border-radius: 2.5px;
-          transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
           cursor: pointer;
         }
         .heatmap-square:hover {
-          transform: scale(1.4) translateY(-1px);
-          z-index: 5;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          transform: scale(1.5) translateY(-2px);
+          z-index: 10;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.25);
           border-radius: 3px;
         }
         .heatmap-square.real-commit {
-          box-shadow: 0 0 5px var(--color-primary-orange);
-          border: 1px solid #FFEDD5;
+          box-shadow: 0 0 4px rgba(245, 158, 11, 0.6);
+          border: 1px solid rgba(255, 237, 213, 0.8);
           animation: pulse-orange-border 3s infinite;
         }
         .stat-badge-box {
-          border: 1px solid var(--color-border);
-          border-radius: 10px;
-          padding: 10px 12px;
-          background-color: var(--bg-panel);
+          border: 1px solid rgba(128, 128, 128, 0.15);
+          border-radius: 12px;
+          padding: 16px;
+          background: linear-gradient(135deg, var(--bg-main) 0%, var(--bg-panel) 100%);
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -822,11 +843,12 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
           overflow: hidden;
+          box-shadow: 0 2px 8px -2px rgba(0,0,0,0.05), inset 0 1px 2px rgba(255,255,255,0.05);
         }
         .stat-badge-box:hover {
-          border-color: var(--color-primary-orange);
+          border-color: rgba(245, 158, 11, 0.4);
           transform: translateY(-2px);
-          box-shadow: 0 6px 14px rgba(232, 104, 74, 0.12);
+          box-shadow: 0 8px 16px -4px rgba(245, 158, 11, 0.15), inset 0 1px 2px rgba(255,255,255,0.05);
         }
         .wt-sidebar-item {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -880,7 +902,7 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, minHeight: 0 }}>
             
             {/* Top Grid - Stretches vertically to fill upper part */}
-            <div className="worktree-split-container" style={{ padding: 0, flex: 1, display: 'grid', gridTemplateColumns: '260px 1fr 1.2fr', gap: '24px', minHeight: 0, overflow: 'hidden' }}>
+            <div className="worktree-split-container" style={{ padding: 0, flex: 1, display: 'grid', gridTemplateColumns: '260px 1fr 1.2fr', gap: '20px', minHeight: 0, overflow: 'hidden' }}>
               
               {/* Column 1 - Worktrees Sidebar */}
               <WorktreeList
@@ -896,7 +918,7 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
               <div className="worktree-details-left wt-details-card" style={{ display: 'flex', flexDirection: 'column', gap: '18px', backgroundColor: 'var(--bg-main)', height: '100%', overflowY: 'auto', padding: '24px' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-main)', letterSpacing: '-0.01em' }}>{selectedWt.name}</h2>
+                    <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-main)', letterSpacing: '-0.01em' }}>{selectedWt.name}</h2>
                     {isMainRepo ? (
                       <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', backgroundColor: 'rgba(59, 130, 246, 0.08)', color: '#3B82F6', fontWeight: 600, border: '1px solid rgba(59, 130, 246, 0.15)' }}>主项目</span>
                     ) : (
@@ -931,16 +953,22 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
                   ) : fileStats.length > 0 ? (
                     <div>
                       {/* Segment bar */}
-                      <div style={{ display: 'flex', height: '8px', borderRadius: '4px', overflow: 'hidden', backgroundColor: 'var(--bg-hover)', marginBottom: '12px', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', height: '22px', borderRadius: '11px', overflow: 'hidden', backgroundColor: 'rgba(128,128,128,0.1)', marginBottom: '16px', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.1)', border: '1px solid rgba(128,128,128,0.15)', padding: '2px', gap: '2px' }}>
                         {fileStats.map((stat, idx) => (
                           <div 
                             key={stat.label} 
                             style={{ 
                               width: `${stat.percent}%`, 
                               backgroundColor: stat.color,
-                              transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
-                              transitionDelay: `${idx * 0.1}s`
+                              backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(0,0,0,0.1))',
+                              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)',
+                              borderRadius: '6px',
+                              transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+                              transitionDelay: `${idx * 0.1}s`,
+                              cursor: 'pointer'
                             }} 
+                            onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(1.15) saturate(1.2)'; e.currentTarget.style.transform = 'scaleY(1.05)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; e.currentTarget.style.transform = 'none'; }}
                             title={`${stat.label}: ${stat.count} 个文件 (${stat.percent}%)`}
                           />
                         ))}
@@ -968,12 +996,12 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
 
                 {/* Load Metrics bar */}
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '8px' }}>
                     <span className="text-muted" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>隔离工作区修改负载 (Load Status)</span>
-                    <span style={{ color: loadInfo.color, fontWeight: 600 }}>{loadInfo.label}</span>
+                    <span style={{ color: loadInfo.color, fontWeight: 700, backgroundColor: `${loadInfo.color}15`, padding: '2px 8px', borderRadius: '8px' }}>{loadInfo.label}</span>
                   </div>
-                  <div style={{ display: 'flex', height: '6px', borderRadius: '3px', backgroundColor: 'var(--bg-hover)', overflow: 'hidden' }}>
-                    <div className={fileChanges.length > 0 ? "loading-stripe-bar" : ""} style={{ width: loadInfo.percent, backgroundColor: loadInfo.color, borderRadius: '3px', transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}></div>
+                  <div style={{ display: 'flex', height: '14px', borderRadius: '999px', backgroundColor: 'rgba(128,128,128,0.1)', overflow: 'hidden', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.08)', border: '1px solid rgba(128,128,128,0.1)' }}>
+                    <div className={fileChanges.length > 0 ? "loading-stripe-bar" : ""} style={{ width: loadInfo.percent, backgroundColor: loadInfo.color, backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.2), rgba(255,255,255,0))', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.4)', borderRadius: '999px', transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}></div>
                   </div>
                   <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px', display: 'block' }}>
                     当前存在 <span style={{ color: 'var(--color-text-main)', fontWeight: 600 }}>{fileChanges.length}</span> 个待提交修改文件
@@ -985,37 +1013,37 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
                   <span className="text-muted" style={{ fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
                     协作智能体监控 (Active Agents)
                   </span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11.5px' }}>
-                    <div className="agent-status-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', cursor: 'default' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11.5px' }}>
+                    <div className="agent-status-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: '8px', cursor: 'default', backgroundColor: 'var(--bg-panel)', border: '1px solid rgba(0,0,0,0.02)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3B82F6' }} className="pulse-dot-blue"></span>
                         </div>
                         <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>Antigravity</span>
-                        <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', backgroundColor: 'var(--bg-panel)', padding: '1px 4px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>前端专家</span>
+                        <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(0,0,0,0.04)' }}>前端专家</span>
                       </div>
-                      <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>🟢 运行中</span>
+                      <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>🟢 运行中</span>
                     </div>
-                    <div className="agent-status-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', cursor: 'default' }}>
+                    <div className="agent-status-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: '8px', cursor: 'default', backgroundColor: 'var(--bg-panel)', border: '1px solid rgba(0,0,0,0.02)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', opacity: 0.5 }}></span>
                         </div>
                         <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>Codex</span>
-                        <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', backgroundColor: 'var(--bg-panel)', padding: '1px 4px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>后端专家</span>
+                        <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(0,0,0,0.04)' }}>后端专家</span>
                       </div>
-                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 500, padding: '2px 8px', borderRadius: '4px', backgroundColor: 'var(--bg-panel)', border: '1px solid var(--color-border)' }}>💤 空闲中</span>
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 500, padding: '2px 8px', borderRadius: '4px', backgroundColor: 'var(--bg-main)', border: '1px solid rgba(0,0,0,0.04)' }}>💤 空闲中</span>
                     </div>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto', paddingTop: '10px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn btn-ghost wt-btn-action" style={{ flex: 1, justifyContent: 'center', fontWeight: 600, fontSize: '11.5px', height: '34px' }} onClick={handleOpenExplorer}>
-                      <Icons.FolderOpen style={{ width: '13px', height: '13px', marginRight: '6px' }}/> 资源管理器
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="btn btn-ghost wt-btn-action" style={{ flex: 1, justifyContent: 'center', fontWeight: 600, fontSize: '11.5px', height: '40px', backgroundColor: 'var(--bg-panel)', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }} onClick={handleOpenExplorer}>
+                      <Icons.FolderOpen style={{ width: '14px', height: '14px', marginRight: '6px', color: '#3B82F6' }}/> 资源管理器
                     </button>
-                    <button className="btn btn-ghost wt-btn-action" style={{ flex: 1, justifyContent: 'center', fontWeight: 600, fontSize: '11.5px', height: '34px' }} onClick={handleOpenTerminal}>
-                      <Icons.Terminal style={{ width: '13px', height: '13px', marginRight: '6px' }}/> 本地终端
+                    <button className="btn btn-ghost wt-btn-action" style={{ flex: 1, justifyContent: 'center', fontWeight: 600, fontSize: '11.5px', height: '40px', backgroundColor: 'var(--bg-panel)', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }} onClick={handleOpenTerminal}>
+                      <Icons.Terminal style={{ width: '14px', height: '14px', marginRight: '6px', color: 'var(--color-primary-orange)' }}/> 本地终端
                     </button>
                   </div>
                   
@@ -1024,12 +1052,17 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
                       className="btn btn-destructive" 
                       style={{ 
                         justifyContent: 'center', 
-                        border: '1px solid rgba(239, 68, 68, 0.1)', 
+                        border: '1px solid rgba(239, 68, 68, 0.2)', 
                         fontWeight: 600, 
                         fontSize: '11.5px', 
-                        height: '34px',
-                        transition: 'all 0.2s'
+                        height: '40px',
+                        borderRadius: '12px',
+                        transition: 'all 0.2s',
+                        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                        color: '#EF4444'
                       }} 
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#EF4444'; e.currentTarget.style.color = '#fff'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.05)'; e.currentTarget.style.color = '#EF4444'; }}
                       onClick={handleRemoveWorktree}
                       disabled={actionLoading}
                     >
@@ -1063,30 +1096,35 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
                                 display: 'flex', 
                                 justifyContent: 'space-between', 
                                 alignItems: 'center', 
-                                padding: '6px 10px', 
+                                padding: '8px 12px', 
                                 backgroundColor: 'var(--bg-panel)', 
-                                borderRadius: '6px', 
-                                border: '1px solid var(--color-border)', 
+                                borderRadius: '10px', 
+                                border: '1px solid rgba(128,128,128,0.1)', 
                                 fontFamily: 'var(--font-mono)', 
                                 fontSize: '11.5px',
-                                flexShrink: 0
+                                flexShrink: 0,
+                                boxShadow: '0 2px 4px -2px rgba(0,0,0,0.02)'
                               }}
                             >
-                              <span style={{ color: 'var(--color-text-secondary)', wordBreak: 'break-all', paddingRight: '12px', fontWeight: 500 }}>
-                                {change.file}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                <Icons.FileText style={{ width: '14px', height: '14px', color: 'var(--color-primary-orange)', flexShrink: 0 }} />
+                                <span style={{ color: 'var(--color-text-main)', wordBreak: 'break-all', paddingRight: '12px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {change.file}
+                                </span>
+                              </div>
                               <span style={{ 
                                 color: style.color, 
                                 backgroundColor: style.bg,
                                 border: `1px solid ${style.border}`,
-                                padding: '1px 6px', 
-                                borderRadius: '4px', 
+                                padding: '2px 8px', 
+                                borderRadius: '6px', 
                                 fontSize: '9.5px', 
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 whiteSpace: 'nowrap',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '3px'
+                                gap: '4px',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                               }}>
                                 <span>{style.icon}</span>
                                 <span>{style.text}</span>

@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
 
+import { parseMarkdown } from '../utils/markdownParser';
+import { runMermaidSafely } from '../utils/mermaidRunner';
+
 interface LogsViewProps {
   projectPath: string;
   terminalLogs: string;
@@ -125,6 +128,29 @@ export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs })
     }
   }, [logContent, commandHistory]);
 
+
+
+  // Run mermaid when log content changes
+  useEffect(() => {
+    let active = true;
+    const runMermaid = async () => {
+      // Small delay to ensure React has finished rendering the content in dangerouslySetInnerHTML
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      if (!active) return;
+      try {
+        await runMermaidSafely();
+      } catch (err) {
+        // Suppress expected mermaid errors on partial logs
+      }
+    };
+
+    runMermaid();
+
+    return () => {
+      active = false;
+    };
+  }, [logContent, commandHistory]);
+
   // Handle reconnect
   const handleReconnect = async () => {
     setIsRefreshing(true);
@@ -239,30 +265,9 @@ export const LogsView: React.FC<LogsViewProps> = ({ projectPath, terminalLogs })
           )}
         </div>
         
-        <div className="logs-terminal-container">
-          <div className="rp-terminal-logs">
-            {displayContent.split('\n').map((line, index) => {
-              if (!line.trim()) return null;
-              
-              const match = line.match(/^(\d{2}:\d{2}:\d{2})\s+\[([A-Z]+)\]\s+(.*)$/);
-              if (match) {
-                const [, time, level, msg] = match;
-                const levelLower = level.toLowerCase();
-                return (
-                  <div key={index} className="log-line">
-                    <span className="log-time">{time}</span>
-                    <span className={`log-level ${levelLower}`}>[{level}]</span>
-                    <span style={{ color: 'var(--color-text-main)' }}>{msg}</span>
-                  </div>
-                );
-              }
-              
-              return (
-                <div key={index} className="log-line" style={{ color: 'var(--color-text-main)' }}>
-                  {line}
-                </div>
-              );
-            })}
+        <div className="logs-terminal-container" style={{ backgroundColor: 'var(--bg-main)' }}>
+          <div className="rp-terminal-logs" style={{ display: 'block', padding: '32px', paddingBottom: '80px', color: 'var(--color-text-main)', fontSize: '14px', lineHeight: '1.7' }}>
+            <div dangerouslySetInnerHTML={{ __html: parseMarkdown(displayContent, 'Agent starting... Waiting for logs...') }} />
             <div ref={consoleBottomRef} />
           </div>
           

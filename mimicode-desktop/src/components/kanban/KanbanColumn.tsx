@@ -21,7 +21,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onCreateTaskClick
 }) => {
   return (
-    <div className="kanban-column">
+    <div className="kanban-column" style={{ '--col-accent': col.color } as React.CSSProperties}>
       <div className="kanban-column-header">
         <div className="kanban-column-title">
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: col.color }}></span>

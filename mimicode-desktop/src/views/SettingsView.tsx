@@ -50,7 +50,7 @@ const translations = {
     settingsTitle: 'Settings',
     tabs: {
       General: 'General',
-      Agents: 'Agents',
+      Agents: 'Local TUI Agents',
       AgentAPI: 'AgentTeam Config',
       Models: 'Models',
       Editor: 'Editor',
@@ -81,8 +81,8 @@ const translations = {
       save: 'Save',
       saveSuccess: 'API Key saved successfully',
       saveFail: 'Failed to save: ',
-      openaiTitle: 'OpenAI Configuration',
-      openaiDesc: 'Configure API key, base URL, and model for OpenAI-compatible services.',
+      openaiTitle: 'Local TUI API Config',
+      openaiDesc: 'Configure API key, base URL, and model for the local Terminal User Interface and Main Agent.',
       baseUrlPlaceholder: 'Base URL (e.g. https://api.openai.com/v1)',
       modelPlaceholder: 'Model',
       deepseekTitle: 'DeepSeek API Key',
@@ -156,8 +156,8 @@ const translations = {
     settingsTitle: '设置',
     tabs: {
       General: '常规',
-      Agents: '智能体',
-      AgentAPI: '子智能体接口',
+      Agents: '本地智能体 (TUI)',
+      AgentAPI: '多智能体协作 (AgentTeam)',
       Models: '模型',
       Editor: '编辑器',
       Terminal: '终端',
@@ -187,8 +187,8 @@ const translations = {
       save: '保存',
       saveSuccess: 'API 密钥保存成功',
       saveFail: '保存失败: ',
-      openaiTitle: 'Agent API 接口配置',
-      openaiDesc: '多智能体团队协作 (CrewAI) 所使用的默认大模型接口配置（兼容 OpenAI 格式）。',
+      openaiTitle: '本地 TUI 接口配置',
+      openaiDesc: '控制本地终端交互界面 (TUI) 和主控智能体所使用的大模型默认接口。多智能体协作(AgentTeam)的配置请在下一选项卡中设置。',
       baseUrlPlaceholder: '基础 URL (如: https://api.openai.com/v1)',
       modelPlaceholder: '模型名称 (如: gpt-4o)',
       deepseekTitle: 'DeepSeek API 密钥',
@@ -277,6 +277,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
   const [lyclaudeModel, setLyclaudeModel] = useState(() => lsGet('mimi-lyclaude-model', 'claude-3-5-sonnet-20241022'));
   const [isSaving, setIsSaving] = useState(false);
 
+  const [availableOpenAIModels, setAvailableOpenAIModels] = useState<string[]>([]);
+  const [isFetchingOpenAIModels, setIsFetchingOpenAIModels] = useState(false);
+
   // --- Test Connection ---
   const [connectionStatus, setConnectionStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -361,6 +364,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
     }
   };
 
+  const handleFetchOpenAIModels = async () => {
+    if (!openAIBaseUrl) return;
+    setIsFetchingOpenAIModels(true);
+    try {
+      const url = openAIBaseUrl.endsWith('/') ? `${openAIBaseUrl}models` : `${openAIBaseUrl}/models`;
+      const headers: any = { 'Content-Type': 'application/json' };
+      const keys = openAIKey.split(',').map(k => k.trim()).filter(Boolean);
+      const key = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : '';
+      if (key) {
+        headers['Authorization'] = `Bearer ${key}`;
+      }
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        let modelsList: string[] = [];
+        if (Array.isArray(data)) modelsList = data.map((m: any) => m.name || m.id);
+        else if (data.data && Array.isArray(data.data)) modelsList = data.data.map((m: any) => m.id || m.name);
+        else if (data.models && Array.isArray(data.models)) modelsList = data.models.map((m: any) => m.name || m.id);
+        if (modelsList.length > 0) {
+          setAvailableOpenAIModels(modelsList);
+        } else {
+          alert('未能获取到有效的模型列表 (空数组)');
+        }
+      } else {
+        alert(`获取模型失败: HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      alert(`获取模型失败: ${e.message}`);
+    } finally {
+      setIsFetchingOpenAIModels(false);
+    }
+  };
+
   const handleTestConnection = useCallback(async () => {
     setConnectionStatus(null);
     try {
@@ -428,7 +464,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
     }
     keys.forEach(k => localStorage.removeItem(k));
     setCacheClearMsg(t.advanced.cacheCleared.replace('{n}', keys.length.toString()));
-    setTimeout(() => setCacheClearMsg(''), 3000);
+    setTimeout(() => {
+      setCacheClearMsg('');
+      window.location.reload();
+    }, 1500);
   };
 
   const agentDisplayNames: Record<string, string> = {
@@ -456,6 +495,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
         return <div className="agent-card-avatar" style={{ ...baseStyle, background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)' }}>{name.charAt(0).toUpperCase()}</div>;
     }
   };
+
+  const SettingIconBox = ({ icon: Icon, color, rgb }: { icon: any, color: string, rgb: string }) => (
+    <div style={{ 
+      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+      width: '36px', height: '36px', borderRadius: '10px', 
+      background: `linear-gradient(135deg, rgba(${rgb}, 0.15) 0%, rgba(${rgb}, 0.05) 100%)`, 
+      color: color, marginRight: '10px', 
+      boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.8), 0 2px 6px rgba(0,0,0,0.04)',
+      border: `1px solid rgba(${rgb}, 0.1)`
+    }}>
+      <Icon style={{ width: '20px', height: '20px' }} />
+    </div>
+  );
 
   return (
     <div className="view-container bg-panel" style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column' }}>
@@ -495,7 +547,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
             <div className="settings-card">
               <div className="settings-group">
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.general.themeTitle}</div>
+                  <div className="settings-group-title"><Icons.Palette style={{ color: 'var(--color-primary-orange)', width: '18px', height: '18px' }} /> {t.general.themeTitle}</div>
                   <div className="settings-group-desc">{t.general.themeDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -509,7 +561,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
               <div className="settings-group">
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.general.langTitle}</div>
+                  <div className="settings-group-title"><Icons.Globe style={{ color: '#3B82F6', width: '18px', height: '18px' }} /> {t.general.langTitle}</div>
                   <div className="settings-group-desc">{t.general.langDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -522,38 +574,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
               <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
                 <div className="settings-group-info" style={{ maxWidth: '100%' }}>
-                  <div className="settings-group-title">{t.general.anthropicTitle}</div>
+                  <div className="settings-group-title"><Icons.Key style={{ color: '#8B5CF6', width: '18px', height: '18px' }} /> {t.general.anthropicTitle}</div>
                   <div className="settings-group-desc">{t.general.anthropicDesc}</div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                  <input type="password" className="modern-input" placeholder="sk-ant-..." value={anthropicKey} onChange={e => setAnthropicKey(e.target.value)} />
-                  <button className="modern-btn" onClick={() => handleSaveKey('anthropic', anthropicKey)} disabled={isSaving}>{t.general.save}</button>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <input type="password" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder="sk-ant-..." value={anthropicKey} onChange={e => setAnthropicKey(e.target.value)} />
+                    <Icons.Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                  </div>
+                  <button className="modern-btn" style={{ minWidth: '100px', backgroundColor: 'var(--bg-hover)' }} onClick={() => handleSaveKey('anthropic', anthropicKey)} disabled={isSaving}>{t.general.save}</button>
                 </div>
               </div>
 
               <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
                 <div className="settings-group-info" style={{ maxWidth: '100%' }}>
-                  <div className="settings-group-title">{t.general.deepseekTitle}</div>
+                  <div className="settings-group-title"><Icons.Cpu style={{ color: '#10B981', width: '18px', height: '18px' }} /> {t.general.deepseekTitle}</div>
                   <div className="settings-group-desc">{t.general.deepseekDesc}</div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                  <input type="password" className="modern-input" placeholder="sk-..." value={deepseekKey} onChange={e => setDeepseekKey(e.target.value)} />
-                  <button className="modern-btn" onClick={() => handleSaveKey('deepseek', deepseekKey)} disabled={isSaving}>{t.general.save}</button>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <input type="password" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder="sk-..." value={deepseekKey} onChange={e => setDeepseekKey(e.target.value)} />
+                    <Icons.Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                  </div>
+                  <button className="modern-btn" style={{ minWidth: '100px', backgroundColor: 'var(--bg-hover)' }} onClick={() => handleSaveKey('deepseek', deepseekKey)} disabled={isSaving}>{t.general.save}</button>
                 </div>
               </div>
 
               <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
                 <div className="settings-group-info" style={{ maxWidth: '100%' }}>
-                  <div className="settings-group-title">{t.general.lyclaudeTitle}</div>
+                  <div className="settings-group-title"><Icons.Cloud style={{ color: '#F59E0B', width: '18px', height: '18px' }} /> {t.general.lyclaudeTitle}</div>
                   <div className="settings-group-desc">{t.general.lyclaudeDesc}</div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                  <input type="text" className="modern-input" placeholder={t.general.baseUrlPlaceholder} value={lyclaudeBaseUrl} onChange={e => { setLyclaudeBaseUrl(e.target.value); lsSet('mimi-lyclaude-base-url', e.target.value); }} />
-                  <input type="text" className="modern-input" style={{ maxWidth: '200px' }} placeholder={t.general.modelPlaceholder} value={lyclaudeModel} onChange={e => { setLyclaudeModel(e.target.value); lsSet('mimi-lyclaude-model', e.target.value); }} />
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <input type="text" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder={t.general.baseUrlPlaceholder} value={lyclaudeBaseUrl} onChange={e => { setLyclaudeBaseUrl(e.target.value); lsSet('mimi-lyclaude-base-url', e.target.value); }} />
+                    <Icons.Link2 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                  </div>
+                  <div style={{ flex: '0 0 240px', position: 'relative' }}>
+                    <input type="text" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder={t.general.modelPlaceholder} value={lyclaudeModel} onChange={e => { setLyclaudeModel(e.target.value); lsSet('mimi-lyclaude-model', e.target.value); }} />
+                    <Icons.Box style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                  <input type="password" className="modern-input" placeholder="sk-..." value={lyclaudeKey} onChange={e => setLyclaudeKey(e.target.value)} />
-                  <button className="modern-btn" onClick={() => handleSaveKey('lyclaude', lyclaudeKey)} disabled={isSaving}>{t.general.save}</button>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <input type="password" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder="sk-..." value={lyclaudeKey} onChange={e => setLyclaudeKey(e.target.value)} />
+                    <Icons.Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                  </div>
+                  <button className="modern-btn" style={{ minWidth: '100px', backgroundColor: 'var(--bg-hover)' }} onClick={() => handleSaveKey('lyclaude', lyclaudeKey)} disabled={isSaving}>{t.general.save}</button>
                 </div>
               </div>
             </div>
@@ -561,36 +628,95 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
           {activeTab === 'Agents' && (
             <div>
-              <div className="settings-card" style={{ marginBottom: '24px' }}>
-                <div className="settings-group" style={{ flexDirection: 'column', gap: '16px' }}>
+              <div className="settings-card" style={{ marginBottom: '24px', padding: '24px' }}>
+                <div className="settings-group" style={{ flexDirection: 'column', gap: '20px', border: 'none', padding: 0, backgroundColor: 'transparent' }}>
                   <div className="settings-group-info" style={{ maxWidth: '100%' }}>
-                    <div className="settings-group-title">{t.general.openaiTitle}</div>
-                    <div className="settings-group-desc">{t.general.openaiDesc}</div>
+                    <div className="settings-group-title" style={{ fontSize: '18px', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <SettingIconBox icon={Icons.Server} color="#F97316" rgb="249, 115, 22" />
+                        {t.general.openaiTitle}
+                      </div>
+                      <div className="mimi-tooltip-wrapper">
+                        <div style={{ width: '22px', height: '22px', borderRadius: '50%', backgroundColor: 'var(--bg-hover)', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', cursor: 'help' }}>
+                          ?
+                        </div>
+                        <div className="mimi-tooltip-content">
+                          <span style={{color: '#F97316', fontWeight: 600}}>隐藏作用：</span>在多智能体协作(AgentTeam)中，如果某个子智能体没有配置专属接口模型，系统将默认回退(Fallback)使用此处的模型配置。
+                        </div>
+                      </div>
+                    </div>
+                    <div className="settings-group-desc" style={{ fontSize: '13px', marginLeft: '42px' }}>{t.general.openaiDesc}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', width: '100%', alignItems: 'center' }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <input type="text" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder={t.general.baseUrlPlaceholder} value={openAIBaseUrl} onChange={e => { setOpenAIBaseUrl(e.target.value); lsSet('mimi-openai-base-url', e.target.value); }} />
+                      <Icons.Link2 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                    </div>
+                    <div style={{ flex: '0 0 240px', position: 'relative' }}>
+                      {availableOpenAIModels.length > 0 ? (
+                        <select className="modern-select" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} value={openAIModel} onChange={e => { setOpenAIModel(e.target.value); lsSet('mimi-openai-model', e.target.value); }}>
+                          <option value="">-- 选择模型 --</option>
+                          {availableOpenAIModels.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      ) : (
+                        <input type="text" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder={t.general.modelPlaceholder} value={openAIModel} onChange={e => { setOpenAIModel(e.target.value); lsSet('mimi-openai-model', e.target.value); }} />
+                      )}
+                      <Icons.Box style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                    </div>
+                    <button className="modern-btn" onClick={handleFetchOpenAIModels} disabled={isFetchingOpenAIModels} style={{ minWidth: '100px', backgroundColor: 'var(--bg-panel)' }}>
+                      {isFetchingOpenAIModels ? '拉取中...' : '拉取模型'}
+                    </button>
                   </div>
                   <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                    <input type="text" className="modern-input" placeholder={t.general.baseUrlPlaceholder} value={openAIBaseUrl} onChange={e => { setOpenAIBaseUrl(e.target.value); lsSet('mimi-openai-base-url', e.target.value); }} />
-                    <input type="text" className="modern-input" style={{ maxWidth: '200px' }} placeholder={t.general.modelPlaceholder} value={openAIModel} onChange={e => { setOpenAIModel(e.target.value); lsSet('mimi-openai-model', e.target.value); }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                    <input type="password" className="modern-input" placeholder="sk-..." value={openAIKey} onChange={e => setOpenAIKey(e.target.value)} />
-                    <button className="modern-btn" onClick={() => handleSaveKey('openai', openAIKey)} disabled={isSaving}>{t.general.save}</button>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <input type="password" className="modern-input" style={{ width: '100%', paddingLeft: '36px', fontFamily: 'var(--font-mono)' }} placeholder="sk-..." value={openAIKey} onChange={e => setOpenAIKey(e.target.value)} />
+                      <Icons.Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--color-text-muted)' }} />
+                    </div>
+                    <button className="modern-btn" style={{ minWidth: '100px', backgroundColor: 'var(--bg-hover)' }} onClick={() => handleSaveKey('openai', openAIKey)} disabled={isSaving}>{t.general.save}</button>
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
-                <button className="modern-btn" onClick={() => setShowAddAgent(true)}>
-                  <Icons.Plus style={{ width: '16px', height: '16px' }}/> {t.agents.addCustom}
-                </button>
-              </div>
+              {!showAddAgent && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px', marginBottom: '24px' }}>
+                  <div 
+                    className="agent-card" 
+                    onClick={() => setShowAddAgent(true)}
+                    style={{ 
+                      border: '1px dashed var(--color-border)', 
+                      backgroundColor: 'transparent', 
+                      cursor: 'pointer',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '12px',
+                      minHeight: '180px',
+                      boxShadow: 'none'
+                    }}
+                  >
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--bg-panel)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>
+                      <Icons.Plus style={{ width: '24px', height: '24px' }} />
+                    </div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-main)' }}>{t.agents.addCustom}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>创建专属于您的本地或远端智能体</div>
+                  </div>
+                </div>
+              )}
 
               {/* Add Agent Form */}
               {showAddAgent && (
-                <div className="settings-card" style={{ marginBottom: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div className="settings-group-title">{t.agents.createTitle}</div>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <input className="modern-input" placeholder={t.agents.namePlaceholder} value={newAgentName} onChange={e => setNewAgentName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddAgent(); }} autoFocus />
-                    <button className="modern-btn" style={{ backgroundColor: 'var(--color-primary-orange)', color: 'white', borderColor: 'var(--color-primary-orange)' }} onClick={handleAddAgent}>{t.agents.addBtn}</button>
-                    <button className="modern-btn" onClick={() => { setShowAddAgent(false); setNewAgentName(''); }}>{t.agents.cancelBtn}</button>
+                <div className="settings-card" style={{ marginBottom: '24px', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', animation: 'cardSlideIn 0.4s ease-out' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 12px rgba(236, 72, 153, 0.3)' }}>
+                      <Icons.Plus style={{ width: '20px', height: '20px' }} />
+                    </div>
+                    <div>
+                      <div className="settings-group-title" style={{ fontSize: '18px', marginBottom: '4px' }}>{t.agents.createTitle}</div>
+                      <div className="settings-group-desc" style={{ fontSize: '13px' }}>配置一个新的大语言模型实例作为智能体参与工作流</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <input className="modern-input" style={{ flex: 1, height: '44px', fontSize: '15px' }} placeholder={t.agents.namePlaceholder} value={newAgentName} onChange={e => setNewAgentName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddAgent(); }} autoFocus />
+                    <button className="modern-btn" style={{ height: '44px', padding: '0 24px', background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)', color: 'white', border: 'none', boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)' }} onClick={handleAddAgent}>{t.agents.addBtn}</button>
+                    <button className="modern-btn" style={{ height: '44px', padding: '0 24px' }} onClick={() => { setShowAddAgent(false); setNewAgentName(''); }}>{t.agents.cancelBtn}</button>
                   </div>
                 </div>
               )}
@@ -622,7 +748,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                   <div key={`custom-${i}`} className="agent-card" style={{ '--i': i } as React.CSSProperties}>
                     <div className="agent-card-header">
                       <div className="agent-card-info">
-                        <div className="agent-card-avatar" style={{ background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="agent-card-avatar" style={{ 
+                          background: [
+                            'linear-gradient(135deg, #FF6B6B 0%, #C0392B 100%)',
+                            'linear-gradient(135deg, #00C9FF 0%, #92FE9D 100%)',
+                            'linear-gradient(135deg, #FAD961 0%, #F76B1C 100%)',
+                            'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
+                            'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+                            'linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)'
+                          ][Math.abs(agent.name.split('').reduce((a,b)=>a+b.charCodeAt(0),0)) % 6], 
+                          color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                        }}>
                           {agent.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="agent-card-title-group">
@@ -649,10 +785,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
           {activeTab === 'Models' && (
             <div>
-              <div className="settings-card" style={{ marginBottom: '24px' }}>
-                <div className="settings-group">
+              <div className="settings-card" style={{ marginBottom: '24px', padding: '8px' }}>
+                <div className="settings-group" style={{ borderRadius: '12px' }}>
                   <div className="settings-group-info">
-                    <div className="settings-group-title">{t.models.fallbackTitle}</div>
+                    <div className="settings-group-title">
+                      <SettingIconBox icon={Icons.Activity} color="#3B82F6" rgb="59, 130, 246" />
+                      {t.models.fallbackTitle}
+                    </div>
                     <div className="settings-group-desc">{t.models.fallbackDesc}</div>
                   </div>
                   <div className="settings-group-control">
@@ -664,17 +803,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
               
-              <div className="settings-card">
-                <div className="settings-group" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-start' }}>
+              <div className="settings-card" style={{ padding: '8px' }}>
+                <div className="settings-group" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-start', borderRadius: '12px' }}>
                   <div className="settings-group-info" style={{ maxWidth: '100%' }}>
-                    <div className="settings-group-title">{t.models.diagTitle}</div>
+                    <div className="settings-group-title">
+                      <SettingIconBox icon={Icons.Server} color="#8B5CF6" rgb="139, 92, 246" />
+                      {t.models.diagTitle}
+                    </div>
                     <div className="settings-group-desc">{t.models.diagDesc}</div>
                   </div>
-                  <button className="modern-btn" onClick={handleTestConnection}>
+                  <button className="modern-btn" onClick={handleTestConnection} style={{ backgroundColor: '#8B5CF6', color: '#fff', borderColor: '#8B5CF6' }}>
                     <Icons.CheckCircle2 style={{ width: '16px', height: '16px' }}/> {t.models.runDiag}
                   </button>
                   {connectionStatus && (
-                    <div style={{ padding: '12px 16px', width: '100%', borderRadius: 'var(--radius-md)', fontSize: '14px', backgroundColor: connectionStatus.type === 'success' ? 'var(--color-success-bg)' : 'rgba(239,68,68,0.1)', color: connectionStatus.type === 'success' ? 'var(--color-success)' : '#dc2626', border: `1px solid ${connectionStatus.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                    <div style={{ padding: '12px 16px', width: '100%', borderRadius: '8px', fontSize: '14px', backgroundColor: connectionStatus.type === 'success' ? 'var(--color-success-bg)' : 'rgba(239,68,68,0.1)', color: connectionStatus.type === 'success' ? 'var(--color-success)' : '#dc2626', border: `1px solid ${connectionStatus.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239,68,68,0.3)'}` }}>
                       {connectionStatus.message}
                     </div>
                   )}
@@ -684,24 +826,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
           )}
 
           {activeTab === 'Editor' && (
-            <div className="settings-card">
-              <div className="settings-group">
+            <div className="settings-card" style={{ padding: '8px' }}>
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.editor.fontSizeTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Type} color="#8B5CF6" rgb="139, 92, 246" />
+                    {t.editor.fontSizeTitle}
+                  </div>
                   <div className="settings-group-desc">{t.editor.fontSizeDesc}</div>
                 </div>
                 <div className="settings-group-control">
-                  <input type="number" className="modern-input" min={8} max={32} value={editorFontSize} onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { setEditorFontSize(v); lsSet('mimi-editor-font-size', String(v)); } }} />
+                  <input type="number" className="modern-input" min={8} max={32} value={editorFontSize} onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { setEditorFontSize(v); lsSet('mimi-editor-font-size', String(v)); window.dispatchEvent(new Event('mimi-editor-settings-updated')); } }} />
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.editor.tabWidthTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.AlignLeft} color="#3B82F6" rgb="59, 130, 246" />
+                    {t.editor.tabWidthTitle}
+                  </div>
                   <div className="settings-group-desc">{t.editor.tabWidthDesc}</div>
                 </div>
                 <div className="settings-group-control">
-                  <select className="modern-select" value={editorTabWidth} onChange={e => { setEditorTabWidth(e.target.value); lsSet('mimi-editor-tab-width', e.target.value); }}>
+                  <select className="modern-select" value={editorTabWidth} onChange={e => { setEditorTabWidth(e.target.value); lsSet('mimi-editor-tab-width', e.target.value); window.dispatchEvent(new Event('mimi-editor-settings-updated')); }}>
                     <option value="2">2 {t.editor.spaces}</option>
                     <option value="4">4 {t.editor.spaces}</option>
                     <option value="8">8 {t.editor.spaces}</option>
@@ -709,27 +857,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.editor.autoSaveTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Save} color="#10B981" rgb="16, 185, 129" />
+                    {t.editor.autoSaveTitle}
+                  </div>
                   <div className="settings-group-desc">{t.editor.autoSaveDesc}</div>
                 </div>
                 <div className="settings-group-control">
                   <label className="modern-toggle">
-                    <input type="checkbox" checked={editorAutoSave} onChange={e => { setEditorAutoSave(e.target.checked); lsSet('mimi-editor-auto-save', String(e.target.checked)); }} />
+                    <input type="checkbox" checked={editorAutoSave} onChange={e => { setEditorAutoSave(e.target.checked); lsSet('mimi-editor-auto-save', String(e.target.checked)); window.dispatchEvent(new Event('mimi-editor-settings-updated')); }} />
                     <span className="modern-toggle-slider"></span>
                   </label>
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.editor.wordWrapTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.WrapText} color="#F59E0B" rgb="245, 158, 11" />
+                    {t.editor.wordWrapTitle}
+                  </div>
                   <div className="settings-group-desc">{t.editor.wordWrapDesc}</div>
                 </div>
                 <div className="settings-group-control">
                   <label className="modern-toggle">
-                    <input type="checkbox" checked={editorWordWrap} onChange={e => { setEditorWordWrap(e.target.checked); lsSet('mimi-editor-word-wrap', String(e.target.checked)); }} />
+                    <input type="checkbox" checked={editorWordWrap} onChange={e => { setEditorWordWrap(e.target.checked); lsSet('mimi-editor-word-wrap', String(e.target.checked)); window.dispatchEvent(new Event('mimi-editor-settings-updated')); }} />
                     <span className="modern-toggle-slider"></span>
                   </label>
                 </div>
@@ -738,10 +892,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
           )}
 
           {activeTab === 'Terminal' && (
-            <div className="settings-card">
-              <div className="settings-group">
+            <div className="settings-card" style={{ padding: '8px' }}>
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.terminal.shellTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Terminal} color="#14B8A6" rgb="20, 184, 166" />
+                    {t.terminal.shellTitle}
+                  </div>
                   <div className="settings-group-desc">{t.terminal.shellDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -749,9 +906,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.terminal.fontSizeTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Type} color="#6366F1" rgb="99, 102, 241" />
+                    {t.terminal.fontSizeTitle}
+                  </div>
                   <div className="settings-group-desc">{t.terminal.fontSizeDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -759,9 +919,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.terminal.cursorTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Edit2} color="#EC4899" rgb="236, 72, 153" />
+                    {t.terminal.cursorTitle}
+                  </div>
                   <div className="settings-group-desc">{t.terminal.cursorDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -776,10 +939,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
           )}
 
           {activeTab === 'Notifications' && (
-            <div className="settings-card">
-              <div className="settings-group">
+            <div className="settings-card" style={{ padding: '8px' }}>
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.notifications.taskCompleteTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.CheckCircle2} color="#10B981" rgb="16, 185, 129" />
+                    {t.notifications.taskCompleteTitle}
+                  </div>
                   <div className="settings-group-desc">{t.notifications.taskCompleteDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -790,9 +956,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.notifications.agentInterceptTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Shield} color="#F43F5E" rgb="244, 63, 94" />
+                    {t.notifications.agentInterceptTitle}
+                  </div>
                   <div className="settings-group-desc">{t.notifications.agentInterceptDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -803,9 +972,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.notifications.soundTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Bell} color="#3B82F6" rgb="59, 130, 246" />
+                    {t.notifications.soundTitle}
+                  </div>
                   <div className="settings-group-desc">{t.notifications.soundDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -819,10 +991,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
           )}
 
           {activeTab === 'Advanced' && (
-            <div className="settings-card">
-              <div className="settings-group">
+            <div className="settings-card" style={{ padding: '8px' }}>
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.advanced.projectDirTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.FolderOpen} color="#F59E0B" rgb="245, 158, 11" />
+                    {t.advanced.projectDirTitle}
+                  </div>
                   <div className="settings-group-desc">{t.advanced.projectDirDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -830,9 +1005,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.advanced.logLevelTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Activity} color="#10B981" rgb="16, 185, 129" />
+                    {t.advanced.logLevelTitle}
+                  </div>
                   <div className="settings-group-desc">{t.advanced.logLevelDesc}</div>
                 </div>
                 <div className="settings-group-control">
@@ -845,14 +1023,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
                 </div>
               </div>
 
-              <div className="settings-group">
+              <div className="settings-group" style={{ borderRadius: '12px' }}>
                 <div className="settings-group-info">
-                  <div className="settings-group-title">{t.advanced.cacheTitle}</div>
+                  <div className="settings-group-title">
+                    <SettingIconBox icon={Icons.Trash2} color="#EF4444" rgb="239, 68, 68" />
+                    {t.advanced.cacheTitle}
+                  </div>
                   <div className="settings-group-desc">{t.advanced.cacheDesc}</div>
                 </div>
                 <div className="settings-group-control" style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {cacheClearMsg && <span style={{ color: 'var(--color-success)', fontSize: '13px' }}>{cacheClearMsg}</span>}
-                  <button className="modern-btn" onClick={handleClearCache}>
+                  <button className="modern-btn" onClick={handleClearCache} style={{ backgroundColor: '#EF4444', color: '#fff', borderColor: '#EF4444' }}>
                     <Icons.RefreshCw style={{ width: '16px', height: '16px' }} /> {t.advanced.clearCacheBtn}
                   </button>
                 </div>

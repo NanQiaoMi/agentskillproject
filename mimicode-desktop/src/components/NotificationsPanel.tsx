@@ -25,6 +25,8 @@ export const dispatchAppNotification = (notif: Omit<AppNotification, 'id' | 'rea
   window.dispatchEvent(event);
 };
 
+import { formatRelativeTime } from '../utils/chatUtils';
+
 export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onClose, isOpen }) => {
   const [activeTab, setActiveTab] = useState<NotificationTab>('全部');
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
@@ -52,7 +54,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onClose,
       const newNotif: AppNotification = {
         ...notifData,
         id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
-        time: '刚刚',
+        time: new Date().toISOString(),
         read: false,
         icon,
       };
@@ -75,7 +77,36 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onClose,
     localStorage.setItem('mimi-notifications', JSON.stringify(toSave.slice(0, 100)));
   }, [notifications]);
 
-  if (!isOpen) return null;
+  const [isClosing, setIsClosing] = useState(false);
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setIsClosing(false);
+    } else if (shouldRender) {
+      setIsClosing(true);
+    }
+  }, [isOpen, shouldRender]);
+
+  // Force re-render every minute so that relative times like "昨天 16:17" are correctly updated if the app stays open.
+  useEffect(() => {
+    if (!shouldRender) return;
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [shouldRender]);
+
+  const handleAnimationEnd = () => {
+    if (isClosing) {
+      setIsClosing(false);
+      setShouldRender(false);
+    }
+  };
+
+  if (!shouldRender) return null;
 
   const renderIcon = (notif: AppNotification) => {
     if (React.isValidElement(notif.icon)) return notif.icon;
@@ -104,11 +135,16 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onClose,
     <>
       <div
         className="modal-overlay"
-        style={{ backgroundColor: 'transparent', zIndex: 998 }}
+        style={{ 
+          backgroundColor: 'transparent', zIndex: 998, 
+          transition: 'opacity 0.3s ease',
+          opacity: isClosing ? 0 : 1 
+        }}
         onClick={onClose}
       />
       <div
-        className="notifications-panel slide-in-right"
+        className={`notifications-panel ${isClosing ? 'slide-out-right' : 'slide-in-right'}`}
+        onAnimationEnd={handleAnimationEnd}
         style={{
           position: 'fixed',
           top: '20px',
@@ -182,7 +218,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onClose,
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--color-text-main)' }}>{notif.title}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{notif.time}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{formatRelativeTime(notif.time)}</div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -203,13 +239,20 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onClose,
           )}
         </div>
 
-        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'center', backgroundColor: 'var(--bg-main)' }}>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'center', gap: '32px', backgroundColor: 'var(--bg-main)' }}>
           <button
             onClick={markAllAsRead}
             style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
             className="hover:text-[var(--color-primary-orange)] transition-colors"
           >
             全部标为已读
+          </button>
+          <button
+            onClick={() => setNotifications([])}
+            style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+            className="hover:text-[#EF4444] transition-colors"
+          >
+            清空所有通知
           </button>
         </div>
       </div>

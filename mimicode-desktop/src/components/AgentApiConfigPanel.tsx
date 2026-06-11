@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import { Icons } from './Icons';
 
+const getAgentAvatar = (name: string, role: string) => {
+  const n = name.toLowerCase();
+  const r = role.toLowerCase();
+  if (n.includes('hermes') || r.includes('manager')) return { Icon: Icons.Shield, bg: 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)', shadow: 'rgba(245, 158, 11, 0.3)' };
+  if (n.includes('antigravity') || r.includes('frontend')) return { Icon: Icons.Monitor, bg: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)', shadow: 'rgba(59, 130, 246, 0.3)' };
+  if (n.includes('codex') || r.includes('backend')) return { Icon: Icons.Database, bg: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', shadow: 'rgba(16, 185, 129, 0.3)' };
+  if (n.includes('qa') || r.includes('tester')) return { Icon: Icons.TestTube, bg: 'linear-gradient(135deg, #F43F5E 0%, #E11D48 100%)', shadow: 'rgba(244, 63, 94, 0.3)' };
+  if (n.includes('devops') || r.includes('devops')) return { Icon: Icons.Server, bg: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', shadow: 'rgba(139, 92, 246, 0.3)' };
+  return { Icon: Icons.Code, bg: 'linear-gradient(135deg, #64748B 0%, #475569 100%)', shadow: 'rgba(100, 116, 139, 0.3)' };
+};
+
 export interface SubAgentConfig {
   id: string;
   name: string;
@@ -216,74 +227,83 @@ export const AgentApiConfigPanel: React.FC = () => {
       
       {/* Banner Area */}
       <div style={{ 
-        padding: '24px', 
-        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(37, 99, 235, 0.03) 100%)', 
-        borderRadius: '16px', 
+        padding: '28px 32px', 
+        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.06) 0%, rgba(139, 92, 246, 0.06) 100%)', 
+        borderRadius: '20px', 
         border: '1px solid rgba(59, 130, 246, 0.1)',
+        boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px'
+        gap: '12px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--color-primary-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-            <Icons.GitBranch style={{ width: '16px', height: '16px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3), inset 0 2px 4px rgba(255,255,255,0.4)' }}>
+            <Icons.GitBranch style={{ width: '20px', height: '20px', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.2))' }} />
           </div>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>子智能体专有接口配置</h2>
+          <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-main)', margin: 0, letterSpacing: '-0.3px' }}>子智能体专有接口配置</h2>
         </div>
-        <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', margin: 0, paddingLeft: '44px', lineHeight: '1.6' }}>
-          为 5 个核心开发智能体分别设置独立的 OpenAI 兼容接口（如 Ollama, DeepSeek 等）。您可以为不同岗位的 Agent 指定不同强度的模型以组建异构的顶尖 AI 团队。
+        <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', margin: 0, paddingLeft: '54px', lineHeight: '1.6' }}>
+          为核心开发智能体分别设置独立的接口模型。您可以为不同岗位的 Agent 指定不同强度的模型，组建异构的顶尖 AI 团队。
         </p>
       </div>
 
       {/* Agents Grid/List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {agents.map((agent, idx) => (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        {agents.map((agent, idx) => {
+          const avatar = getAgentAvatar(agent.name, agent.role);
+          const IconComp = avatar.Icon;
+          
+          return (
           <div key={agent.id} className="settings-card" style={{ 
             display: 'flex', 
             flexDirection: 'column', 
-            borderRadius: '16px', 
+            borderRadius: '20px', 
             overflow: 'hidden', 
-            border: '1px solid var(--border-color)',
-            flexShrink: 0 /* This prevents the flexbox from slicing the card */
+            border: '1px solid rgba(0,0,0,0.06)',
+            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.06), 0 4px 6px -2px rgba(0,0,0,0.03)',
+            flexShrink: 0
           }}>
             
             {/* Card Header */}
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
-              padding: '16px 24px', 
-              backgroundColor: 'var(--bg-main)', 
-              borderBottom: '1px solid var(--border-color)',
-              gap: '12px'
+              padding: '20px 24px', 
+              backgroundColor: '#ffffff', 
+              borderBottom: '1px solid rgba(0,0,0,0.04)',
+              gap: '16px'
             }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-                {agent.icon === 'manager' ? <Icons.Shield style={{ width: '18px', height: '18px' }}/> : <Icons.Code style={{ width: '18px', height: '18px' }}/>}
+              <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: avatar.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: `0 6px 16px ${avatar.shadow}, inset 0 2px 4px rgba(255,255,255,0.4)` }}>
+                <IconComp style={{ width: '24px', height: '24px', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))' }}/>
               </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <input 
                   value={agent.name} 
                   onChange={e => updateAgent(idx, 'name', e.target.value)} 
-                  style={{ background: 'transparent', border: 'none', fontSize: '16px', fontWeight: 600, color: 'var(--color-text-main)', outline: 'none', padding: 0 }}
+                  style={{ background: 'transparent', border: 'none', fontSize: '18px', fontWeight: 700, color: 'var(--color-text-main)', outline: 'none', padding: 0 }}
                   placeholder="Agent Name"
                 />
                 <input 
                   value={agent.role} 
                   onChange={e => updateAgent(idx, 'role', e.target.value)} 
-                  style={{ background: 'transparent', border: 'none', fontSize: '13px', color: 'var(--color-text-muted)', outline: 'none', padding: 0, marginTop: '2px' }}
+                  style={{ background: 'transparent', border: 'none', fontSize: '14px', color: 'var(--color-text-muted)', outline: 'none', padding: 0 }}
                   placeholder="Role (e.g. Frontend Engineer)"
                 />
               </div>
             </div>
 
             {/* Card Body */}
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--bg-panel)' }}>
+            <div style={{ padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: '24px', backgroundColor: '#f8fafc' }}>
               
               {/* Row 1: Provider and URL */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-main)' }}>服务商 (Provider)</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Icons.Cloud style={{ width: '16px', height: '16px', color: '#3B82F6' }} /> 服务商 (Provider)
+                  </label>
                   <select 
                     className="modern-select" 
+                    style={{ backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
                     value={agent.provider || 'custom'} 
                     onChange={e => handleProviderChange(idx, e.target.value)}
                   >
@@ -292,31 +312,40 @@ export const AgentApiConfigPanel: React.FC = () => {
                     ))}
                   </select>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-main)' }}>Base URL</label>
-                  <input className="modern-input" value={agent.baseUrl} onChange={e => updateAgent(idx, 'baseUrl', e.target.value)} placeholder="https://api.openai.com/v1" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Icons.Globe style={{ width: '16px', height: '16px', color: '#10B981' }} /> Base URL
+                  </label>
+                  <input className="modern-input" style={{ backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }} value={agent.baseUrl} onChange={e => updateAgent(idx, 'baseUrl', e.target.value)} placeholder="https://api.openai.com/v1" />
                 </div>
               </div>
 
               {/* Row 2: API Key */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-main)' }}>API Key (可填入多个以逗号分隔，后端每次调用随机挑选负载均衡)</label>
-                <input type="text" className="modern-input" value={agent.apiKey} onChange={e => updateAgent(idx, 'apiKey', e.target.value)} placeholder="sk-..." />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Icons.Key style={{ width: '16px', height: '16px', color: '#F59E0B' }} /> API Key <span style={{ fontWeight: 400, color: '#94a3b8' }}>(多 Key 请用逗号分隔，支持自动负载均衡)</span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Icons.Lock style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: '#94a3b8' }} />
+                  <input type="text" className="modern-input" style={{ paddingLeft: '40px', fontFamily: 'var(--font-mono)', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }} value={agent.apiKey} onChange={e => updateAgent(idx, 'apiKey', e.target.value)} placeholder="sk-..." />
+                </div>
               </div>
 
-              {/* Row 2: Model and Actions */}
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-main)' }}>模型 (Model)</label>
+              {/* Row 3: Model and Actions */}
+              <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Icons.Box style={{ width: '16px', height: '16px', color: '#8B5CF6' }} /> 模型 (Model)
+                  </label>
                   {availableModels[agent.id] && availableModels[agent.id].length > 0 ? (
-                    <select className="modern-select" value={agent.model} onChange={e => updateAgent(idx, 'model', e.target.value)}>
+                    <select className="modern-select" style={{ backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }} value={agent.model} onChange={e => updateAgent(idx, 'model', e.target.value)}>
                       <option value="">-- 选择模型 --</option>
                       {availableModels[agent.id].map(m => (
                         <option key={m} value={m}>{m}</option>
                       ))}
                     </select>
                   ) : (
-                    <input className="modern-input" value={agent.model} onChange={e => updateAgent(idx, 'model', e.target.value)} placeholder="gpt-4o" />
+                    <input className="modern-input" style={{ backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }} value={agent.model} onChange={e => updateAgent(idx, 'model', e.target.value)} placeholder="gpt-4o" />
                   )}
                 </div>
                 
@@ -325,7 +354,7 @@ export const AgentApiConfigPanel: React.FC = () => {
                     className="modern-btn" 
                     onClick={() => handleFetchModels(idx)} 
                     disabled={isFetchingModels[agent.id]}
-                    style={{ backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--color-text-main)', padding: '0 20px', height: '40px' }}
+                    style={{ backgroundColor: '#fff', border: '1px solid #cbd5e1', color: '#475569', padding: '0 24px', height: '42px', fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
                   >
                     {isFetchingModels[agent.id] ? '拉取中...' : '拉取可用模型'}
                   </button>
@@ -333,9 +362,9 @@ export const AgentApiConfigPanel: React.FC = () => {
                     className="modern-btn" 
                     onClick={() => handleTestStream(idx)}
                     disabled={isTesting[agent.id]}
-                    style={{ backgroundColor: 'var(--color-primary-blue)', color: '#fff', border: 'none', padding: '0 20px', height: '40px' }}
+                    style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)', color: '#fff', border: 'none', padding: '0 24px', height: '42px', fontWeight: 600, boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}
                   >
-                    <Icons.Play style={{ width: '14px', height: '14px', marginRight: '6px' }} />
+                    <Icons.Play style={{ width: '16px', height: '16px', marginRight: '6px' }} />
                     {isTesting[agent.id] ? '测试中...' : '连接测试'}
                   </button>
                 </div>
@@ -360,7 +389,8 @@ export const AgentApiConfigPanel: React.FC = () => {
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

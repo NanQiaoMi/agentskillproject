@@ -21,17 +21,17 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
       onClick={onSelect}
       className="wt-sidebar-item"
       style={{
-        padding: '12px 14px',
-        backgroundColor: isSelected ? 'var(--bg-hover)' : 'var(--bg-panel)',
-        border: isSelected ? '1.5px solid var(--color-primary-orange)' : '1px solid var(--color-border)',
-        borderRadius: '8px',
+        padding: '14px 16px',
+        background: isSelected ? 'linear-gradient(145deg, rgba(249, 115, 22, 0.05), rgba(249, 115, 22, 0.01))' : 'var(--bg-panel)',
+        border: isSelected ? '1px solid rgba(249, 115, 22, 0.3)' : '1px solid rgba(0,0,0,0.04)',
+        borderRadius: '12px',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
         gap: '6px',
         position: 'relative',
-        transition: 'all 0.2s ease',
-        boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,0.03)' : 'none'
+        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        boxShadow: isSelected ? '0 8px 24px -4px rgba(249, 115, 22, 0.1)' : '0 2px 8px rgba(0,0,0,0.01)'
       }}
     >
       {/* Selected Indicator Bar */}

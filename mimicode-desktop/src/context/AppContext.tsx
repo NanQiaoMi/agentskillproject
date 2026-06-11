@@ -80,11 +80,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         projectPath,
         args: ['json-list'],
       });
-      const jsonStart = res.indexOf('[');
-      if (jsonStart !== -1) {
-        const jsonStr = res.substring(jsonStart);
-        const parsed: Task[] = JSON.parse(jsonStr);
+      
+      let parsed: Task[] = [];
+      let parseSuccess = false;
 
+      try {
+        parsed = JSON.parse(res);
+        parseSuccess = true;
+      } catch (err) {
+        // Fallback: try to extract the JSON array if there's preceding text (e.g. logs)
+        const match = res.match(/\[\s*\{.*\}\s*\]/s);
+        if (match) {
+          try {
+            parsed = JSON.parse(match[0]);
+            parseSuccess = true;
+          } catch (e) {
+            // Still fails
+          }
+        } else if (res.includes('[]')) {
+          parsed = [];
+          parseSuccess = true;
+        }
+        
+        if (!parseSuccess) {
+          throw err; // Rethrow to be caught by the outer catch
+        }
+      }
+
+      if (parseSuccess) {
         if (isBackgroundPolling && tasksRef.current.length > 0) {
           parsed.forEach(currentTask => {
             const prevTask = tasksRef.current.find(t => t.id === currentTask.id);
@@ -102,14 +125,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         tasksRef.current = parsed;
         setTasks(parsed);
-      } else {
-        tasksRef.current = [];
-        setTasks([]);
       }
     } catch (err) {
       if (!isBackgroundPolling) {
         console.error(err);
-        addToast('MIMIcode 无法加载任务列表：' + String(err), 'error');
+        // Only show toast if it's a new error or limit the amount
+        setToasts(prev => {
+          const errMsg = 'MIMIcode 无法加载任务列表：' + String(err);
+          if (prev.some(t => t.message === errMsg)) {
+            return prev; // Don't add duplicate
+          }
+          const id = Date.now() + Math.random();
+          setTimeout(() => removeToast(id), 4000);
+          return [...prev, { id, message: errMsg, type: 'error' }];
+        });
       }
       tasksRef.current = [];
       setTasks([]);

@@ -1339,6 +1339,31 @@ fn get_git_status(repo_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn create_file(path: String) -> Result<(), String> {
+    fs::write(&path, "").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_folder(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn rename_path(old_path: String, new_path: String) -> Result<(), String> {
+    fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_path(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if p.is_dir() {
+        fs::remove_dir_all(&path).map_err(|e| e.to_string())
+    } else {
+        fs::remove_file(&path).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
 fn open_in_explorer(path: String) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -1384,9 +1409,10 @@ fn read_file_content(path: String) -> Result<Option<String>, String> {
     if !p.exists() {
         return Ok(None);
     }
-    std::fs::read_to_string(p)
-        .map(Some)
-        .map_err(|e| e.to_string())
+    match std::fs::read(p) {
+        Ok(bytes) => Ok(Some(String::from_utf8_lossy(&bytes).into_owned())),
+        Err(e) => Err(e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -1618,24 +1644,39 @@ async fn spawn_agent_pty(
 
     // Determine executable and args for each agent
     #[cfg(windows)]
-    let (exe, args): (&str, Vec<&str>) = match cli_name.as_str() {
-        "claudecode" => ("D:\\npm_global\\claude.cmd", vec!["--permission-mode", "bypassPermissions"]),
-        "antigravity" => ("D:\\npm_global\\gemini.cmd", vec!["-y"]),
-        "codex" => ("D:\\npm_global\\codex.cmd", vec!["--dangerously-bypass-approvals-and-sandbox"]),
-        "opencode" => ("D:\\npm_global\\opencode.cmd", vec![]),
-        "hermes" => ("C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe", vec![]),
-        _ => return Err(format!("Unknown agent: {}", cli_name)),
-    };
+    // Determine executable and args for each agent
+    let exe_str;
+    let mut args: Vec<&str> = vec![];
+
+    #[cfg(windows)]
+    {
+        let (e, a) = match cli_name.as_str() {
+            "claudecode" => ("D:\\npm_global\\claude.cmd".to_string(), vec!["--permission-mode", "bypassPermissions"]),
+            "antigravity" => ("D:\\npm_global\\gemini.cmd".to_string(), vec!["-y"]),
+            "codex" => ("D:\\npm_global\\codex.cmd".to_string(), vec!["--dangerously-bypass-approvals-and-sandbox"]),
+            "opencode" => ("D:\\npm_global\\opencode.cmd".to_string(), vec![]),
+            "hermes" => ("C:\\Users\\Legion\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe".to_string(), vec![]),
+            custom => (custom.to_string(), vec![]),
+        };
+        exe_str = e;
+        args = a;
+    }
 
     #[cfg(not(windows))]
-    let (exe, args): (&str, Vec<&str>) = match cli_name.as_str() {
-        "claudecode" => ("claude", vec!["--permission-mode", "bypassPermissions"]),
-        "antigravity" => ("gemini", vec!["-y"]),
-        "codex" => ("codex", vec!["--dangerously-bypass-approvals-and-sandbox"]),
-        "opencode" => ("opencode", vec![]),
-        "hermes" => ("hermes", vec![]),
-        _ => return Err(format!("Unknown agent: {}", cli_name)),
-    };
+    {
+        let (e, a) = match cli_name.as_str() {
+            "claudecode" => ("claude".to_string(), vec!["--permission-mode", "bypassPermissions"]),
+            "antigravity" => ("gemini".to_string(), vec!["-y"]),
+            "codex" => ("codex".to_string(), vec!["--dangerously-bypass-approvals-and-sandbox"]),
+            "opencode" => ("opencode".to_string(), vec![]),
+            "hermes" => ("hermes".to_string(), vec![]),
+            custom => (custom.to_string(), vec![]),
+        };
+        exe_str = e;
+        args = a;
+    }
+    
+    let exe = exe_str.as_str();
 
     // Create PTY pair
     let pty_system = native_pty_system();
@@ -2506,6 +2547,52 @@ pub struct SearchResultData {
     pub result_type: String, // 'code', 'task', etc.
 }
 
+fn search_directory_recursive(base_dir: &std::path::Path, dir: &std::path::Path, regex: &regex::Regex, results: &mut Vec<SearchResultData>, max_results: usize) -> Result<(), String> {
+    if results.len() >= max_results { return Ok(()); }
+    
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.filter_map(Result::ok) {
+            if results.len() >= max_results { break; }
+            let path = entry.path();
+            let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            
+            if path.is_dir() {
+                if file_name == ".git" || file_name == "node_modules" || file_name == "target" || file_name == "venv" || file_name == ".agentflow" {
+                    continue;
+                }
+                let _ = search_directory_recursive(base_dir, &path, regex, results, max_results);
+            } else {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    for (line_idx, line) in content.lines().enumerate() {
+                        if results.len() >= max_results { break; }
+                        if regex.is_match(line) {
+                            let result_type = if file_name.ends_with(".md") && path.to_string_lossy().to_lowercase().contains("spec") {
+                                "spec".to_string()
+                            } else if file_name.ends_with(".md") && path.to_string_lossy().to_lowercase().contains("task") {
+                                "task".to_string()
+                            } else {
+                                "code".to_string()
+                            };
+                            
+                            let rel_path = path.strip_prefix(base_dir).unwrap_or(&path).to_string_lossy().replace("\\", "/");
+                            
+                            results.push(SearchResultData {
+                                id: format!("res_fallback_{}", results.len()),
+                                path: rel_path,
+                                line: (line_idx + 1) as u32,
+                                title: file_name.clone(),
+                                excerpt: line.trim().to_string(),
+                                result_type,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn search_codebase(project_path: String, query: String, match_case: bool, is_regex: bool) -> Result<Vec<SearchResultData>, String> {
     if query.trim().is_empty() {
@@ -2526,6 +2613,7 @@ fn search_codebase(project_path: String, query: String, match_case: bool, is_reg
     } else {
         git_args.push("-F");
     }
+    git_args.push("--untracked");
     git_args.push("-m");
     git_args.push("100");
     git_args.push("--");
@@ -2542,39 +2630,110 @@ fn search_codebase(project_path: String, query: String, match_case: bool, is_reg
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let output = cmd.output().map_err(|e| e.to_string())?;
+    let output_res = cmd.output();
     let mut results = Vec::new();
-    
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for (i, line_str) in stdout.lines().enumerate() {
-        let parts: Vec<&str> = line_str.splitn(3, ':').collect();
-        if parts.len() == 3 {
-            let path = parts[0].to_string();
-            let line_num: u32 = parts[1].parse().unwrap_or(1);
-            let content = parts[2].to_string();
-            
-            let result_type = if path.ends_with(".md") && path.to_lowercase().contains("spec") {
-                "spec".to_string()
-            } else if path.ends_with(".md") && path.to_lowercase().contains("task") {
-                "task".to_string()
-            } else {
-                "code".to_string()
-            };
-            
-            let title = Path::new(&path).file_name().unwrap_or_default().to_string_lossy().into_owned();
+    let mut used_fallback = false;
 
-            results.push(SearchResultData {
-                id: format!("res_{}", i),
-                path,
-                line: line_num,
-                title,
-                excerpt: content,
-                result_type,
-            });
+    if let Ok(output) = output_res {
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("not a git repository") || stderr.contains("ambiguous argument") || stderr.contains("fatal:") {
+                used_fallback = true;
+            }
+        }
+        
+        if !used_fallback {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for (i, line_str) in stdout.lines().enumerate() {
+                let parts: Vec<&str> = line_str.splitn(3, ':').collect();
+                if parts.len() == 3 {
+                    let path = parts[0].to_string();
+                    let line_num: u32 = parts[1].parse().unwrap_or(1);
+                    let content = parts[2].to_string();
+                    
+                    let result_type = if path.ends_with(".md") && path.to_lowercase().contains("spec") {
+                        "spec".to_string()
+                    } else if path.ends_with(".md") && path.to_lowercase().contains("task") {
+                        "task".to_string()
+                    } else {
+                        "code".to_string()
+                    };
+                    
+                    let title = Path::new(&path).file_name().unwrap_or_default().to_string_lossy().into_owned();
+
+                    results.push(SearchResultData {
+                        id: format!("res_{}", i),
+                        path: path.replace("\\", "/"),
+                        line: line_num,
+                        title,
+                        excerpt: content,
+                        result_type,
+                    });
+                }
+            }
+        }
+    } else {
+        used_fallback = true;
+    }
+
+    if used_fallback {
+        let regex_result = if is_regex {
+            if match_case {
+                regex::Regex::new(&query)
+            } else {
+                regex::RegexBuilder::new(&query).case_insensitive(true).build()
+            }
+        } else {
+            let escaped = regex::escape(&query);
+            if match_case {
+                regex::Regex::new(&escaped)
+            } else {
+                regex::RegexBuilder::new(&escaped).case_insensitive(true).build()
+            }
+        };
+
+        if let Ok(re) = regex_result {
+            let _ = search_directory_recursive(&repo_dir, &repo_dir, &re, &mut results, 100);
         }
     }
 
     Ok(results)
+}
+
+#[tauri::command]
+fn replace_in_files(project_path: String, query: String, replacement: String, match_case: bool, is_regex: bool, paths: Vec<String>) -> Result<u32, String> {
+    let mut replaced_count = 0;
+    use std::fs;
+    let repo_dir = std::path::Path::new(&project_path);
+    
+    let regex = if is_regex {
+        if match_case {
+            regex::Regex::new(&query).map_err(|e| e.to_string())?
+        } else {
+            regex::RegexBuilder::new(&query).case_insensitive(true).build().map_err(|e| e.to_string())?
+        }
+    } else {
+        let escaped = regex::escape(&query);
+        if match_case {
+            regex::Regex::new(&escaped).map_err(|e| e.to_string())?
+        } else {
+            regex::RegexBuilder::new(&escaped).case_insensitive(true).build().map_err(|e| e.to_string())?
+        }
+    };
+
+    for rel_path in paths {
+        let p = repo_dir.join(&rel_path);
+        if let Ok(content) = fs::read_to_string(&p) {
+            let new_content = regex.replace_all(&content, replacement.as_str());
+            if new_content != content {
+                if fs::write(&p, new_content.as_ref()).is_ok() {
+                    replaced_count += 1;
+                }
+            }
+        }
+    }
+
+    Ok(replaced_count)
 }
 
 #[tauri::command]
@@ -2711,6 +2870,10 @@ pub fn run() {
             get_git_diagnostics,
             read_file_content,
             write_file_content,
+            create_file,
+            create_folder,
+            rename_path,
+            delete_path,
             get_node_version,
             run_shell_command,
             proxy_post_request,
@@ -2726,6 +2889,7 @@ pub fn run() {
             resize_pty,
             kill_pty,
             search_codebase,
+            replace_in_files,
             open_file_in_editor
         ])
         .run(tauri::generate_context!())

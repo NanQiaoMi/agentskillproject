@@ -5,7 +5,8 @@ import {
   parseTime,
   getAgentAvatarStyle,
   getAgentInitials,
-  renderCommentContent
+  renderCommentContent,
+  formatRelativeTime
 } from '../../utils/chatUtils';
 
 export interface MessageListProps {
@@ -37,7 +38,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   return (
     <>
       {items.map((item, index) => {
-        const dateStr = parseTime(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = formatRelativeTime(item.time);
         
         if (item.type === 'history') {
           const h = item.data as HistoryItem;

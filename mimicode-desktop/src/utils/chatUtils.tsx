@@ -210,6 +210,28 @@ export const parseTime = (timeStr: string) => {
   return new Date(timeStr);
 };
 
+export const formatRelativeTime = (timeStr: string | Date) => {
+  const date = typeof timeStr === 'string' ? parseTime(timeStr) : timeStr;
+  if (isNaN(date.getTime())) return String(timeStr);
+
+  const now = new Date();
+  const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
+
+  const timePart = date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+  if (isToday) {
+    return timePart;
+  } else if (isYesterday) {
+    return `昨天 ${timePart}`;
+  } else {
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${timePart}`;
+  }
+};
+
 export const getActiveAgent = (inputText: string) => {
   const lowerInput = inputText.toLowerCase();
   

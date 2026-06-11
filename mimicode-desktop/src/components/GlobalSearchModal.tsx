@@ -37,6 +37,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onClose, i
   const [results, setResults] = useState<SearchResultData[]>([]);
   const [selectedResult, setSelectedResult] = useState<SearchResultData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isAdvancedClosing, setIsAdvancedClosing] = useState(false);
+  const [includePath, setIncludePath] = useState('');
+  const [excludePath, setExcludePath] = useState('');
 
   const [language, setLanguage] = useState(() => {
     try { return localStorage.getItem('mimi-language') || '简体中文'; } 
@@ -91,6 +95,21 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onClose, i
 
   const filteredResults = useMemo(() => {
     return results.filter(res => {
+      // Advanced Filters
+      if (includePath.trim()) {
+        const includes = includePath.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
+        if (includes.length > 0 && !includes.some(inc => res.path.toLowerCase().includes(inc))) {
+          return false;
+        }
+      }
+      if (excludePath.trim()) {
+        const excludes = excludePath.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
+        if (excludes.length > 0 && excludes.some(exc => res.path.toLowerCase().includes(exc))) {
+          return false;
+        }
+      }
+
+      // Tab Filters
       if (activeTab === 'All') return true;
       const t = activeTab.toLowerCase();
       if (t === 'code' || t === '代码') return res.result_type === 'code';
@@ -100,7 +119,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onClose, i
       if (t === 'commits' || t === '提交') return res.result_type === 'commit';
       return true;
     });
-  }, [results, activeTab]);
+  }, [results, activeTab, includePath, excludePath]);
 
   useEffect(() => {
     if (filteredResults.length > 0) {
@@ -179,10 +198,75 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onClose, i
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--color-text-muted)', cursor: 'pointer' }} className="hover:text-[var(--color-primary-orange)] transition-colors">
-            <Icons.Settings style={{ width: '14px', height: '14px' }} /> {isZh ? "高级" : "Advanced"}
+          <div 
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', 
+              color: showAdvanced ? 'var(--color-primary-orange)' : 'var(--color-text-muted)', 
+              cursor: 'pointer', transition: 'all 0.2s', userSelect: 'none',
+              padding: '4px 8px', borderRadius: '6px',
+              backgroundColor: showAdvanced ? 'rgba(249, 115, 22, 0.1)' : 'transparent'
+            }} 
+            className="hover:text-[var(--color-primary-orange)]"
+            onClick={() => {
+              if (showAdvanced && !isAdvancedClosing) {
+                setIsAdvancedClosing(true);
+              } else if (!showAdvanced) {
+                setShowAdvanced(true);
+                setIsAdvancedClosing(false);
+              }
+            }}
+          >
+            <Icons.Settings style={{ width: '14px', height: '14px', transform: showAdvanced ? 'rotate(90deg)' : 'none', transition: 'transform 0.3s' }} /> 
+            {isZh ? "高级" : "Advanced"}
           </div>
         </div>
+
+        {/* Advanced Options Panel */}
+        {(showAdvanced || isAdvancedClosing) && (
+          <div 
+            style={{ 
+              padding: '16px 24px', backgroundColor: 'rgba(0,0,0,0.1)', borderBottom: '1px solid var(--color-border)', 
+              display: 'flex', gap: '16px', alignItems: 'center', 
+              animation: isAdvancedClosing ? 'panelSlideUp 0.25s ease-in forwards' : 'panelSlideDown 0.35s var(--ease-spring) forwards' 
+            }}
+            onAnimationEnd={() => {
+              if (isAdvancedClosing) {
+                setShowAdvanced(false);
+                setIsAdvancedClosing(false);
+              }
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+              <label style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600 }}>{isZh ? "包含路径 (逗号分隔)" : "Include Paths"}</label>
+              <input 
+                type="text" 
+                value={includePath}
+                onChange={e => setIncludePath(e.target.value)}
+                placeholder="例如: src, components"
+                style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', color: 'var(--color-text-main)' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+              <label style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600 }}>{isZh ? "排除路径 (逗号分隔)" : "Exclude Paths"}</label>
+              <input 
+                type="text" 
+                value={excludePath}
+                onChange={e => setExcludePath(e.target.value)}
+                placeholder="例如: node_modules, dist"
+                style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', color: 'var(--color-text-main)' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '4px' }}>
+              <button 
+                onClick={() => { setIncludePath(''); setExcludePath(''); }}
+                style={{ backgroundColor: 'transparent', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+                className="hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                {isZh ? "重置" : "Reset"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Main Content Area */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

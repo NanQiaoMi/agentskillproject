@@ -11,6 +11,7 @@ import { AgentsView } from "./views/AgentsView";
 import { WorktreesView } from "./views/WorktreesView";
 import { DiagnosticsView } from "./views/DiagnosticsView";
 import { SettingsView } from "./views/SettingsView";
+import { IDEView } from "./views/IDEView";
 import { SpecificationsView } from "./views/SpecificationsView";
 import { PromptsView } from "./views/PromptsView";
 import { NewProjectWizard } from "./components/NewProjectWizard";
@@ -58,6 +59,9 @@ function App() {
     };
     window.addEventListener('mimi-language-changed', handleLangChange);
     window.addEventListener('app-notification-unread', handleUnread);
+    
+    // Initialize mermaid full-screen viewer
+    import('./utils/mermaidViewer').then(m => m.initMermaidViewer());
     
     // Dispatch a welcome system notification once per session
     if (!hasDispatchedWelcome) {
@@ -194,6 +198,12 @@ function App() {
             <SettingsView projectPath={projectPath} />
           </div>
         )}
+
+        {activeNav === 'IDE' && (
+          <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <IDEView projectPath={projectPath} />
+          </div>
+        )}
       </div>
     );
   };
@@ -204,42 +214,44 @@ function App() {
 
       <main className="main-content" style={{ position: 'relative' }}>
         {/* Top-Right Action Toolbar */}
-        <div style={{ position: 'absolute', top: '16px', right: '24px', display: 'flex', gap: '12px', zIndex: 100 }}>
-          <button 
-            className="btn-icon-ghost hover-scale" 
-            title="Global Search (Ctrl+K)"
-            onClick={() => setShowSearchModal(true)}
-            style={{ 
-              backgroundColor: 'var(--bg-panel)', 
-              border: '1px solid var(--color-border)',
-              width: '32px', height: '32px',
-              borderRadius: '10px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}
-          >
-            <Icons.Search style={{ width: '18px', height: '18px', color: 'var(--color-text-main)' }} />
-          </button>
-          <button 
-            className="btn-icon-ghost hover-scale" 
-            title="Notifications"
-            onClick={() => setShowNotifications(true)}
-            style={{ 
-              backgroundColor: 'var(--bg-panel)', 
-              border: '1px solid var(--color-border)', 
-              position: 'relative',
-              width: '32px', height: '32px',
-              borderRadius: '10px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}
-          >
-            <Icons.Bell style={{ width: '18px', height: '18px', color: 'var(--color-text-main)' }} />
-            {unreadNotifications > 0 && (
-              <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-primary-orange)', border: '2px solid var(--bg-panel)' }}></div>
-            )}
-          </button>
-        </div>
+        {activeNav !== 'IDE' && (
+          <div style={{ position: 'absolute', top: '16px', right: '24px', display: 'flex', gap: '12px', zIndex: 100 }}>
+            <button 
+              className="btn-icon-ghost hover-scale" 
+              title="Global Search (Ctrl+K)"
+              onClick={() => setShowSearchModal(true)}
+              style={{ 
+                backgroundColor: 'var(--bg-panel)', 
+                border: '1px solid var(--color-border)',
+                width: '32px', height: '32px',
+                borderRadius: '10px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              <Icons.Search style={{ width: '18px', height: '18px', color: 'var(--color-text-main)' }} />
+            </button>
+            <button 
+              className="btn-icon-ghost hover-scale" 
+              title="Notifications"
+              onClick={() => setShowNotifications(true)}
+              style={{ 
+                backgroundColor: 'var(--bg-panel)', 
+                border: '1px solid var(--color-border)', 
+                position: 'relative',
+                width: '32px', height: '32px',
+                borderRadius: '10px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              <Icons.Bell style={{ width: '18px', height: '18px', color: 'var(--color-text-main)' }} />
+              {unreadNotifications > 0 && (
+                <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-primary-orange)', border: '2px solid var(--bg-panel)' }}></div>
+              )}
+            </button>
+          </div>
+        )}
 
         {renderMainContent()}
       </main>

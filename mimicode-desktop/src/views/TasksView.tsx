@@ -41,19 +41,32 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
 
   // Task Creation states
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreateModalClosing, setIsCreateModalClosing] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newTaskAssignee, setNewTaskAssignee] = useState('antigravity');
   const [isCreating, setIsCreating] = useState(false);
 
+  const handleCloseCreateModal = () => {
+    setIsCreateModalClosing(true);
+    setTimeout(() => { setShowCreateModal(false); setIsCreateModalClosing(false); }, 200);
+  };
+
   // Task Editing states
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isEditModalClosing, setIsEditModalClosing] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deleteTaskConfirmId, setDeleteTaskConfirmId] = useState<string | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDesc, setEditTaskDesc] = useState('');
   const [editTaskAssignee, setEditTaskAssignee] = useState('antigravity');
   const [editTaskStatus, setEditTaskStatus] = useState('todo');
   const [isSaving, setIsSaving] = useState(false);
+
+  const handleCloseEditModal = () => {
+    setIsEditModalClosing(true);
+    setTimeout(() => { setShowEditModal(false); setEditingTask(null); setIsEditModalClosing(false); }, 200);
+  };
 
   // Filter & Search states
   const [showFilterBar, setShowFilterBar] = useState(false);
@@ -109,7 +122,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
       if (newTaskDesc.trim()) args.push(`--desc="${newTaskDesc}"`);
       await runCmd(args);
       
-      setShowCreateModal(false);
+      handleCloseCreateModal();
       setNewTaskTitle('');
       setNewTaskDesc('');
       fetchTasks();
@@ -158,7 +171,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
       
       await runCmd(args);
       
-      setShowEditModal(false);
+      handleCloseEditModal();
       setEditingTask(null);
       fetchTasks();
       dispatchAppNotification({
@@ -173,21 +186,25 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
     }
   };
 
-  const handleDeleteTask = async (e: React.MouseEvent, taskId: string) => {
+  const handleDeleteTask = (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation(); // Avoid opening task detail page
-    if (!window.confirm(`是否确认删除任务 ${taskId}？此操作将永久移除该任务文件及记录。`)) {
-      return;
-    }
+    setDeleteTaskConfirmId(taskId);
+  };
+
+  const confirmDeleteTask = async () => {
+    if (!deleteTaskConfirmId) return;
     try {
-      await runCmd(["delete", taskId]);
+      await runCmd(["delete", deleteTaskConfirmId]);
       fetchTasks();
       dispatchAppNotification({
         type: 'system',
         title: '任务已删除',
-        desc: `任务 ${taskId} 已被永久删除。`
+        desc: `任务 ${deleteTaskConfirmId} 已被永久删除。`
       });
     } catch (err: any) {
       alert("删除任务失败: " + err.toString());
+    } finally {
+      setDeleteTaskConfirmId(null);
     }
   };
 
@@ -318,20 +335,19 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
 
       {/* Task Creation Modal */}
       {showCreateModal && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowCreateModal(false) }}>
+        <div className={`modal-overlay ${isCreateModalClosing ? 'closing' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) handleCloseCreateModal() }}>
           <div className="modal-card" style={{ width: '500px' }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ fontSize: '16px', fontWeight: 600 }}>Create New Task</div>
-              <button className="btn-icon-ghost" onClick={() => setShowCreateModal(false)}><Icons.Plus style={{ transform: 'rotate(45deg)' }}/></button>
+              <div className="modal-title">Create New Task</div>
+              <button className="btn-icon-ghost" onClick={handleCloseCreateModal}><Icons.Plus style={{ transform: 'rotate(45deg)' }}/></button>
             </div>
             <div className="modal-body" style={{ padding: '24px' }}>
               
               <div className="form-group mb-4">
-                <label className="form-label" style={{ fontWeight: 500, marginBottom: '8px', display: 'block' }}>任务标题 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
+                <label className="form-label">任务标题 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
                 <input 
                   type="text" 
-                  className="chat-input-area bg-panel" 
-                  style={{ width: '100%', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px' }}
+                  className="form-control" 
                   placeholder="例如：实现登录功能"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
@@ -340,10 +356,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
               </div>
 
               <div className="form-group mb-4">
-                <label className="form-label" style={{ fontWeight: 500, marginBottom: '8px', display: 'block' }}>分配给 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
+                <label className="form-label">分配给 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
                 <select 
-                  className="chat-input-area bg-panel" 
-                  style={{ width: '100%', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px' }}
+                  className="form-control" 
                   value={newTaskAssignee}
                   onChange={(e) => setNewTaskAssignee(e.target.value)}
                 >
@@ -357,20 +372,19 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
               </div>
               
               <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 500, marginBottom: '8px', display: 'block' }}>详细描述 (可选)</label>
+                <label className="form-label">详细描述 (可选)</label>
                 <textarea 
-                  className="chat-input-area bg-panel" 
+                  className="form-control" 
                   rows={4} 
                   placeholder="请输入任务详细需求和规范..."
-                  style={{ width: '100%', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px' }}
                   value={newTaskDesc}
                   onChange={(e) => setNewTaskDesc(e.target.value)}
                 ></textarea>
               </div>
 
             </div>
-            <div className="modal-footer" style={{ justifyContent: 'flex-end', padding: '16px 24px', gap: '12px', borderTop: '1px solid var(--color-border)' }}>
-              <button className="btn btn-ghost" onClick={() => setShowCreateModal(false)} disabled={isCreating}>取消</button>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={handleCloseCreateModal} disabled={isCreating}>取消</button>
               <button className="btn btn-primary" onClick={handleCreateTask} disabled={isCreating || !newTaskTitle.trim()}>
                 {isCreating ? "创建中..." : "确认创建"}
               </button>
@@ -381,20 +395,19 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
 
       {/* Task Editing Modal */}
       {showEditModal && editingTask && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) { setShowEditModal(false); setEditingTask(null); } }}>
+        <div className={`modal-overlay ${isEditModalClosing ? 'closing' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) handleCloseEditModal() }}>
           <div className="modal-card" style={{ width: '500px' }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ fontSize: '16px', fontWeight: 600 }}>修改任务 {editingTask.id}</div>
-              <button className="btn-icon-ghost" onClick={() => { setShowEditModal(false); setEditingTask(null); }}><Icons.Plus style={{ transform: 'rotate(45deg)' }}/></button>
+              <div className="modal-title">修改任务 {editingTask.id}</div>
+              <button className="btn-icon-ghost" onClick={handleCloseEditModal}><Icons.Plus style={{ transform: 'rotate(45deg)' }}/></button>
             </div>
             <div className="modal-body" style={{ padding: '24px' }}>
               
               <div className="form-group mb-4">
-                <label className="form-label" style={{ fontWeight: 500, marginBottom: '8px', display: 'block' }}>任务标题 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
+                <label className="form-label">任务标题 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
                 <input 
                   type="text" 
-                  className="chat-input-area bg-panel" 
-                  style={{ width: '100%', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px' }}
+                  className="form-control" 
                   placeholder="例如：实现登录功能"
                   value={editTaskTitle}
                   onChange={(e) => setEditTaskTitle(e.target.value)}
@@ -403,10 +416,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
 
               <div style={{ display: 'flex', gap: '16px' }} className="mb-4">
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label" style={{ fontWeight: 500, marginBottom: '8px', display: 'block' }}>分配给 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
+                  <label className="form-label">分配给 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
                   <select 
-                    className="chat-input-area bg-panel" 
-                    style={{ width: '100%', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px' }}
+                    className="form-control" 
                     value={editTaskAssignee}
                     onChange={(e) => setEditTaskAssignee(e.target.value)}
                   >
@@ -419,10 +431,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label" style={{ fontWeight: 500, marginBottom: '8px', display: 'block' }}>状态 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
+                  <label className="form-label">状态 <span style={{ color: 'var(--color-destructive)' }}>*</span></label>
                   <select 
-                    className="chat-input-area bg-panel" 
-                    style={{ width: '100%', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px' }}
+                    className="form-control" 
                     value={editTaskStatus}
                     onChange={(e) => setEditTaskStatus(e.target.value)}
                   >
@@ -436,20 +447,19 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
               </div>
               
               <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 500, marginBottom: '8px', display: 'block' }}>详细描述 (可选)</label>
+                <label className="form-label">详细描述 (可选)</label>
                 <textarea 
-                  className="chat-input-area bg-panel" 
+                  className="form-control" 
                   rows={4} 
                   placeholder="请输入任务详细需求和规范..."
-                  style={{ width: '100%', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px' }}
                   value={editTaskDesc}
                   onChange={(e) => setEditTaskDesc(e.target.value)}
                 ></textarea>
               </div>
 
             </div>
-            <div className="modal-footer" style={{ justifyContent: 'flex-end', padding: '16px 24px', gap: '12px', borderTop: '1px solid var(--color-border)' }}>
-              <button className="btn btn-ghost" onClick={() => { setShowEditModal(false); setEditingTask(null); }} disabled={isSaving}>取消</button>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={handleCloseEditModal} disabled={isSaving}>取消</button>
               <button className="btn btn-primary" onClick={handleSaveTask} disabled={isSaving || !editTaskTitle.trim()}>
                 {isSaving ? "保存中..." : "保存修改"}
               </button>
@@ -457,6 +467,44 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
           </div>
         </div>
       )}
+      {/* Delete Confirmation Modal */}
+      {deleteTaskConfirmId && (
+        <div className="modal-overlay" onClick={() => setDeleteTaskConfirmId(null)}>
+          <div className="modal-card" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <h2 style={{ fontSize: '18px', display: 'none' }}>删除任务</h2>
+              <button className="btn-icon-ghost" style={{ position: 'absolute', top: '16px', right: '16px' }} onClick={() => setDeleteTaskConfirmId(null)}>
+                <Icons.X style={{ width: '16px', height: '16px' }} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '24px', paddingBottom: '24px' }}>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, border: '4px solid rgba(239, 68, 68, 0.05)' }}>
+                  <Icons.AlertTriangle style={{ width: '22px', height: '22px', color: '#EF4444' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-main)', margin: '0 0 8px 0', letterSpacing: '0.01em' }}>删除任务 {deleteTaskConfirmId} 吗？</h3>
+                  <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: 0, lineHeight: 1.5 }}>
+                    此操作将永久移除该任务的所有相关文件及流转记录。<br/>
+                    <strong style={{ color: '#EF4444', fontWeight: 500 }}>此操作无法撤销。</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ borderTop: 'none', paddingTop: 0, display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingRight: '24px', paddingBottom: '24px' }}>
+              <button className="btn btn-ghost" style={{ fontWeight: 500 }} onClick={() => setDeleteTaskConfirmId(null)}>取消保留</button>
+              <button 
+                className="btn btn-primary" 
+                style={{ backgroundColor: '#EF4444', borderColor: '#EF4444', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)', fontWeight: 600 }}
+                onClick={confirmDeleteTask}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

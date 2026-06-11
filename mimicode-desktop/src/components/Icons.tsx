@@ -2,11 +2,14 @@ import React from 'react';
 import { 
   MessageSquare, CheckSquare, Users, GitBranch, Activity, Settings,
   AlertTriangle, Check, Monitor, Server, Database, FolderOpen, Loader,
-  Plus, FileText, Code, Shield, Sun, Moon, ChevronDown, Send, Zap,
+  Plus, FileText, Code, Shield, Sun, Moon, ChevronDown, ChevronUp, Send, Zap,
   Terminal, CheckCircle2, Copy, Search, RefreshCw, MoreHorizontal,
   Play, Edit2, ArrowLeft, BookOpen, Layout, Clock, ChevronRight, Link,
   Box, Trash2, Square, Grid, Maximize2, Minimize2, X, Bell, Command,
-  Info, XCircle, ArrowRight, Star, Lightbulb, Brain, Bot, Sparkles
+  Info, XCircle, ArrowRight, Star, Lightbulb, Brain, Bot, Sparkles,
+  PenTool, FileCheck, TrendingUp, TestTube, Crown, Eye, Bug,
+  Palette, Globe, Key, Cpu, Cloud, Lock, Link2,
+  Type, AlignLeft, Save, WrapText, Folder, GitCommit
 } from 'lucide-react';
 
 const SW = 1.75; // Premium stroke width
@@ -19,6 +22,7 @@ export const Icons = {
   CheckSquare: (props: React.SVGProps<SVGSVGElement>) => <CheckSquare strokeWidth={SW} {...props as any} />,
   Users: (props: React.SVGProps<SVGSVGElement>) => <Users strokeWidth={SW} {...props as any} />,
   GitBranch: (props: React.SVGProps<SVGSVGElement>) => <GitBranch strokeWidth={SW} {...props as any} />,
+  GitCommit: (props: React.SVGProps<SVGSVGElement>) => <GitCommit strokeWidth={SW} {...props as any} />,
   Activity: (props: React.SVGProps<SVGSVGElement>) => <Activity strokeWidth={SW} {...props as any} />,
   Settings: (props: React.SVGProps<SVGSVGElement>) => <Settings strokeWidth={SW} {...props as any} />,
   AlertTriangle: (props: React.SVGProps<SVGSVGElement>) => <AlertTriangle strokeWidth={SW} {...props as any} />,
@@ -37,6 +41,7 @@ export const Icons = {
   Sun: (props: React.SVGProps<SVGSVGElement>) => <Sun strokeWidth={SW} {...props as any} />,
   Moon: (props: React.SVGProps<SVGSVGElement>) => <Moon strokeWidth={SW} {...props as any} />,
   ChevronDown: (props: React.SVGProps<SVGSVGElement>) => <ChevronDown strokeWidth={SW} {...props as any} />,
+  ChevronUp: (props: React.SVGProps<SVGSVGElement>) => <ChevronUp strokeWidth={SW} {...props as any} />,
   Send: (props: React.SVGProps<SVGSVGElement>) => <Send strokeWidth={SW} {...props as any} />,
   Zap: (props: React.SVGProps<SVGSVGElement>) => <Zap strokeWidth={SW} {...props as any} />,
   Terminal: (props: React.SVGProps<SVGSVGElement>) => <Terminal strokeWidth={SW} {...props as any} />,
@@ -57,6 +62,18 @@ export const Icons = {
 
   Box: (props: React.SVGProps<SVGSVGElement>) => <Box strokeWidth={SW} {...props as any} />,
   Trash2: (props: React.SVGProps<SVGSVGElement>) => <Trash2 strokeWidth={SW} {...props as any} />,
+  Palette: (props: React.SVGProps<SVGSVGElement>) => <Palette strokeWidth={SW} {...props as any} />,
+  Globe: (props: React.SVGProps<SVGSVGElement>) => <Globe strokeWidth={SW} {...props as any} />,
+  Key: (props: React.SVGProps<SVGSVGElement>) => <Key strokeWidth={SW} {...props as any} />,
+  Cpu: (props: React.SVGProps<SVGSVGElement>) => <Cpu strokeWidth={SW} {...props as any} />,
+  Cloud: (props: React.SVGProps<SVGSVGElement>) => <Cloud strokeWidth={SW} {...props as any} />,
+  Lock: (props: React.SVGProps<SVGSVGElement>) => <Lock strokeWidth={SW} {...props as any} />,
+  Link2: (props: React.SVGProps<SVGSVGElement>) => <Link2 strokeWidth={SW} {...props as any} />,
+  Type: (props: React.SVGProps<SVGSVGElement>) => <Type strokeWidth={SW} {...props as any} />,
+  AlignLeft: (props: React.SVGProps<SVGSVGElement>) => <AlignLeft strokeWidth={SW} {...props as any} />,
+  Save: (props: React.SVGProps<SVGSVGElement>) => <Save strokeWidth={SW} {...props as any} />,
+  WrapText: (props: React.SVGProps<SVGSVGElement>) => <WrapText strokeWidth={SW} {...props as any} />,
+  Folder: (props: React.SVGProps<SVGSVGElement>) => <Folder strokeWidth={SW} {...props as any} />,
   Square: (props: React.SVGProps<SVGSVGElement>) => <Square strokeWidth={SW} {...props as any} />,
   Grid: (props: React.SVGProps<SVGSVGElement>) => <Grid strokeWidth={SW} {...props as any} />,
   Maximize2: (props: React.SVGProps<SVGSVGElement>) => <Maximize2 strokeWidth={SW} {...props as any} />,
@@ -70,4 +87,13 @@ export const Icons = {
   Star: (props: React.SVGProps<SVGSVGElement>) => <Star strokeWidth={SW} {...props as any} />,
   Lightbulb: (props: React.SVGProps<SVGSVGElement>) => <Lightbulb strokeWidth={SW} {...props as any} />,
   Sparkles: (props: React.SVGProps<SVGSVGElement>) => <Sparkles strokeWidth={SW} {...props as any} />,
+  
+  // Agent Roles
+  PenTool: (props: React.SVGProps<SVGSVGElement>) => <PenTool strokeWidth={SW} {...props as any} />,
+  FileCheck: (props: React.SVGProps<SVGSVGElement>) => <FileCheck strokeWidth={SW} {...props as any} />,
+  TrendingUp: (props: React.SVGProps<SVGSVGElement>) => <TrendingUp strokeWidth={SW} {...props as any} />,
+  TestTube: (props: React.SVGProps<SVGSVGElement>) => <TestTube strokeWidth={SW} {...props as any} />,
+  Crown: (props: React.SVGProps<SVGSVGElement>) => <Crown strokeWidth={SW} {...props as any} />,
+  Eye: (props: React.SVGProps<SVGSVGElement>) => <Eye strokeWidth={SW} {...props as any} />,
+  Bug: (props: React.SVGProps<SVGSVGElement>) => <Bug strokeWidth={SW} {...props as any} />,
 };

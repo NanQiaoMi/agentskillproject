@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2",
@@ -23,17 +24,22 @@
     "lucide-react": "^1.17.0",
     "mermaid": "^11.15.0",
     "prism-react-renderer": "^2.4.1",
+    "puppeteer": "^25.1.0",
     "react": "^19.1.0",
     "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
-    "react-rnd": "^10.5.3"
+    "react-rnd": "^10.5.3",
+    "react-virtualized-auto-sizer": "^2.0.3",
+    "react-window": "^2.2.7"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@types/dagre": "^0.7.54",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/react-virtualized-auto-sizer": "^1.0.4",
+    "@types/react-window": "^1.8.8",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"

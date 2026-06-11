@@ -1,0 +1,5 @@
+crewai==0.30.11
+langchain-openai==0.1.7
+pydantic==2.7.1
+python-dotenv==1.0.1
+setuptools<71.0.0

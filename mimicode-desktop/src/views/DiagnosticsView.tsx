@@ -77,6 +77,19 @@ const translations = {
 
 export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, projectPath }) => {
   const { setEnvStatus, addToast } = useAppContext();
+  
+  const DiagIconBox = ({ icon: Icon, color, rgb }: { icon: any, color: string, rgb: string }) => (
+    <div style={{ 
+      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+      width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0,
+      background: `linear-gradient(135deg, rgba(${rgb}, 0.15) 0%, rgba(${rgb}, 0.05) 100%)`,
+      border: `1px solid rgba(${rgb}, 0.2)`,
+      color: color,
+      boxShadow: `0 4px 12px rgba(${rgb}, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.1)`
+    }}>
+      <Icon style={{ width: '22px', height: '22px', filter: `drop-shadow(0 2px 4px rgba(${rgb}, 0.3))` }} />
+    </div>
+  );
   const [activeTab, setActiveTab] = useState('System Diagnostics');
   const [logs, setLogs] = useState<string>('');
   const [agentStatus, setAgentStatus] = useState<Record<string, boolean>>({});
@@ -455,109 +468,150 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ envStatus, pro
 
       <div className="view-content" style={{ overflowY: 'auto' }}>
         {activeTab === 'System Diagnostics' && (
-          <div style={{ padding: '24px 32px', display: 'flex', gap: '32px' }}>
-            <div className="diag-list" style={{ flex: 1 }}>
-              <div className="diag-item" style={{ '--i': 0 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.GitBranch /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">{t.git}</div>
-                  <div className="diag-desc text-muted">{envStatus?.git_version || t.notDetected}</div>
-                </div>
-                <div className={`diag-status ${envStatus?.git_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.git_installed ? t.healthy : t.error}
-                </div>
-              </div>
-              <div className="diag-item" style={{ '--i': 1 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Code /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">{t.pythonEnv}</div>
-                  <div className="diag-desc text-muted">{envStatus?.python_version || t.notDetected}</div>
-                </div>
-                <div className={`diag-status ${envStatus?.python_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.python_installed ? t.healthy : t.error}
+          <div style={{ padding: '32px 48px', display: 'flex', gap: '40px', maxWidth: '1200px', margin: '0 auto' }}>
+            <div className="diag-list" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 0 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.GitBranch} color="#F97316" rgb="249, 115, 22" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{t.git}</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{envStatus?.git_version || t.notDetected}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${envStatus?.git_installed ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: envStatus?.git_installed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {envStatus?.git_installed ? t.healthy : t.error}
+                  </div>
                 </div>
               </div>
-              <div className="diag-item" style={{ '--i': 2 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Zap /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">{t.uvPkg}</div>
-                  <div className="diag-desc text-muted">{envStatus?.uv_version || t.notDetected}</div>
-                </div>
-                <div className={`diag-status ${envStatus?.uv_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.uv_installed ? t.healthy : t.error}
-                </div>
-              </div>
-              <div className="diag-item" style={{ '--i': 3 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Box /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">{t.node}</div>
-                  <div className="diag-desc text-muted">{envStatus?.node_version || t.notDetected}</div>
-                </div>
-                <div className={`diag-status ${envStatus?.node_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.node_installed ? t.healthy : t.error}
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 1 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.Code} color="#3B82F6" rgb="59, 130, 246" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{t.pythonEnv}</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{envStatus?.python_version || t.notDetected}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${envStatus?.python_installed ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: envStatus?.python_installed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {envStatus?.python_installed ? t.healthy : t.error}
+                  </div>
                 </div>
               </div>
-              <div className="diag-item" style={{ '--i': 4 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Box /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">npm</div>
-                  <div className="diag-desc text-muted">{envStatus?.npm_version || t.notDetected}</div>
-                </div>
-                <div className={`diag-status ${envStatus?.npm_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.npm_installed ? t.healthy : t.error}
-                </div>
-              </div>
-              <div className="diag-item" style={{ '--i': 5 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">Smithery CLI</div>
-                  <div className="diag-desc text-muted">{envStatus?.smithery_installed ? 'Installed' : t.notDetected}</div>
-                </div>
-                <div className={`diag-status ${envStatus?.smithery_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.smithery_installed ? t.healthy : t.error}
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 2 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.Zap} color="#EAB308" rgb="234, 179, 8" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{t.uvPkg}</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{envStatus?.uv_version || t.notDetected}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${envStatus?.uv_installed ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: envStatus?.uv_installed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {envStatus?.uv_installed ? t.healthy : t.error}
+                  </div>
                 </div>
               </div>
-              <div className="diag-item" style={{ '--i': 6 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">Claude Code CLI</div>
-                  <div className="diag-desc text-muted">{envStatus?.claude_code_installed ? 'Installed' : t.notDetected}</div>
-                </div>
-                <div className={`diag-status ${envStatus?.claude_code_installed ? 'text-success' : 'text-destructive'}`}>
-                  {envStatus?.claude_code_installed ? t.healthy : t.error}
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 3 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.Box} color="#10B981" rgb="16, 185, 129" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{t.node}</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{envStatus?.node_version || t.notDetected}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${envStatus?.node_installed ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: envStatus?.node_installed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {envStatus?.node_installed ? t.healthy : t.error}
+                  </div>
                 </div>
               </div>
-              <div className="diag-item" style={{ '--i': 7 } as React.CSSProperties}>
-                <div className="diag-icon-wrapper" style={{ backgroundColor: 'transparent' }}><Icons.Users /></div>
-                <div className="diag-info">
-                  <div className="diag-name font-semibold">{t.agentsServices} (Running)</div>
-                  <div className="diag-desc text-muted">{agentSummary.text}</div>
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 4 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.Box} color="#EF4444" rgb="239, 68, 68" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>npm</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{envStatus?.npm_version || t.notDetected}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${envStatus?.npm_installed ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: envStatus?.npm_installed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {envStatus?.npm_installed ? t.healthy : t.error}
+                  </div>
                 </div>
-                <div className={`diag-status ${agentSummary.healthy ? 'text-success' : 'text-destructive'}`}>
-                  {agentSummary.healthy ? t.healthy : t.error}
+              </div>
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 5 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.Users} color="#8B5CF6" rgb="139, 92, 246" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>Smithery CLI</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{envStatus?.smithery_installed ? 'Installed' : t.notDetected}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${envStatus?.smithery_installed ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: envStatus?.smithery_installed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {envStatus?.smithery_installed ? t.healthy : t.error}
+                  </div>
+                </div>
+              </div>
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 6 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.Cpu} color="#06B6D4" rgb="6, 182, 212" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>Claude Code CLI</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{envStatus?.claude_code_installed ? 'Installed' : t.notDetected}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${envStatus?.claude_code_installed ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: envStatus?.claude_code_installed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {envStatus?.claude_code_installed ? t.healthy : t.error}
+                  </div>
+                </div>
+              </div>
+              <div className="settings-card" style={{ padding: '0 24px', '--i': 7 } as React.CSSProperties}>
+                <div className="settings-group" style={{ padding: '20px 0', borderBottom: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <DiagIconBox icon={Icons.Activity} color="#6366F1" rgb="99, 102, 241" />
+                    <div className="diag-info">
+                      <div className="diag-name font-semibold" style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{t.agentsServices} (Running)</div>
+                      <div className="diag-desc text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>{agentSummary.text}</div>
+                    </div>
+                  </div>
+                  <div className={`diag-status ${agentSummary.healthy ? 'text-success' : 'text-destructive'}`} style={{ fontWeight: 600, padding: '6px 12px', background: agentSummary.healthy ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: '20px', fontSize: '13px' }}>
+                    {agentSummary.healthy ? t.healthy : t.error}
+                  </div>
                 </div>
               </div>
             </div>
             
-            <div className="diag-sidebar" style={{ width: '240px' }}>
-              <h3 className="section-title text-main font-semibold" style={{ marginBottom: '16px', fontSize: '14px', textTransform: 'none', letterSpacing: 'normal' }}>{t.quickActions}</h3>
-              <button
-                className="btn w-full"
-                style={{ justifyContent: 'flex-start', padding: '10px 14px', backgroundColor: 'var(--bg-main)', marginBottom: '8px' }}
-                onClick={handleRunFullCheck}
-                disabled={isRunningCheck}
-              >
-                <Icons.RefreshCw style={{ width: '16px', height: '16px', marginRight: '8px', animation: isRunningCheck ? 'spin 1s linear infinite' : undefined }}/>
-                {isRunningCheck ? t.checking : t.runFullCheck}
-              </button>
-              <button
-                className="btn w-full"
-                style={{ justifyContent: 'flex-start', padding: '10px 14px', backgroundColor: 'var(--bg-main)' }}
-                onClick={() => setIsRepairModalOpen(true)}
-              >
-                <Icons.Settings style={{ width: '16px', height: '16px', marginRight: '8px' }}/>
-                {t.repairEnv}
-              </button>
+            <div className="diag-sidebar" style={{ width: '280px', flexShrink: 0 }}>
+              <div className="settings-card" style={{ padding: '24px' }}>
+                <h3 className="section-title text-main font-semibold" style={{ marginBottom: '20px', fontSize: '15px', textTransform: 'none', letterSpacing: 'normal' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Icons.Zap style={{ width: '18px', height: '18px', color: 'var(--color-primary-orange)' }} />
+                    {t.quickActions}
+                  </div>
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <button
+                    className="modern-btn w-full"
+                    style={{ justifyContent: 'center', padding: '12px 16px', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.02) 100%)', borderColor: 'rgba(59, 130, 246, 0.2)', color: '#3B82F6' }}
+                    onClick={handleRunFullCheck}
+                    disabled={isRunningCheck}
+                  >
+                    <Icons.RefreshCw style={{ width: '16px', height: '16px', animation: isRunningCheck ? 'spin 1s linear infinite' : undefined }}/>
+                    {isRunningCheck ? t.checking : t.runFullCheck}
+                  </button>
+                  <button
+                    className="modern-btn w-full"
+                    style={{ justifyContent: 'center', padding: '12px 16px' }}
+                    onClick={() => setIsRepairModalOpen(true)}
+                  >
+                    <Icons.Settings style={{ width: '16px', height: '16px' }}/>
+                    {t.repairEnv}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

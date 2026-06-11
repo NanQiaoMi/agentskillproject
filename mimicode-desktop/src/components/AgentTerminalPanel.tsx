@@ -59,6 +59,10 @@ interface SessionInfo {
 
 const AGENTS = [
   { 
+    id: 'shell', name: 'System Terminal', icon: <Icons.Terminal style={{ width: '16px', height: '16px' }} />, color: '#14B8A6', 
+    prompt: '' 
+  },
+  { 
     id: 'claudecode', name: 'Claude Code', icon: <Icons.Shield style={{ width: '16px', height: '16px' }} />, color: '#f97316', 
     prompt: '你是 Claude Code，首席代码与产品构建专家。\n\n## 核心能力与工具箱\n作为编程专家，你必须主动使用以下专属技能提升代码质量。使用方法：在终端运行 `npx @smithery/cli@latest skill add [技能名称]` 安装。\n1. `git-master`：处理复杂Git操作、变基和合并。在需要提交代码或梳理历史时使用。\n2. `code-review`：深度代码审查，找出逻辑漏洞和坏味道。在合并前或排查代码时使用。\n3. `refactor`：智能重构，优化代码内部结构。在发现代码臃肿或需优化架构时使用。\n4. `testing-expert`：自动生成单元测试与集成测试。在新功能开发完毕或修Bug后补充用例时使用。\n5. `security-audit`：扫描SQL注入等安全漏洞。在涉及鉴权和数据存储的代码完成后使用。\n6. `performance-optimization`：分析并提供内存泄漏、慢查询等性能优化方案。在系统卡顿或发现低效循环时使用。' 
   },
@@ -148,6 +152,10 @@ const AgentTerminalInstance: React.FC<{
   useEffect(() => {
     if (!terminalContainerRef.current) return;
 
+    const termFontSize = parseInt(localStorage.getItem('mimi-terminal-font-size') || '13', 10);
+    const rawCursor = localStorage.getItem('mimi-terminal-cursor-style') || 'block';
+    const termCursorStyle = rawCursor === 'line' ? 'bar' : (rawCursor as 'block' | 'underline' | 'bar');
+
     // 1. Create and open terminal
     const term = new Terminal({
       allowProposedApi: true,
@@ -159,11 +167,12 @@ const AgentTerminalInstance: React.FC<{
         selectionBackground: 'rgba(249, 115, 22, 0.3)',
       },
       fontFamily: '"Cascadia Mono", "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace',
-      fontSize: 15,
+      fontSize: termFontSize,
       lineHeight: 1.2,
       letterSpacing: 0,
       customGlyphs: true,
       cursorBlink: true,
+      cursorStyle: termCursorStyle,
     });
 
     const fitAddon = new FitAddon();
@@ -353,8 +362,11 @@ const AgentTerminalInstance: React.FC<{
         const cols = dims?.cols || 80;
         const rows = dims?.rows || 24;
 
+        const shellConfig = localStorage.getItem('mimi-terminal-shell') || 'powershell';
+        const actualCliName = agentId === 'shell' ? shellConfig : agentId;
+
         const sk: string = await invoke('spawn_agent_pty', {
-          cliName: agentId,
+          cliName: actualCliName,
           projectPath,
           cols,
           rows,

@@ -7,38 +7,38 @@ const getIconConfig = (iconType: string, roleName: string, labelName: string) =>
   const label = (labelName || '').toLowerCase();
   
   if (label.includes('hermes') || role.includes('planner') || role.includes('manager') || role.includes('leader') || role.includes('pm') || iconType === 'manager') {
-    return { Icon: Icons.Shield, bg: '#EF4444' };
+    return { Icon: Icons.Shield, bg: '#993333' }; // Darker red
   }
   if (label.includes('opencode') || role.includes('refactor')) {
-    return { Icon: Icons.Activity, bg: '#8B5CF6' };
+    return { Icon: Icons.Activity, bg: '#663399' }; // Darker purple
   }
   if (label.includes('codex') || role.includes('backend') || role.includes('后端')) {
-    return { Icon: Icons.Database, bg: '#10B981' };
+    return { Icon: Icons.Database, bg: '#338066' }; // Darker green
   }
   if (label.includes('claude') || role.includes('qa') || role.includes('test') || role.includes('测试')) {
-    return { Icon: Icons.TestTube, bg: '#F59E0B' };
+    return { Icon: Icons.TestTube, bg: '#996633' }; // Darker orange/brown
   }
   if (label.includes('antigravity') || role.includes('frontend') || role.includes('前端')) {
-    return { Icon: Icons.Monitor, bg: '#3B82F6' };
+    return { Icon: Icons.Monitor, bg: '#336699' }; // Darker blue
   }
 
   if (role.includes('research') || role.includes('调研')) {
-    return { Icon: Icons.Search, bg: '#8B5CF6' };
+    return { Icon: Icons.Search, bg: '#663399' };
   }
   if (role.includes('writer') || role.includes('creat') || role.includes('撰写') || role.includes('创作者')) {
-    return { Icon: Icons.PenTool, bg: '#10B981' };
+    return { Icon: Icons.PenTool, bg: '#338066' };
   }
   if (role.includes('editor') || role.includes('review') || role.includes('审核') || role.includes('编辑')) {
-    return { Icon: Icons.FileCheck, bg: '#F43F5E' };
+    return { Icon: Icons.FileCheck, bg: '#993344' };
   }
   if (role.includes('seo') || role.includes('market') || role.includes('运营') || role.includes('营销')) {
-    return { Icon: Icons.TrendingUp, bg: '#6366F1' };
+    return { Icon: Icons.TrendingUp, bg: '#444499' };
   }
   if (role.includes('devops') || role.includes('ops') || role.includes('运维')) {
-    return { Icon: Icons.Server, bg: '#64748B' };
+    return { Icon: Icons.Server, bg: '#555566' };
   }
   
-  return { Icon: Icons.Code, bg: '#3B82F6' };
+  return { Icon: Icons.Code, bg: '#336699' };
 };
 
 export const AgentNode = memo(({ id, data }: any) => {
@@ -91,157 +91,194 @@ export const AgentNode = memo(({ id, data }: any) => {
     setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id));
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.dispatchEvent(new CustomEvent('edit-agent-node', { detail: { id } }));
+  };
+
+  const config = getIconConfig(data.icon, data.role, data.label);
+  const IconComp = config.Icon;
+
   return (
     <div 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onDoubleClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('edit-agent-node', { detail: { id } })); }}
+      onDoubleClick={handleDoubleClick}
       style={{
-        padding: '20px',
-        borderRadius: '16px',
-        background: '#ffffff',
-        border: `1px solid ${isHovered ? '#6366f1' : '#e2e8f0'}`,
-        boxShadow: isHovered 
-          ? '0 10px 25px -5px rgba(0, 0, 0, 0.08)' 
-          : '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-        minWidth: '240px',
+        background: '#282828',
+        borderRadius: '8px',
+        boxShadow: isHovered ? '0 0 0 2px #E0E0E0, 0 8px 16px rgba(0,0,0,0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+        width: '240px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
-        transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-        position: 'relative',
-        transform: isHovered ? 'translateY(-4px)' : 'translateY(0)'
+        overflow: 'visible', // To allow handles to be visible
+        fontFamily: '"Inter", "Segoe UI", sans-serif',
+        transition: 'box-shadow 0.2s',
       }}
     >
-      {/* Settings Button */}
-      <button
-        onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('edit-agent-node', { detail: { id } })); }}
-        style={{
-          position: 'absolute',
-          top: '-12px',
-          right: '24px',
-          width: '28px',
-          height: '28px',
-          borderRadius: '50%',
-          background: '#6366f1',
-          color: '#ffffff',
-          border: 'none',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          cursor: 'pointer',
-          opacity: isHovered ? 1 : 0,
-          transform: isHovered ? 'scale(1) rotate(0deg)' : 'scale(0.5) rotate(-45deg)',
-          transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-          boxShadow: '0 2px 4px rgba(99, 102, 241, 0.3)',
-          zIndex: 10
-        }}
-        title="设置任务属性"
-      >
-        <Icons.Settings style={{ width: '14px', height: '14px' }} />
-      </button>
+      {/* Header */}
+      <div style={{
+        background: config.bg,
+        borderTopLeftRadius: '8px',
+        borderTopRightRadius: '8px',
+        padding: '6px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        borderBottom: '1px solid #1A1A1A'
+      }}>
+        <IconComp style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
+        <div style={{
+          flex: 1,
+          color: '#FFFFFF',
+          fontSize: '14px',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+        }}>
+          {data.label || 'Agent'}
+        </div>
 
-      {/* Delete Button */}
-      <button
-        onClick={handleDelete}
-        style={{
-          position: 'absolute',
-          top: '-12px',
-          right: '-12px',
-          width: '28px',
-          height: '28px',
-          borderRadius: '50%',
-          background: '#f43f5e',
-          color: '#ffffff',
-          border: 'none',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          cursor: 'pointer',
-          opacity: isHovered ? 1 : 0,
-          transform: isHovered ? 'scale(1) rotate(0deg)' : 'scale(0.5) rotate(-45deg)',
-          transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-          transitionDelay: '0.05s',
-          boxShadow: '0 2px 4px rgba(244, 63, 94, 0.3)',
-          zIndex: 10
-        }}
-        title="删除节点"
-      >
-        <Icons.X style={{ width: '14px', height: '14px' }} />
-      </button>
-
-      {/* Top Edge */}
-      <Handle id="top-target" type="target" position={Position.Top} style={{ left: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
-      <Handle id="top-source" type="source" position={Position.Top} style={{ left: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
-
-      {/* Bottom Edge */}
-      <Handle id="bottom-target" type="target" position={Position.Bottom} style={{ left: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
-      <Handle id="bottom-source" type="source" position={Position.Bottom} style={{ left: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
-
-      {/* Left Edge */}
-      <Handle id="left-target" type="target" position={Position.Left} style={{ top: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
-      <Handle id="left-source" type="source" position={Position.Left} style={{ top: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
-
-      {/* Right Edge */}
-      <Handle id="right-target" type="target" position={Position.Right} style={{ top: 'calc(50% - 14px)', background: '#6366f1', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }} />
-      <Handle id="right-source" type="source" position={Position.Right} style={{ top: 'calc(50% + 14px)', background: '#10B981', width: '12px', height: '12px', border: '2px solid #ffffff', zIndex: 100, transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }} />
-      
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {(() => {
-          const config = getIconConfig(data.icon, data.role, data.label);
-          const IconComp = config.Icon;
-          return (
-            <div style={{ 
-              width: '46px', height: '46px', borderRadius: '12px', 
-              backgroundColor: config.bg,
-              display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff',
-              flexShrink: 0
-            }}>
-              <IconComp style={{ width: '22px', height: '22px' }} />
-            </div>
-          );
-        })()}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ 
-            fontSize: '17px', 
-            fontWeight: 700, 
-            color: '#0f172a', 
-            whiteSpace: 'nowrap', 
-            overflow: 'hidden', 
-            textOverflow: 'ellipsis', 
-            letterSpacing: '0.4px', 
-            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale'
-          }}>
-            {data.label}
-          </div>
-          <div style={{ 
-            fontSize: '14px', 
-            fontWeight: 500, 
-            color: '#64748b', 
-            whiteSpace: 'nowrap', 
-            overflow: 'hidden', 
-            textOverflow: 'ellipsis', 
-            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased'
-          }}>
-            {data.role}
-          </div>
+        {/* Action Buttons in Header */}
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button
+            onClick={handleDoubleClick}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: isHovered ? 0.8 : 0,
+              transition: 'opacity 0.2s',
+            }}
+            title="Settings"
+          >
+            <Icons.Settings style={{ width: '14px', height: '14px' }} />
+          </button>
+          <button
+            onClick={handleDelete}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: isHovered ? 0.8 : 0,
+              transition: 'opacity 0.2s',
+            }}
+            title="Delete Node"
+          >
+            <Icons.X style={{ width: '14px', height: '14px' }} />
+          </button>
         </div>
       </div>
 
-      <div style={{ 
-        display: 'flex', alignItems: 'center', gap: '8px', 
-        padding: '6px 10px', 
-        backgroundColor: '#f1f5f9', 
-        borderRadius: '6px', 
+      {/* Body */}
+      <div style={{
+        padding: '12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        position: 'relative'
       }}>
-        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981' }}></div>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.5px' }}>
-          {actualModel}
+
+        {/* Input Row */}
+        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+          <Handle 
+            id="target-input"
+            type="target" 
+            position={Position.Left} 
+            style={{ 
+              left: '-18px', 
+              width: '12px', 
+              height: '12px', 
+              background: '#63B3ED', // Light blue input handle
+              border: '2px solid #282828',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 10
+            }} 
+          />
+          <div style={{ color: '#E2E8F0', fontSize: '13px', marginLeft: '4px' }}>
+            Dependencies
+          </div>
         </div>
+
+        {/* Role Inline Property */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Role</div>
+          <div style={{ 
+            color: '#E2E8F0', 
+            fontSize: '12px', 
+            maxWidth: '120px', 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis',
+            textAlign: 'right'
+          }}>
+            {data.role || 'Agent'}
+          </div>
+        </div>
+
+        {/* Model Dropdown Inline Property */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Model</div>
+          <select
+            value={actualModel}
+            onChange={(e) => setActualModel(e.target.value)}
+            style={{
+              background: '#1A202C',
+              color: '#E2E8F0',
+              border: '1px solid #4A5568',
+              borderRadius: '4px',
+              padding: '4px 6px',
+              fontSize: '12px',
+              width: '120px',
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value={actualModel}>{actualModel}</option>
+            {actualModel !== 'gpt-4o' && <option value="gpt-4o">gpt-4o</option>}
+            {actualModel !== 'claude-3-5-sonnet-20240620' && <option value="claude-3-5-sonnet-20240620">claude-3-5-sonnet-20240620</option>}
+            {actualModel !== 'gemini-1.5-pro' && <option value="gemini-1.5-pro">gemini-1.5-pro</option>}
+            {actualModel !== 'deepseek-coder' && <option value="deepseek-coder">deepseek-coder</option>}
+          </select>
+        </div>
+
+        {/* Output Row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', position: 'relative', marginTop: '4px' }}>
+          <div style={{ color: '#E2E8F0', fontSize: '13px', marginRight: '4px' }}>
+            Result
+          </div>
+          <Handle 
+            id="source-output"
+            type="source" 
+            position={Position.Right} 
+            style={{ 
+              right: '-18px', 
+              width: '12px', 
+              height: '12px', 
+              background: '#F6E05E', // Yellow output handle
+              border: '2px solid #282828',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 10
+            }} 
+          />
+        </div>
+
       </div>
     </div>
   );
 });
+

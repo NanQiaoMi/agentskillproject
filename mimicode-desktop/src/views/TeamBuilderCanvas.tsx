@@ -31,11 +31,12 @@ const getId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 5
 const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 100 });
+  // Change to LR (Left to Right) for Blender-style node flow
+  dagreGraph.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 120 });
 
   nodes.forEach((node) => {
-    // Standard bounding box for AgentNode cards (220px width, 130px height)
-    dagreGraph.setNode(node.id, { width: 220, height: 130 });
+    // Bounding box for new Blender-style AgentNode cards (240px width, 160px height)
+    dagreGraph.setNode(node.id, { width: 240, height: 160 });
   });
 
   edges.forEach((edge) => {
@@ -49,8 +50,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
     return {
       ...node,
       position: {
-        x: nodeWithPosition.x - 110, // Convert center back to top-left (half of 220px)
-        y: nodeWithPosition.y - 65,  // Convert center back to top-left (half of 130px)
+        x: nodeWithPosition.x - 120, // Convert center back to top-left (half of 240px)
+        y: nodeWithPosition.y - 80,  // Convert center back to top-left (half of 160px)
       },
     };
   });
@@ -139,11 +140,6 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
 
   const nodeTypes = useMemo(() => ({ agentNode: AgentNode }), []);
   const edgeTypes = useMemo(() => ({ feedback: FeedbackEdge }), []);
-
-  const onConnect = useCallback(
-    (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
-  );
 
   const onAddAgent = useCallback(
     (agentData: any) => {
@@ -518,10 +514,11 @@ Respond ONLY with a valid JSON object in this exact format:
                  id: `edge_${dep.source}_${dep.target}`,
                  source: dep.source,
                  target: dep.target,
-                 targetHandle: `top-target`,
-                 type: 'default',
+                 sourceHandle: 'source-output',
+                 targetHandle: 'target-input',
+                 type: 'default', // ReactFlow 'default' is a smooth bezier curve
                  animated: true,
-                 style: { stroke: '#93C5FD', strokeWidth: 3 }
+                 style: { stroke: '#A0AEC0', strokeWidth: 3 } // Neutral grey for Blender style
               });
            });
         }
@@ -903,43 +900,34 @@ Respond ONLY with a valid JSON object in this exact format:
       <div style={{ 
         flex: 1, 
         height: '100%', 
-        background: 'radial-gradient(circle at 50% 50%, #f8fafc 0%, #e2e8f0 100%)',
+        background: '#1A1A1A', // Dark Blender background
         position: 'relative'
       }} ref={reactFlowWrapper}>
         <ReactFlow
           nodes={nodes}
           edges={edges.map(e => {
-            let isFeedbackLoop = 
-              (e.sourceHandle?.includes('right') && e.targetHandle?.includes('right')) ||
-              (e.sourceHandle?.includes('left') && e.targetHandle?.includes('left'));
-              
-            const sourceNode = nodes.find(n => n.id === e.source);
-            const targetNode = nodes.find(n => n.id === e.target);
-            if (!isFeedbackLoop && sourceNode && targetNode && targetNode.position.y < sourceNode.position.y) {
-              isFeedbackLoop = true;
-            }
-
             return {
               ...e,
-              type: isFeedbackLoop ? 'feedback' : (e.type === 'default' || e.type === 'straight' || !e.type ? 'smoothstep' : e.type)
+              // Fallback default edges to bezier curves for standard Blender feeling
+              type: e.type || 'default' 
             };
           })}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          onConnect={(params) => setEdges((eds) => addEdge({ ...params, type: 'default', sourceHandle: params.sourceHandle || 'source-output', targetHandle: params.targetHandle || 'target-input' }, eds))}
           isValidConnection={(connection) => connection.source !== connection.target}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
           minZoom={0.05}
           maxZoom={2}
-          colorMode="light"
+          colorMode="dark"
         >
-          <Controls style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '8px', overflow: 'hidden' }} />
+          <Controls style={{ backgroundColor: 'rgba(40, 40, 40, 0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', overflow: 'hidden' }} />
           {/* Major Grid Lines */}
-          <Background id="bg-major" variant={"lines" as any} gap={120} size={2} color="rgba(0, 0, 0, 0.08)" />
+          <Background id="bg-major" variant={"lines" as any} gap={120} size={2} color="rgba(255, 255, 255, 0.05)" />
           {/* Minor Grid Lines */}
-          <Background id="bg-minor" variant={"lines" as any} gap={24} size={1} color="rgba(0, 0, 0, 0.04)" />
+          <Background id="bg-minor" variant={"lines" as any} gap={24} size={1} color="rgba(255, 255, 255, 0.02)" />
         </ReactFlow>
       </div>
     </div>

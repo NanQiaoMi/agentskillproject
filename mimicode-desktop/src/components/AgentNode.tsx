@@ -190,92 +190,141 @@ export const AgentNode = memo(({ id, data }: any) => {
         gap: '12px',
         position: 'relative'
       }}>
+        {/* Dynamic Sockets & Controls based on Role */}
+        {(() => {
+          const role = (data.role || '').toLowerCase();
+          const label = (data.label || '').toLowerCase();
+          const isManager = role.includes('manager') || role.includes('leader') || role.includes('planner') || label.includes('hermes');
+          const isFrontend = role.includes('frontend') || role.includes('ui') || role.includes('前端') || label.includes('antigravity');
+          const isTester = role.includes('qa') || role.includes('test') || role.includes('测试') || label.includes('claude');
+          const isDevOps = role.includes('devops') || role.includes('ops') || role.includes('运维');
 
-        {/* Input Row */}
-        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-          <Handle 
-            id="target-input"
-            type="target" 
-            position={Position.Left} 
-            style={{ 
-              left: '-18px', 
-              width: '12px', 
-              height: '12px', 
-              background: '#63B3ED', // Light blue input handle
-              border: '2px solid #282828',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              zIndex: 10
-            }} 
-          />
-          <div style={{ color: '#E2E8F0', fontSize: '13px', marginLeft: '4px' }}>
-            Dependencies
-          </div>
-        </div>
+          const renderHandle = (type: 'target' | 'source', id: string, text: string, color: string, index: number, isRight: boolean) => (
+            <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: isRight ? 'flex-end' : 'flex-start', position: 'relative', marginTop: index > 0 ? '4px' : '0' }}>
+              {!isRight && (
+                <Handle type={type} position={Position.Left} id={id} style={{ left: '-18px', width: '12px', height: '12px', background: color, border: '2px solid #282828', zIndex: 10 }} />
+              )}
+              <div style={{ color: '#E2E8F0', fontSize: '13px', marginLeft: !isRight ? '4px' : '0', marginRight: isRight ? '4px' : '0' }}>
+                {text}
+              </div>
+              {isRight && (
+                <Handle type={type} position={Position.Right} id={id} style={{ right: '-18px', width: '12px', height: '12px', background: color, border: '2px solid #282828', zIndex: 10 }} />
+              )}
+            </div>
+          );
 
-        {/* Role Inline Property */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Role</div>
-          <div style={{ 
-            color: '#E2E8F0', 
-            fontSize: '12px', 
-            maxWidth: '120px', 
-            whiteSpace: 'nowrap', 
-            overflow: 'hidden', 
-            textOverflow: 'ellipsis',
-            textAlign: 'right'
-          }}>
-            {data.role || 'Agent'}
-          </div>
-        </div>
+          if (isManager) {
+            return (
+              <>
+                {renderHandle('target', 'in-goal', 'Goal', '#9F7AEA', 0, false)}
+                {renderHandle('target', 'in-feedback', 'Feedback', '#ED8936', 1, false)}
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Strategy</div>
+                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option>Sequential</option>
+                    <option>Parallel</option>
+                  </select>
+                </div>
 
-        {/* Model Dropdown Inline Property */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Model</div>
-          <select
-            value={actualModel}
-            onChange={(e) => setActualModel(e.target.value)}
-            style={{
-              background: '#1A202C',
-              color: '#E2E8F0',
-              border: '1px solid #4A5568',
-              borderRadius: '4px',
-              padding: '4px 6px',
-              fontSize: '12px',
-              width: '120px',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <option value={actualModel}>{actualModel}</option>
-            {actualModel !== 'gpt-4o' && <option value="gpt-4o">gpt-4o</option>}
-            {actualModel !== 'claude-3-5-sonnet-20240620' && <option value="claude-3-5-sonnet-20240620">claude-3-5-sonnet-20240620</option>}
-            {actualModel !== 'gemini-1.5-pro' && <option value="gemini-1.5-pro">gemini-1.5-pro</option>}
-            {actualModel !== 'deepseek-coder' && <option value="deepseek-coder">deepseek-coder</option>}
-          </select>
-        </div>
+                {renderHandle('source', 'out-tasks', 'Assigned Tasks', '#63B3ED', 0, true)}
+                {renderHandle('source', 'out-approved', 'Approved Result', '#48BB78', 1, true)}
+              </>
+            );
+          }
 
-        {/* Output Row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', position: 'relative', marginTop: '4px' }}>
-          <div style={{ color: '#E2E8F0', fontSize: '13px', marginRight: '4px' }}>
-            Result
-          </div>
-          <Handle 
-            id="source-output"
-            type="source" 
-            position={Position.Right} 
-            style={{ 
-              right: '-18px', 
-              width: '12px', 
-              height: '12px', 
-              background: '#F6E05E', // Yellow output handle
-              border: '2px solid #282828',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              zIndex: 10
-            }} 
-          />
-        </div>
+          if (isFrontend) {
+            return (
+              <>
+                {renderHandle('target', 'in-specs', 'Specs', '#63B3ED', 0, false)}
+                {renderHandle('target', 'in-assets', 'Assets', '#F6E05E', 1, false)}
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Framework</div>
+                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option>React</option>
+                    <option>Vue</option>
+                    <option>Next.js</option>
+                  </select>
+                </div>
+
+                {renderHandle('source', 'out-code', 'Code / PR', '#48BB78', 0, true)}
+                {renderHandle('source', 'out-questions', 'Questions', '#F56565', 1, true)}
+              </>
+            );
+          }
+
+          if (isTester) {
+            return (
+              <>
+                {renderHandle('target', 'in-code', 'Implementation', '#48BB78', 0, false)}
+                {renderHandle('target', 'in-cases', 'Test Cases', '#ED8936', 1, false)}
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Mode</div>
+                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option>Standard</option>
+                    <option>Strict (E2E)</option>
+                  </select>
+                </div>
+
+                {renderHandle('source', 'out-report', 'Test Report', '#63B3ED', 0, true)}
+                {renderHandle('source', 'out-bugs', 'Bugs', '#F56565', 1, true)}
+              </>
+            );
+          }
+
+          if (isDevOps) {
+            return (
+              <>
+                {renderHandle('target', 'in-codebase', 'Codebase', '#48BB78', 0, false)}
+                {renderHandle('target', 'in-config', 'Config', '#A0AEC0', 1, false)}
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Env</div>
+                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option>Staging</option>
+                    <option>Production</option>
+                  </select>
+                </div>
+
+                {renderHandle('source', 'out-url', 'Deploy URL', '#63B3ED', 0, true)}
+                {renderHandle('source', 'out-logs', 'Build Logs', '#F6E05E', 1, true)}
+              </>
+            );
+          }
+
+          // Default Fallback
+          return (
+            <>
+              {renderHandle('target', 'target-input', 'Dependencies', '#63B3ED', 0, false)}
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Role</div>
+                <div style={{ color: '#E2E8F0', fontSize: '12px', maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>
+                  {data.role || 'Agent'}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Model</div>
+                <select
+                  value={actualModel}
+                  onChange={(e) => setActualModel(e.target.value)}
+                  style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '120px', cursor: 'pointer' }}
+                >
+                  <option value={actualModel}>{actualModel}</option>
+                  {actualModel !== 'gpt-4o' && <option value="gpt-4o">gpt-4o</option>}
+                  {actualModel !== 'claude-3-5-sonnet-20240620' && <option value="claude-3-5-sonnet-20240620">claude-3-5-sonnet-20240620</option>}
+                  {actualModel !== 'gemini-1.5-pro' && <option value="gemini-1.5-pro">gemini-1.5-pro</option>}
+                  {actualModel !== 'deepseek-coder' && <option value="deepseek-coder">deepseek-coder</option>}
+                </select>
+              </div>
+
+              {renderHandle('source', 'source-output', 'Result', '#F6E05E', 0, true)}
+            </>
+          );
+        })()}
 
       </div>
     </div>

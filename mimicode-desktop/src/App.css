@@ -208,7 +208,7 @@ body {
   border-left: 4px solid var(--card-accent, var(--color-border));
   border-radius: 12px;
   cursor: pointer;
-  transition: all var(--duration-normal) var(--ease-spring);
+  transition: background-color var(--duration-normal), border-color var(--duration-normal), box-shadow var(--duration-normal);
   box-shadow: 0 4px 12px rgba(0,0,0,0.03);
   margin-bottom: 12px;
   position: relative;
@@ -379,10 +379,46 @@ body {
 .header-icon-btn { background: none; border: none; color: var(--color-text-secondary); cursor: pointer; display: flex; align-items: center; }
 .user-avatar { width: 24px; height: 24px; border-radius: 50%; background-color: var(--color-border); overflow: hidden; }
 .chat-welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
-.welcome-title { font-size: 28px; font-weight: 500; margin-bottom: 8px; }
-.welcome-title span { color: var(--color-primary-orange); font-weight: 700; }
-.welcome-subtitle { font-size: 14px; color: var(--color-text-muted); margin-bottom: 32px; }
-.welcome-actions { display: flex; gap: 12px; }
+.welcome-title { 
+  font-size: 28px; 
+  font-weight: 500; 
+  margin-bottom: 8px; 
+}
+
+.typewriter-char {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: revealChar 0.01s forwards;
+}
+
+@keyframes revealChar {
+  to { max-width: 2em; opacity: 1; }
+}
+
+@keyframes blink-caret {
+  from, to { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes welcomeFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.welcome-subtitle { 
+  font-size: 14px; 
+  color: var(--color-text-muted); 
+  margin-bottom: 32px; 
+  animation: welcomeFadeIn 0.8s ease-out 1.2s both;
+}
+.welcome-actions { 
+  display: flex; 
+  gap: 12px; 
+  animation: welcomeFadeIn 0.8s ease-out 1.4s both;
+}
 .action-btn { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background-color: var(--bg-main); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; box-shadow: var(--shadow-soft); }
 .action-btn-icon { color: var(--color-text-muted); }
 .chat-scroll-area { flex: 1; overflow-y: auto; padding: 32px; display: flex; flex-direction: column; gap: 32px; scroll-behavior: smooth; }
@@ -959,7 +995,7 @@ body {
 .kanban-column-title { font-size: 15px; font-weight: 600; color: var(--color-text-main); display: flex; align-items: center; gap: 10px; }
 .kanban-count-badge { background-color: var(--bg-main); color: var(--color-text-secondary); font-size: 12px; padding: 2px 8px; border-radius: 99px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); font-weight: 500; }
 .kanban-column-content { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; flex: 1; min-height: 150px; padding: 4px; }
-.kanban-card { background-color: var(--bg-main); border: 1px solid transparent; border-left: 4px solid var(--card-accent, var(--color-border)); border-radius: 16px; padding: 20px; cursor: pointer; transition: all var(--duration-normal) var(--ease-spring); box-shadow: 0 4px 12px rgba(0,0,0,0.03); display: flex; flex-direction: column; gap: 12px; animation: cardSlideIn var(--duration-slow) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * var(--stagger-delay)); position: relative; overflow: hidden; }
+.kanban-card { background-color: var(--bg-main); border: 1px solid transparent; border-left: 4px solid var(--card-accent, var(--color-border)); border-radius: 16px; padding: 20px; cursor: pointer; transition: background-color var(--duration-normal), border-color var(--duration-normal), box-shadow var(--duration-normal); box-shadow: 0 4px 12px rgba(0,0,0,0.03); display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden; }
 .kanban-card::after, .agent-card::after, .settings-card::after, .diag-item::after {
   content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
   background: linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent);

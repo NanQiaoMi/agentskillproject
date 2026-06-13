@@ -118,8 +118,12 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, fetchTasks, onSelec
     }
     setIsCreating(true);
     try {
-      const args = ["create-task", `--title="${newTaskTitle}"`, `--assignee=${newTaskAssignee}`];
-      if (newTaskDesc.trim()) args.push(`--desc="${newTaskDesc}"`);
+      const args = ["add", "--title", newTaskTitle, "--assignee", newTaskAssignee];
+      if (newTaskDesc.trim()) {
+        args.push("--desc", newTaskDesc);
+      } else {
+        args.push("--desc", "");
+      }
       await runCmd(args);
       
       handleCloseCreateModal();

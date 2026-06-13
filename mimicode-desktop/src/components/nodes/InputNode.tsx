@@ -40,53 +40,50 @@ export function InputNode({ id, data }: any) {
         color: '#fff'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Icons.FileText style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
-          <span>输入</span>
+          <Icons.FileText style={{ width: '16px', height: '16px', color: '#FFFFFF' }} />
+          <span>输入 (Input)</span>
         </div>
-        
         {isHovered && (
-          <button
-            onClick={handleDelete}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#fff',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '2px',
-              borderRadius: '4px',
-              opacity: 0.8
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
-            title="Delete node"
-          >
+          <div onClick={handleDelete} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.8 }} onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')} onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')} title="Delete node">
             <Icons.X style={{ width: '14px', height: '14px' }} />
-          </button>
+          </div>
         )}
       </div>
       
       <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <textarea 
-          placeholder="Initial context or prompt..."
-          style={{
-            background: '#1A202C',
-            color: '#e2e8f0',
-            border: '1px solid #4a5568',
-            borderRadius: '4px',
-            padding: '6px',
-            resize: 'vertical',
-            minHeight: '60px',
-            fontSize: '12px',
-            outline: 'none',
-            boxSizing: 'border-box',
-            width: '100%'
-          }}
-          defaultValue={data?.prompt || ''}
-          onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input
+            type="checkbox"
+            id={`runtime-only-${id}`}
+            checked={data?.isRuntimeOnly || false}
+            onChange={(e) => updateNodeData(id, { isRuntimeOnly: e.target.checked })}
+            style={{ cursor: 'pointer', accentColor: '#DD6B20' }}
+          />
+          <label htmlFor={`runtime-only-${id}`} style={{ fontSize: '12px', color: '#CBD5E0', cursor: 'pointer' }}>
+            仅接收运行时输入 (无预设)
+          </label>
+        </div>
+
+        {!data?.isRuntimeOnly && (
+          <textarea 
+            placeholder="预设情景或系统提示词..."
+            style={{
+              background: '#1A202C',
+              color: '#e2e8f0',
+              border: '1px solid #4a5568',
+              borderRadius: '4px',
+              padding: '6px',
+              resize: 'vertical',
+              minHeight: '60px',
+              fontSize: '12px',
+              outline: 'none',
+              boxSizing: 'border-box',
+              width: '100%'
+            }}
+            value={data?.prompt || ''}
+            onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
+          />
+        )}
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' }}>
           <div style={{ color: '#A0AEC0', fontSize: '12px', marginRight: '4px' }}>

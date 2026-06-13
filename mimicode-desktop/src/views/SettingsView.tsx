@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Icons } from '../components/Icons';
 import { AgentApiConfigPanel } from '../components/AgentApiConfigPanel';
+import { McpConfigPanel } from '../components/McpConfigPanel';
 
 // --- localStorage helper ---
 function lsGet(key: string, fallback: string): string {
@@ -57,6 +58,7 @@ const translations = {
       Terminal: 'Terminal',
       Notifications: 'Notifications',
       Advanced: 'Advanced',
+      McpServers: 'MCP Servers',
     },
     subtitles: {
       General: 'Manage your basic preferences, API keys, and language settings.',
@@ -67,6 +69,7 @@ const translations = {
       Terminal: 'Configure terminal display and default shell.',
       Notifications: 'Adjust system notifications and sounds.',
       Advanced: 'Advanced diagnostics and cache management.',
+      McpServers: 'Configure Model Context Protocol (MCP) servers for extended agent capabilities.',
     },
     general: {
       themeTitle: 'Theme',
@@ -163,16 +166,18 @@ const translations = {
       Terminal: '终端',
       Notifications: '通知',
       Advanced: '高级',
+      McpServers: 'MCP 服务器',
     },
     subtitles: {
-      General: '管理基础偏好设置、API密钥以及界面语言。',
-      Agents: '配置内置智能体和自定义智能体。',
-      AgentAPI: '为每个子智能体配置独立的 API、模型与密钥，支持异构团队。',
-      Models: '设置LLM供应商及模型降级回退策略。',
-      Editor: '自定义内置代码编辑器的行为与外观。',
-      Terminal: '配置终端显示样式及默认Shell解释器。',
-      Notifications: '调整系统通知和声音提示。',
-      Advanced: '高级系统诊断与缓存管理。',
+      General: '管理应用偏好、API 密钥与界面语言。',
+      Agents: '配置内置智能体或添加自定义的本地 CLI 智能体。',
+      AgentAPI: '为各子智能体配置独立的 API 端点、模型与密钥。',
+      Models: '设置 LLM 接口供应商与模型异常时的回退策略。',
+      Editor: '自定义内置代码编辑器的显示与行为。',
+      Terminal: '配置终端窗口的显示风格与默认 Shell。',
+      Notifications: '设置系统通知与声音提醒。',
+      Advanced: '高级调试与缓存管理。',
+      McpServers: '配置模型上下文协议 (MCP) 服务器以扩展智能体能力。',
     },
     general: {
       themeTitle: '主题颜色',
@@ -515,14 +520,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
         {/* Sidebar */}
         <div className="settings-sidebar">
           <div className="settings-sidebar-header">{t.settingsTitle}</div>
-          {['General', 'Agents', 'AgentAPI', 'Models', 'Editor', 'Terminal', 'Notifications', 'Advanced'].map(tab => (
+          {['General', 'AgentAPI', 'McpServers', 'Agents', 'Models', 'Editor', 'Terminal', 'Notifications', 'Advanced'].map(tab => (
             <div 
               key={tab} 
               className={`settings-nav-item ${activeTab === tab ? 'active' : ''}`}
               onClick={() => setActiveTab(tab)}
             >
               {tab === 'General' && <Icons.Settings className="settings-nav-icon" />}
-              {tab === 'Agents' && <Icons.Users className="settings-nav-icon" />}
               {tab === 'AgentAPI' && <Icons.GitBranch className="settings-nav-icon" />}
               {tab === 'Models' && <Icons.Activity className="settings-nav-icon" />}
               {tab === 'Editor' && <Icons.Edit2 className="settings-nav-icon" />}
@@ -781,6 +785,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ projectPath = '' }) 
 
           {activeTab === 'AgentAPI' && (
             <AgentApiConfigPanel />
+          )}
+
+          {activeTab === 'McpServers' && (
+            <McpConfigPanel />
           )}
 
           {activeTab === 'Models' && (

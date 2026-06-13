@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { logger, LogEntry } from '../utils/logger';
-import * as Icons from './Icons';
+import { Icons } from './Icons';
 
 export const LogViewer: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);

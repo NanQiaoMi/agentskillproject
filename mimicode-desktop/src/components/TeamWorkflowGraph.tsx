@@ -3,14 +3,8 @@ import { ReactFlow, Background, Handle, Position, Node, Edge, MarkerType, ReactF
 import '@xyflow/react/dist/style.css';
 import { Icons } from './Icons';
 import { FeedbackEdge } from './FeedbackEdge';
+import { AgentEvent } from '../types';
 // Removed unused dagre layout logic
-
-interface AgentEvent {
-  event: string;
-  agent: string;
-  message?: string;
-  node_id?: string;
-}
 
 interface TeamWorkflowGraphProps {
   events: AgentEvent[];
@@ -31,7 +25,18 @@ const getAgentIconSVG = (role: string, label: string) => {
 };
 
 const CustomLightNode = ({ data }: { data: any }) => {
-  const { label, role, isActive, isStartEnd } = data;
+  let { label, role, isActive, isStartEnd, originalType } = data;
+  
+  if (!label && originalType === 'routerNode') {
+    label = '条件分发';
+    role = 'Router';
+  } else if (!label && originalType === 'inputNode') {
+    label = '全局输入';
+    role = 'Input';
+  } else if (!label && originalType === 'toolNode') {
+    label = '工具节点';
+    role = 'Tool';
+  }
   
   if (isStartEnd) {
     return (
@@ -241,6 +246,7 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
           position: { x: newX, y: newY },
           data: {
             ...n.data,
+            originalType: n.type,
             isActive: isActive,
             event: isActive ? activeEvent : ''
           }
@@ -266,9 +272,10 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
         }
         if (!found) xClusters.push({ sum: n.position.x, count: 1, nodes: [n] });
       });
+      const xAligned = new Map<any, number>();
       xClusters.forEach(cluster => {
         const avgX = cluster.sum / cluster.count;
-        cluster.nodes.forEach(n => n.position.x = avgX);
+        cluster.nodes.forEach(n => xAligned.set(n, avgX));
       });
 
       const yClusters: { sum: number, count: number, nodes: any[] }[] = [];
@@ -285,10 +292,21 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
         }
         if (!found) yClusters.push({ sum: n.position.y, count: 1, nodes: [n] });
       });
+      const yAligned = new Map<any, number>();
       yClusters.forEach(cluster => {
         const avgY = cluster.sum / cluster.count;
-        cluster.nodes.forEach(n => n.position.y = avgY);
+        cluster.nodes.forEach(n => yAligned.set(n, avgY));
       });
+
+      // Apply aligned positions immutably
+      for (let i = 0; i < mappedNodes.length; i++) {
+        const n = mappedNodes[i];
+        const newX = xAligned.get(n) ?? n.position.x;
+        const newY = yAligned.get(n) ?? n.position.y;
+        if (newX !== n.position.x || newY !== n.position.y) {
+          mappedNodes[i] = { ...n, position: { x: newX, y: newY } };
+        }
+      }
       // --- End Auto-Alignment ---
 
       let mappedEdges: any[] = savedEdges.map((e: any) => {
@@ -389,7 +407,7 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
               // Ensure we don't duplicate existing identical edges
               if (!finalEdges.find(e => e.source === sourceNode.id && e.target === targetNode.id && e.id.includes('delegation'))) {
                 finalEdges.push({
-                  id: `delegation-edge-${Date.now()}-${i}`,
+                  id: `delegation-edge-${sourceNode.id}-${targetNode.id}-${i}`,
                   source: sourceNode.id,
                   target: targetNode.id,
                   type: 'default',
@@ -556,9 +574,9 @@ const TeamWorkflowGraphInner: React.FC<TeamWorkflowGraphProps> = ({ events }) =>
               let color = '#3B82F6';
               if (ev.event === 'error') color = '#EF4444';
               else if (ev.event === 'success') color = '#10B981';
-              else if (ev.event === 'tool_execution' || ev.event === 'system') color = '#F59E0B';
+              else if (ev.event === 'agent_action' || ev.event === 'system') color = '#F59E0B';
               
-              const message = ev.message || (ev as any).task || (ev as any).tool || ev.event;
+              const message = ev.message || ev.task || ev.tool || ev.event;
               
               return (
                 <div key={i} style={{ display: 'flex', gap: '12px', lineHeight: '1.4' }}>

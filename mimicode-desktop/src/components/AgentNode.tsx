@@ -42,9 +42,10 @@ const getIconConfig = (iconType: string, roleName: string, labelName: string) =>
 };
 
 export const AgentNode = memo(({ id, data }: any) => {
-  const { setNodes, setEdges } = useReactFlow();
+  const { setNodes, setEdges, updateNodeData } = useReactFlow();
   const [isHovered, setIsHovered] = useState(false);
   const [actualModel, setActualModel] = useState(data.model || 'gpt-4o');
+  const [dynamicModels, setDynamicModels] = useState<string[]>([]);
 
   useEffect(() => {
     const updateModel = () => {
@@ -52,6 +53,9 @@ export const AgentNode = memo(({ id, data }: any) => {
         const saved = localStorage.getItem('mimi-subagent-configs');
         if (saved) {
           const configs = JSON.parse(saved);
+          const models = new Set<string>();
+          configs.forEach((c: any) => { if (c.model) models.add(c.model); });
+          setDynamicModels(Array.from(models));
           const rLower = (data.role || '').toLowerCase();
           const nLower = (data.label || '').toLowerCase();
 
@@ -139,6 +143,7 @@ export const AgentNode = memo(({ id, data }: any) => {
           textShadow: '0 1px 2px rgba(0,0,0,0.5)'
         }}>
           {data.label || 'Agent'}
+          {data.expectedOutput && <span title="Guardrail Enabled: Expected Output" style={{ marginLeft: '6px', fontSize: '12px' }}>🛡️</span>}
         </div>
 
         {/* Action Buttons in Header */}
@@ -196,6 +201,7 @@ export const AgentNode = memo(({ id, data }: any) => {
           const label = (data.label || '').toLowerCase();
           const isManager = role.includes('manager') || role.includes('leader') || role.includes('planner') || label.includes('hermes');
           const isFrontend = role.includes('frontend') || role.includes('ui') || role.includes('前端') || label.includes('antigravity');
+          const isBackend = role.includes('backend') || role.includes('api') || role.includes('database') || role.includes('后端') || label.includes('codex');
           const isTester = role.includes('qa') || role.includes('test') || role.includes('测试') || label.includes('claude');
           const isDevOps = role.includes('devops') || role.includes('ops') || role.includes('运维');
 
@@ -221,10 +227,19 @@ export const AgentNode = memo(({ id, data }: any) => {
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
                   <div style={{ color: '#A0AEC0', fontSize: '12px' }}>策略</div>
-                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
-                    <option>串行</option>
-                    <option>并行</option>
+                  <select value={data.strategy || '串行'} onChange={(e) => updateNodeData(id, { strategy: e.target.value })} style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option value="串行">串行</option>
+                    <option value="并行">并行</option>
                   </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Memory</div>
+                  <input
+                    type="number" min="1" value={data.memoryWindow || 10}
+                    onChange={(e) => updateNodeData(id, { memoryWindow: parseInt(e.target.value, 10) || 10 })}
+                    style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '50px' }}
+                  />
                 </div>
 
                 {renderHandle('source', 'out-tasks', '分配任务', '#63B3ED', 0, true)}
@@ -241,11 +256,50 @@ export const AgentNode = memo(({ id, data }: any) => {
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
                   <div style={{ color: '#A0AEC0', fontSize: '12px' }}>框架</div>
-                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
-                    <option>React</option>
-                    <option>Vue</option>
-                    <option>Next.js</option>
+                  <select value={data.framework || 'React'} onChange={(e) => updateNodeData(id, { framework: e.target.value })} style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option value="React">React</option>
+                    <option value="Vue">Vue</option>
+                    <option value="Next.js">Next.js</option>
                   </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Memory</div>
+                  <input
+                    type="number" min="1" value={data.memoryWindow || 10}
+                    onChange={(e) => updateNodeData(id, { memoryWindow: parseInt(e.target.value, 10) || 10 })}
+                    style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '50px' }}
+                  />
+                </div>
+
+                {renderHandle('source', 'out-code', '代码', '#48BB78', 0, true)}
+                {renderHandle('source', 'out-questions', '疑问', '#F56565', 1, true)}
+              </>
+            );
+          }
+
+          if (isBackend) {
+            return (
+              <>
+                {renderHandle('target', 'target-input', '任务/架构', '#63B3ED', 0, false)}
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>框架</div>
+                  <select value={data.framework || 'Node.js'} onChange={(e) => updateNodeData(id, { framework: e.target.value })} style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option value="Node.js">Node.js</option>
+                    <option value="Python">Python</option>
+                    <option value="Go">Go</option>
+                    <option value="Java">Java</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Memory</div>
+                  <input
+                    type="number" min="1" value={data.memoryWindow || 10}
+                    onChange={(e) => updateNodeData(id, { memoryWindow: parseInt(e.target.value, 10) || 10 })}
+                    style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '50px' }}
+                  />
                 </div>
 
                 {renderHandle('source', 'out-code', '代码', '#48BB78', 0, true)}
@@ -262,10 +316,19 @@ export const AgentNode = memo(({ id, data }: any) => {
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
                   <div style={{ color: '#A0AEC0', fontSize: '12px' }}>模式</div>
-                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
-                    <option>标准</option>
-                    <option>严格 (E2E)</option>
+                  <select value={data.testMode || '标准'} onChange={(e) => updateNodeData(id, { testMode: e.target.value })} style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option value="标准">标准</option>
+                    <option value="严格 (E2E)">严格 (E2E)</option>
                   </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Memory</div>
+                  <input
+                    type="number" min="1" value={data.memoryWindow || 10}
+                    onChange={(e) => updateNodeData(id, { memoryWindow: parseInt(e.target.value, 10) || 10 })}
+                    style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '50px' }}
+                  />
                 </div>
 
                 {renderHandle('source', 'out-report', '测试报告', '#63B3ED', 0, true)}
@@ -282,10 +345,19 @@ export const AgentNode = memo(({ id, data }: any) => {
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', marginBottom: '8px' }}>
                   <div style={{ color: '#A0AEC0', fontSize: '12px' }}>环境</div>
-                  <select style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
-                    <option>预发布</option>
-                    <option>生产</option>
+                  <select value={data.deployEnv || '预发布'} onChange={(e) => updateNodeData(id, { deployEnv: e.target.value })} style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none' }}>
+                    <option value="预发布">预发布</option>
+                    <option value="生产">生产</option>
                   </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', marginBottom: '8px' }}>
+                  <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Memory</div>
+                  <input
+                    type="number" min="1" value={data.memoryWindow || 10}
+                    onChange={(e) => updateNodeData(id, { memoryWindow: parseInt(e.target.value, 10) || 10 })}
+                    style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '50px' }}
+                  />
                 </div>
 
                 {renderHandle('source', 'out-url', '部署地址', '#63B3ED', 0, true)}
@@ -310,15 +382,47 @@ export const AgentNode = memo(({ id, data }: any) => {
                 <div style={{ color: '#A0AEC0', fontSize: '12px' }}>模型</div>
                 <select
                   value={actualModel}
-                  onChange={(e) => setActualModel(e.target.value)}
+                  onChange={(e) => { setActualModel(e.target.value); updateNodeData(id, { model: e.target.value }); }}
                   style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '120px', cursor: 'pointer' }}
                 >
                   <option value={actualModel}>{actualModel}</option>
-                  {actualModel !== 'gpt-4o' && <option value="gpt-4o">gpt-4o</option>}
-                  {actualModel !== 'claude-3-5-sonnet-20240620' && <option value="claude-3-5-sonnet-20240620">claude-3-5-sonnet-20240620</option>}
-                  {actualModel !== 'gemini-1.5-pro' && <option value="gemini-1.5-pro">gemini-1.5-pro</option>}
-                  {actualModel !== 'deepseek-coder' && <option value="deepseek-coder">deepseek-coder</option>}
+                  {Array.from(new Set(['gpt-4o', 'claude-3-5-sonnet-20240620', 'gemini-1.5-pro', 'deepseek-coder', ...dynamicModels])).filter(m => m !== actualModel).map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
                 </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>Memory Window</div>
+                <input
+                  type="number"
+                  min="1"
+                  value={data.memoryWindow || 10}
+                  onChange={(e) => updateNodeData(id, { memoryWindow: parseInt(e.target.value, 10) || 10 })}
+                  style={{ background: '#1A202C', color: '#E2E8F0', border: '1px solid #4A5568', borderRadius: '4px', padding: '4px 6px', fontSize: '12px', outline: 'none', width: '106px' }}
+                />
+              </div>
+
+              {/* Tool Selection */}
+              <div style={{ display: 'flex', flexDirection: 'column', marginTop: '8px', gap: '4px' }}>
+                <div style={{ color: '#A0AEC0', fontSize: '12px' }}>工具库 (Tools)</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#1A202C', padding: '6px', borderRadius: '4px' }}>
+                  {['execute_command_tool', 'read_file_tool', 'write_file_tool', 'web_search_tool', 'edit_file_tool', 'search_code_tool', 'delegate_task_tool'].map(tool => (
+                    <label key={tool} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#E2E8F0', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={(data.tools || []).includes(tool)}
+                        onChange={(e) => {
+                          const current = data.tools || [];
+                          const newTools = e.target.checked ? [...current, tool] : current.filter((t: string) => t !== tool);
+                          updateNodeData(id, { tools: newTools });
+                        }}
+                        style={{ accentColor: '#3182CE' }}
+                      />
+                      {tool.replace('_tool', '')}
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {renderHandle('source', 'source-output', '输出', '#F6E05E', 0, true)}

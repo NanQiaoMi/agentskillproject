@@ -1,4 +1,5 @@
 import React from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Icons } from '../Icons';
 import { Task } from '../../types';
 import { TaskCard } from './TaskCard';
@@ -38,6 +39,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
       </div>
       
       <div className="kanban-column-content">
+        <AnimatePresence mode="popLayout">
         {colTasks.map((t, index) => (
           <TaskCard
             key={t.id}
@@ -49,6 +51,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
             onDeleteTask={onDeleteTask}
           />
         ))}
+        </AnimatePresence>
       </div>
     </div>
   );

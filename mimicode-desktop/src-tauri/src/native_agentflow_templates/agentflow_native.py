@@ -1,178 +1,151 @@
 import os
 import sys
 import json
-import logging
-from typing import Any, Dict, List
-from crewai import Agent, Task, Crew, Process
+import builtins
+import subprocess
+from typing import TypedDict, Annotated, Sequence
 from langchain_openai import ChatOpenAI
-from langchain.callbacks.base import BaseCallbackHandler
-from langchain.tools import tool
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage, ToolMessage
+from langchain_core.tools import tool
+from langgraph.graph import StateGraph, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
 
-# ---------------------------------------------------------
-# Stdout Hijacker: Mute all non-JSON output from CrewAI
-# ---------------------------------------------------------
-class JSONStdoutFilter:
-    def __init__(self, original_stdout):
-        self.original_stdout = original_stdout
+def emit_event(event_type: str, agent_name: str, message: str, node_id: str = ""):
+    payload = { "event": event_type, "agent": agent_name, "message": message, "node_id": node_id, "is_team": True }
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
 
-    def write(self, message):
-        if not message.strip():
-            return
-        try:
-            # Only let our own emitted JSON events pass through
-            parsed = json.loads(message)
-            if "event" in parsed and "agent" in parsed:
-                self.original_stdout.write(message + '\n')
-                self.original_stdout.flush()
-        except Exception:
-            # Mute everything else (CrewAI raw prints, LangChain warnings)
-            pass
+class AgentState(TypedDict):
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    current_data: str
 
-    def flush(self):
-        self.original_stdout.flush()
+# Define Tools
+@tool
+def execute_command_tool(command: str) -> str:
+    """Execute a terminal command and return the output."""
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=120)
+        output = result.stdout if result.stdout else result.stderr
+        return output if output else "Command executed successfully with no output."
+    except Exception as e:
+        return f"Command execution failed: {str(e)}"
 
-# Apply the filter globally
-sys.stdout = JSONStdoutFilter(sys.stdout)
+@tool
+def read_file_tool(path: str) -> str:
+    """Read contents of a local file."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        return f"Read failed: {e}"
 
-def emit_event(event_type: str, agent: str, message: str = "", node_id: str = "", **kwargs):
-    payload = {
-        "event": event_type,
-        "agent": agent,
-        "message": message,
-        "is_team": True,
-        "node_id": node_id
-    }
-    payload.update(kwargs)
-    # We must bypass the filter to emit our own events
-    sys.stdout.original_stdout.write(json.dumps(payload) + '\n')
-    sys.stdout.original_stdout.flush()
+@tool
+def write_file_tool(path: str, content: str) -> str:
+    """Write contents to a local file."""
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return f"File {path} written successfully."
+    except Exception as e:
+        return f"Write failed: {e}"
 
-class JSONRPCCallbackHandler(BaseCallbackHandler):
-    def __init__(self, agent_name: str, node_id: str = ""):
-        self.agent_name = agent_name
-        self.node_id = node_id
+@tool
+def web_search_tool(query: str) -> str:
+    """Search the web (placeholder)."""
+    return f"Mock search results for: {query}"
 
-    def on_llm_start(self, *args, **kwargs):
-        emit_event("agent_started", self.agent_name, "Started thinking...", self.node_id)
+# Global env
+global_api_key = os.environ.get("OPENAI_API_KEY", "")
+global_base_url = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+global_model = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
 
-    def on_tool_start(self, serialized, input_str, *args, **kwargs):
-        tool_name = serialized.get("name", "Unknown Tool")
-        emit_event("agent_action", self.agent_name, f"Using tool: {tool_name} with input: {input_str}", self.node_id)
+def select_key(keys_str: str) -> str:
+    if not keys_str: return global_api_key
+    keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+    return keys[0] if keys else global_api_key
 
-    def on_llm_end(self, response, *args, **kwargs):
-        try:
-            text = response.generations[0][0].text
-            emit_event("agent_finished", self.agent_name, text, self.node_id)
-        except Exception as e:
-            emit_event("agent_finished", self.agent_name, "Finished thinking.", self.node_id)
+workflow = StateGraph(AgentState)
+
+# Universal Tools Node
+tools_list = [execute_command_tool, read_file_tool, write_file_tool, web_search_tool]
+tools_node = ToolNode(tools_list)
+workflow.add_node("global_tools_node", tools_node)
+
+def should_continue_tools(state: AgentState) -> str:
+    messages = state.get("messages", [])
+    if not messages: return "next"
+    last_message = messages[-1]
+    if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+        return "tools"
+    return "next"
+
+# Default single-agent fallback
+def default_agent(state: AgentState):
+    emit_event("agent_started", "DefaultAgent", "Thinking...", "")
+    
+    llm = ChatOpenAI(
+        temperature=0.7,
+        model_name=global_model,
+        base_url=global_base_url,
+        api_key=global_api_key
+    )
+    
+    llm_with_tools = llm.bind_tools(tools_list)
+    sys_msg = SystemMessage(content=f"You are a helpful AI assistant. Complete the user's request using the available tools.\n\nPrevious context: {state.get('current_data', '')}")
+    
+    try:
+        response = llm_with_tools.invoke([sys_msg] + list(state["messages"]))
+        response.name = "default_agent"
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            emit_event("agent_action", "DefaultAgent", f"Calling tools: {[t['name'] for t in response.tool_calls]}", "")
+            return {"messages": [response], "current_data": "Waiting for tool result..."}
+        else:
+            content = response.content
+            emit_event("agent_finished", "DefaultAgent", content, "")
+            return {"messages": [response], "current_data": content}
+    except Exception as e:
+        err = f"LLM Error: {str(e)}"
+        emit_event("error", "DefaultAgent", err, "")
+        return {"messages": [AIMessage(content=err)], "current_data": err}
+
+workflow.add_node("default_agent", default_agent)
+
+def tool_router(state: AgentState) -> str:
+    messages = state.get("messages", [])
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+            return msg.name if msg.name else "default_agent"
+    return "default_agent"
+
+workflow.add_conditional_edges("default_agent", should_continue_tools, {
+    "tools": "global_tools_node",
+    "next": END
+})
+workflow.add_conditional_edges("global_tools_node", tool_router, {
+    "default_agent": "default_agent",
+    END: END
+})
+workflow.set_entry_point("default_agent")
 
 def run_native_team(project_path: str, task_description: str):
-    emit_event("system", "System", "Initializing Native AgentFlow Team...")
-    
-    # Check for OPENAI_API_KEY
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        emit_event("error", "System", "OPENAI_API_KEY environment variable is not set. Please set it in Settings.")
+    emit_event("system", "System", "Initializing LangGraph Engine (Default Fallback)...")
+    if not global_api_key:
+        emit_event("error", "System", "No API key configured. Please set your API key in Settings.")
         return
-
-    # ---------------------------------------------------------
-    # Tools definition for Subagents
-    # ---------------------------------------------------------
-    @tool("read_file")
-    def read_file(path: str) -> str:
-        """Reads the content of a file."""
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            return f"Error reading file: {str(e)}"
-
-    @tool("write_file")
-    def write_file(path: str, content: str) -> str:
-        """Writes content to a file."""
-        try:
-            # Create directories if they don't exist
-            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            return f"Successfully wrote to {path}"
-        except Exception as e:
-            return f"Error writing file: {str(e)}"
-
-    @tool("list_dir")
-    def list_dir(path: str) -> str:
-        """Lists files and directories in the given path."""
-        try:
-            items = os.listdir(path)
-            return f"Contents of {path}:\n" + "\n".join(items)
-        except Exception as e:
-            return f"Error listing directory: {str(e)}"
-
-    # Create isolated LLM instances for each agent to perfectly intercept their thoughts
-    model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
+        
+    app = workflow.compile()
     
-    llm_hermes = ChatOpenAI(temperature=0.7, model_name=model_name, callbacks=[JSONRPCCallbackHandler("Hermes", "node_hermes")])
-    llm_antigravity = ChatOpenAI(temperature=0.7, model_name=model_name, callbacks=[JSONRPCCallbackHandler("Antigravity", "node_antigravity")])
-    llm_codex = ChatOpenAI(temperature=0.7, model_name=model_name, callbacks=[JSONRPCCallbackHandler("Codex", "node_codex")])
-
-    # Define Agents
-    hermes = Agent(
-        role='Manager and Technical Lead',
-        goal='Analyze the user request, break it down, and coordinate the team to fulfill it.',
-        backstory='You are Hermes, an expert Software Architect and Project Manager. You understand codebases deeply and can delegate tasks perfectly.',
-        verbose=False,
-        allow_delegation=True,
-        llm=llm_hermes
-    )
-
-    antigravity = Agent(
-        role='Frontend Engineer',
-        goal='Implement UI/UX changes, write React components, and style them. You must use tools to actually write files.',
-        backstory='You are Antigravity, an expert Frontend developer who writes clean, accessible, and beautiful UI code.',
-        verbose=False,
-        allow_delegation=False,
-        tools=[read_file, write_file, list_dir],
-        llm=llm_antigravity
-    )
-
-    codex = Agent(
-        role='Backend Engineer',
-        goal='Implement API routes, database migrations, and core business logic. You must use tools to actually write files.',
-        backstory='You are Codex, an expert Backend engineer who writes secure, performant, and robust server-side code.',
-        verbose=False,
-        allow_delegation=False,
-        tools=[read_file, write_file, list_dir],
-        llm=llm_codex
-    )
-
-    # Define the core Task
-    main_task = Task(
-        description=f"Project Path: {project_path}\nTask: {task_description}",
-        expected_output="A complete implementation of the requested feature with all files modified as necessary.",
-        agent=hermes
-    )
-
-    # Form the Crew
-    # When using hierarchical process, the manager handles delegation.
-    # We assign Hermes as the manager_agent, and remove him from the agents list to prevent conflicts.
-    crew = Crew(
-        agents=[antigravity, codex],
-        tasks=[main_task],
-        process=Process.hierarchical,
-        manager_agent=hermes,
-        verbose=False
-    )
-
-    emit_event("system", "System", "Team execution started.")
     try:
-        result = crew.kickoff()
-        emit_event("success", "System", f"Team execution finished. Result: {result}")
+        emit_event("system", "System", f"Starting Workflow Execution. Project: {project_path}")
+        result = app.invoke({"messages": [], "current_data": task_description})
+        emit_event("success", "System", "Workflow execution finished successfully.")
     except Exception as e:
-        emit_event("error", "System", f"Team execution failed: {str(e)}")
+        emit_event("error", "System", f"Workflow execution failed: {str(e)}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print(json.dumps({"event": "error", "agent": "System", "message": "Usage: agentflow_native.py <project_path> <task>"}))
+        print(json.dumps({"event": "error", "agent": "System", "message": "Usage: script.py <project_path> <task>"}))
         sys.exit(1)
     
     project_path = sys.argv[1]

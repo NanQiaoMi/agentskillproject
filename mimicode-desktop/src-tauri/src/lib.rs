@@ -342,17 +342,31 @@ fn start_native_team_task(
     });
 
     let app_handle_err = app_handle.clone();
+    let app_handle_clone2 = app_handle.clone();
     std::thread::spawn(move || {
         use std::io::{BufRead, BufReader};
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             if let Ok(l) = line {
                 println!("AgentFlow Native Log: {}", l);
-                let payload = format!(r#"{{"event": "system", "agent": "CrewAI", "message": "{}"}}"#, l.replace("\"", "\\\"").replace("\\", "\\\\"));
+                let payload = format!(r#"{{"event": "system", "agent": "CrewAI", "message": "{}"}}"#, l.replace("\\", "\\\\").replace("\"", "\\\""));
                 let _ = app_handle_err.emit("agent-event", payload);
             }
         }
-        let _ = child.wait();
+        let status = child.wait();
+        let exit_event = if status.map(|s| s.success()).unwrap_or(false) {
+            r#"{"event":"success","agent":"System","message":"工作流执行完毕。","is_team":true}"#
+        } else {
+            r#"{"event":"error","agent":"System","message":"工作流进程异常退出。","is_team":true}"#
+        };
+        let _ = app_handle_clone2.emit("agent-event", exit_event);
+        let native_state = app_handle_clone2.state::<NativeAppState>();
+        if let Ok(mut stdin_lock) = native_state.current_task_stdin.lock() {
+            *stdin_lock = None;
+        };
+        if let Ok(mut pid_lock) = native_state.current_task_pid.lock() {
+            *pid_lock = None;
+        };
     });
 
     Ok("Task Started".to_string())

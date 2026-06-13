@@ -18,8 +18,9 @@ import { FeedbackEdge } from '../components/FeedbackEdge';
 import { InputNode } from '../components/nodes/InputNode';
 import { ToolNode } from '../components/nodes/ToolNode';
 import { RouterNode } from '../components/nodes/RouterNode';
+import { FeedbackNode } from '../components/nodes/FeedbackNode';
 import { invoke } from '@tauri-apps/api/core';
-import { compileGraphToCrewAI } from '../utils/agentCompiler';
+import { compileGraphToLangGraph } from '../utils/agentCompiler';
 import { TEAM_TEMPLATES, TeamTemplate } from '../utils/teamTemplates';
 import dagre from 'dagre';
 
@@ -34,11 +35,22 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   // Change to LR (Left to Right) for Blender-style node flow
-  dagreGraph.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 120 });
+  dagreGraph.setGraph({ rankdir: 'LR', nodesep: 100, ranksep: 200 });
+
+  const getNodeSize = (type: string | undefined) => {
+    switch (type) {
+      case 'agentNode': return { w: 260, h: 420 };
+      case 'inputNode': return { w: 200, h: 100 };
+      case 'toolNode': return { w: 200, h: 100 };
+      case 'routerNode': return { w: 220, h: 160 };
+      case 'feedbackNode': return { w: 150, h: 60 };
+      default: return { w: 240, h: 160 };
+    }
+  };
 
   nodes.forEach((node) => {
-    // Bounding box for new Blender-style AgentNode cards (240px width, 160px height)
-    dagreGraph.setNode(node.id, { width: 240, height: 160 });
+    const { w, h } = getNodeSize(node.type);
+    dagreGraph.setNode(node.id, { width: w, height: h });
   });
 
   edges.forEach((edge) => {
@@ -49,11 +61,12 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
   return nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
+    const { w, h } = getNodeSize(node.type);
     return {
       ...node,
       position: {
-        x: nodeWithPosition.x - 120, // Convert center back to top-left (half of 240px)
-        y: nodeWithPosition.y - 80,  // Convert center back to top-left (half of 160px)
+        x: nodeWithPosition.x - w / 2, 
+        y: nodeWithPosition.y - h / 2,  
       },
     };
   });
@@ -81,7 +94,7 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [taskForm, setTaskForm] = useState({ taskDescription: '', expectedOutput: '', asyncExecution: false });
+  const [taskForm, setTaskForm] = useState({ taskDescription: '', expectedOutput: '', asyncExecution: false, memoryWindow: 10, parentId: '' });
   
   const [aiPlanModalOpen, setAiPlanModalOpen] = useState(false);
   const [globalGoal, setGlobalGoal] = useState('');
@@ -103,7 +116,9 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
         setTaskForm({
           taskDescription: (node.data.taskDescription as string) || '',
           expectedOutput: (node.data.expectedOutput as string) || '',
-          asyncExecution: !!node.data.asyncExecution
+          asyncExecution: !!node.data.asyncExecution,
+          memoryWindow: parseInt(node.data.memoryWindow as any) || 10,
+          parentId: node.parentId || ''
         });
       }
     };
@@ -140,12 +155,7 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
     return () => window.removeEventListener('mimi-subagent-configs-updated', handleUpdate);
   }, []);
 
-  const nodeTypes = useMemo(() => ({ 
-    agentNode: AgentNode,
-    inputNode: InputNode,
-    toolNode: ToolNode,
-    routerNode: RouterNode
-  }), []);
+  const nodeTypes = useMemo(() => ({ agentNode: AgentNode, inputNode: InputNode, toolNode: ToolNode, routerNode: RouterNode, feedbackNode: FeedbackNode }), []);
   const edgeTypes = useMemo(() => ({ feedback: FeedbackEdge }), []);
 
   const onAddSpecialNode = useCallback(
@@ -153,12 +163,19 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
       const offset = nodes.length * 30;
       const position = { x: 100 + offset, y: 100 + offset };
       
-      const newNode: Node = {
+      let newNode: Node = {
         id: getId(),
         type,
         position,
         data: {},
       };
+
+      if (type === 'group') {
+        newNode = {
+          ...newNode,
+          style: { width: 500, height: 500, backgroundColor: 'rgba(240, 240, 240, 0.2)', border: '2px dashed #cbd5e1', zIndex: -1 },
+        };
+      }
       
       setNodes((nds) => nds.concat(newNode));
     },
@@ -226,14 +243,25 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
     }
     
     try {
-      const pythonCode = compileGraphToCrewAI(nodes, edges);
+      const permsRaw = localStorage.getItem('mimi-team-permissions');
+      const perms = permsRaw ? JSON.parse(permsRaw) : { executeCommand: 'ask', writeFile: 'ask', useGitSandbox: false };
+      const mcpRaw = localStorage.getItem('mimi-mcp-servers');
+      let mcpServers = [];
+      if (mcpRaw) {
+        try { mcpServers = JSON.parse(mcpRaw); } catch (e) { }
+        // parse args string to array for the compiler
+        mcpServers = mcpServers.map((s: any) => ({
+          ...s,
+          args: (s.args || '').split(/\s+/).filter(Boolean)
+        }));
+      }
+      const pythonCode = compileGraphToLangGraph(nodes, edges, perms, mcpServers);
       
-      const targetDir = `${projectPath}/.agentflow/native`;
+      const targetPath = `${projectPath}/.agentflow/native/agentflow_native.py`;
       
-      const b64 = btoa(unescape(encodeURIComponent(pythonCode)));
-      await invoke('run_shell_command', {
-         command: `powershell -Command "New-Item -ItemType Directory -Force -Path '${targetDir}'; [IO.File]::WriteAllText('${targetDir}/agentflow_native.py', [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${b64}')))"`,
-         cwd: projectPath 
+      await invoke('write_file_content', {
+         path: targetPath,
+         content: pythonCode 
       });
 
       (window as any).showToast('编译成功！正在自动跳转并启动多智能体团队任务...', 'success');
@@ -262,15 +290,24 @@ const TeamBuilderCanvasInner: React.FC<TeamBuilderCanvasProps> = ({ projectPath,
       setNodes((nds) => 
         nds.map((node) => {
           if (node.id === editingNodeId) {
-            return {
+            const newNode = {
               ...node,
               data: {
                 ...node.data,
                 taskDescription: taskForm.taskDescription,
                 expectedOutput: taskForm.expectedOutput,
-                asyncExecution: taskForm.asyncExecution
+                asyncExecution: taskForm.asyncExecution,
+                memoryWindow: taskForm.memoryWindow
               }
             };
+            if (taskForm.parentId) {
+              newNode.parentId = taskForm.parentId;
+              newNode.extent = 'parent';
+            } else {
+              delete newNode.parentId;
+              delete newNode.extent;
+            }
+            return newNode;
           }
           return node;
         })
@@ -618,6 +655,31 @@ Respond ONLY with a valid JSON object in this exact format:
                   <span style={{ fontSize: '12px', color: '#9CA3AF', fontWeight: 'normal' }}>此节点将非阻塞并行执行。</span>
                 </label>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <label style={{ fontSize: '14px', fontWeight: 500, color: '#374151' }}>
+                  记忆窗口大小 (Memory Window Size)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={taskForm.memoryWindow}
+                  onChange={(e) => setTaskForm(prev => ({ ...prev, memoryWindow: parseInt(e.target.value) || 10 }))}
+                  style={{ width: '80px', padding: '6px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '14px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <label style={{ fontSize: '14px', fontWeight: 500, color: '#374151' }}>
+                  所属编组 ID (Parent Group ID)
+                </label>
+                <input
+                  type="text"
+                  placeholder="可留空，或填入 Group Node 的 ID"
+                  value={taskForm.parentId}
+                  onChange={(e) => setTaskForm(prev => ({ ...prev, parentId: e.target.value }))}
+                  style={{ width: '100%', padding: '6px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '14px' }}
+                />
+              </div>
             </div>
             <div style={{ padding: '16px 20px', backgroundColor: '#F9FAFB', borderTop: '1px solid #E5E7EB', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button 
@@ -758,10 +820,11 @@ Respond ONLY with a valid JSON object in this exact format:
 
         <div style={{ marginBottom: '12px' }}>
           <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-muted)', margin: '0 0 12px 0' }}>流程节点 (Nodes)</h2>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button onClick={() => onAddSpecialNode('inputNode')} style={{ flex: 1, padding: '8px', background: '#DD6B20', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 输入</button>
-            <button onClick={() => onAddSpecialNode('toolNode')} style={{ flex: 1, padding: '8px', background: '#3182CE', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 工具</button>
-            <button onClick={() => onAddSpecialNode('routerNode')} style={{ flex: 1, padding: '8px', background: '#805AD5', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 路由</button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+            <button onClick={() => onAddSpecialNode('inputNode')} style={{ padding: '8px', background: '#DD6B20', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 输入</button>
+            <button onClick={() => onAddSpecialNode('toolNode')} style={{ padding: '8px', background: '#3182CE', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 工具</button>
+            <button onClick={() => onAddSpecialNode('routerNode')} style={{ padding: '8px', background: '#805AD5', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 路由</button>
+            <button onClick={() => onAddSpecialNode('group')} style={{ padding: '8px', background: '#48BB78', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ 编组</button>
           </div>
 
           <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-muted)', margin: '0 0 12px 0' }}>可用智能体</h2>

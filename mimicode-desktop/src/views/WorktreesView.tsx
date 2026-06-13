@@ -952,39 +952,47 @@ export const WorktreesView: React.FC<WorktreesViewProps> = ({ projectPath }) => 
                     <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '10px' }}>分析代码库中...</div>
                   ) : fileStats.length > 0 ? (
                     <div>
-                      {/* Segment bar */}
-                      <div style={{ display: 'flex', height: '22px', borderRadius: '11px', overflow: 'hidden', backgroundColor: 'rgba(128,128,128,0.1)', marginBottom: '16px', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.1)', border: '1px solid rgba(128,128,128,0.15)', padding: '2px', gap: '2px' }}>
-                        {fileStats.map((stat, idx) => (
+                      {/* Modern Segmented Bar */}
+                      <div 
+                        style={{ 
+                          display: 'flex', 
+                          height: '10px', 
+                          borderRadius: '5px', 
+                          overflow: 'hidden', 
+                          backgroundColor: 'var(--bg-panel)', 
+                          marginBottom: '16px', 
+                          border: '1px solid var(--color-border)',
+                          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+                        }}
+                      >
+                        {fileStats.map((stat) => (
                           <div 
                             key={stat.label} 
                             style={{ 
                               width: `${stat.percent}%`, 
                               backgroundColor: stat.color,
-                              backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(0,0,0,0.1))',
-                              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)',
-                              borderRadius: '6px',
-                              transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
-                              transitionDelay: `${idx * 0.1}s`,
-                              cursor: 'pointer'
+                              transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s',
+                              cursor: 'pointer',
+                              position: 'relative'
                             }} 
-                            onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(1.15) saturate(1.2)'; e.currentTarget.style.transform = 'scaleY(1.05)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; e.currentTarget.style.transform = 'none'; }}
+                            onMouseEnter={(e) => { 
+                              e.currentTarget.style.filter = 'brightness(1.1) saturate(1.2)';
+                            }}
+                            onMouseLeave={(e) => { 
+                              e.currentTarget.style.filter = 'none';
+                            }}
                             title={`${stat.label}: ${stat.count} 个文件 (${stat.percent}%)`}
                           />
                         ))}
                       </div>
                       
-                      {/* Label list */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: '11px' }}>
+                      {/* Clean Wrap Labels */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px', fontSize: '11.5px' }}>
                         {fileStats.slice(0, 6).map(stat => (
-                          <div key={stat.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: stat.color }}></span>
-                              <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>{stat.label}</span>
-                            </div>
-                            <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', fontSize: '10px' }}>
-                              {stat.count} ({stat.percent}%)
-                            </span>
+                          <div key={stat.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: stat.color, boxShadow: '0 0 2px rgba(0,0,0,0.2)' }}></span>
+                            <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>{stat.label}</span>
+                            <span style={{ color: 'var(--color-text-muted)' }}>{stat.percent}%</span>
                           </div>
                         ))}
                       </div>

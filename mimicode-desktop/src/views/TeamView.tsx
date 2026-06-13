@@ -5,6 +5,7 @@ import { Icons } from '../components/Icons';
 import ReactMarkdown from 'react-markdown';
 import { Highlight, themes } from 'prism-react-renderer';
 import { TeamWorkflowGraph } from '../components/TeamWorkflowGraph';
+import { ArtifactViewer, Artifact } from '../components/ArtifactViewer';
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode, fallback: React.ReactNode}, {hasError: boolean}> {
   constructor(props: {children: React.ReactNode, fallback: React.ReactNode}) {
@@ -33,6 +34,11 @@ import { AgentEvent, TeamSession, Task } from '../types';
 
 export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
   const [agentFlowTasks, setAgentFlowTasks] = useState<Task[]>([]);
+  const agentFlowTasksRef = useRef<Task[]>([]);
+  
+  useEffect(() => {
+    agentFlowTasksRef.current = agentFlowTasks;
+  }, [agentFlowTasks]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [taskInput, setTaskInput] = useState('');
@@ -49,6 +55,9 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
   const [isSandboxActionLoading, setIsSandboxActionLoading] = useState(false);
   const [sandboxActionCompleted, setSandboxActionCompleted] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const [costMetrics, setCostMetrics] = useState({ totalTokens: 0, promptTokens: 0, completionTokens: 0, cost: 0 });
+  const [activeArtifacts, setActiveArtifacts] = useState<Artifact[]>([]);
+  const [taskBoardTasks, setTaskBoardTasks] = useState<{title: string, assigned: string}[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem('mimi-team-sessions');
@@ -110,13 +119,50 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
   useEffect(() => {
     const unlisten = listen<string>('agent-event', (e) => {
       try {
-        const parsed = JSON.parse(e.payload) as AgentEvent;
+        const parsed = JSON.parse(e.payload) as any;
+        
+        if (parsed.type === 'cost_tracking') {
+          setCostMetrics(prev => ({
+            totalTokens: prev.totalTokens + (parsed.total_tokens || 0),
+            promptTokens: prev.promptTokens + (parsed.prompt_tokens || 0),
+            completionTokens: prev.completionTokens + (parsed.completion_tokens || 0),
+            cost: prev.cost + (parsed.total_cost || parsed.cost || 0),
+          }));
+          return;
+        }
+
+        if (parsed.type === 'artifact' || parsed.event === 'artifact') {
+          try {
+            const artifactData = parsed.type === 'artifact' ? parsed : (typeof parsed.message === 'string' ? JSON.parse(parsed.message) : parsed.message);
+            if (artifactData && artifactData.name) {
+               setActiveArtifacts(prev => {
+                 const updated = [...prev];
+                 const idx = updated.findIndex(a => a.name === artifactData.name);
+                 if (idx >= 0) updated[idx] = { name: artifactData.name, content: artifactData.content };
+                 else updated.push({ name: artifactData.name, content: artifactData.content });
+                 return updated;
+               });
+            }
+          } catch(e) {
+             console.error("Failed to parse artifact data:", e);
+          }
+          return;
+        }
+
+        if (parsed.event === 'task_posted') {
+          try {
+            const taskData = typeof parsed.message === 'string' ? JSON.parse(parsed.message) : parsed.message;
+            setTaskBoardTasks(prev => [...prev, taskData]);
+          } catch(e) { console.error('Failed to parse task_posted', e); }
+          return;
+        }
+
         // Ignore standalone agent events to prevent graph and chat pollution
-        if (!(parsed as any).is_team && parsed.event !== 'system' && parsed.agent !== 'System') {
+        if (!parsed.is_team && parsed.event !== 'system' && parsed.agent !== 'System') {
           return;
         }
         setEvents(prev => {
-          if (parsed.event === 'system' || parsed.agent === 'CrewAI') {
+          if (parsed.event === 'system' || parsed.agent === 'System') {
             const last = prev[prev.length - 1];
             if (last && last.event === parsed.event && last.agent === parsed.agent) {
               const updated = [...prev];
@@ -143,7 +189,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
         if (cleanMessage) {
           setEvents(prev => {
             const last = prev[prev.length - 1];
-            if (last && last.event === 'system' && last.agent === 'CrewAI') {
+            if (last && last.event === 'system' && last.agent === 'System') {
               const updated = [...prev];
               updated[updated.length - 1] = {
                 ...last,
@@ -151,7 +197,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
               };
               return updated;
             }
-            return [...prev, { event: 'system', agent: 'CrewAI', message: cleanMessage }];
+            return [...prev, { event: 'system', agent: 'System', message: cleanMessage }];
           });
         }
       }
@@ -177,7 +223,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
       if (input) {
         localStorage.removeItem('mimi-team-auto-run-input');
         // Check if the input is actually a Task ID
-        const taskMatch = agentFlowTasks.find(t => t.id === input);
+        const taskMatch = agentFlowTasksRef.current.find(t => t.id === input);
         if (taskMatch) {
           setSelectedTaskId(taskMatch.id);
           setTaskInput(taskMatch.description || taskMatch.title || '');
@@ -219,7 +265,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
     // If a task is selected, we combine title and description for the prompt if it's not overridden
     let fullInputContext = inputToUse;
     if (targetTaskId && !overrideInput) {
-       const taskObj = agentFlowTasks.find(t => t.id === targetTaskId);
+       const taskObj = agentFlowTasksRef.current.find(t => t.id === targetTaskId);
        if (taskObj) {
           fullInputContext = `Task: ${taskObj.title}\n\nDescription:\n${taskObj.description || inputToUse}`;
        }
@@ -229,6 +275,9 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
 
     setIsRunning(true);
     setEvents([]);
+    setActiveArtifacts([]);
+    setTaskBoardTasks([]);
+    setCostMetrics({ totalTokens: 0, promptTokens: 0, completionTokens: 0, cost: 0 });
 
     try {
       setIsInitializing(true);
@@ -251,7 +300,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
       
       const initialEvents: AgentEvent[] = [
         { event: 'user_input', agent: 'User', message: fullInputContext },
-        { event: 'system', agent: 'System', message: '正在初始化原生多智能体环境 (uv/crewai)...' }
+        { event: 'system', agent: 'System', message: '正在初始化原生多智能体环境 (LangGraph)...' }
       ];
       setEvents(initialEvents);
 
@@ -277,10 +326,10 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
           const parsedNodes = JSON.parse(savedNodes);
           const parsedEdges = savedEdges ? JSON.parse(savedEdges) : [];
           if (parsedNodes.length > 0) {
-              const { compileGraphToCrewAI } = await import('../utils/agentCompiler');
+              const { compileGraphToLangGraph } = await import('../utils/agentCompiler');
               const permsRaw = localStorage.getItem('mimi-team-permissions');
               const perms = permsRaw ? JSON.parse(permsRaw) : { executeCommand: 'ask', writeFile: 'ask', useGitSandbox: false };
-              const pythonCode = compileGraphToCrewAI(parsedNodes, parsedEdges, perms);
+              const pythonCode = compileGraphToLangGraph(parsedNodes, parsedEdges, perms);
               const targetPath = `${projectPath}/.agentflow/native/agentflow_native.py`;
               await invoke('write_file_content', {
                  path: targetPath,
@@ -361,7 +410,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
     }
   };
 
-  const chatEvents = events.filter(ev => ev.event === 'user_input' || ev.event === 'agent_finished' || ev.event === 'success' || ev.event === 'agent_action' || ev.event === 'agent_started');
+  const chatEvents = events.filter(ev => ev.event === 'user_input' || ev.event === 'agent_finished' || ev.event === 'success' || ev.event === 'agent_action' || ev.event === 'agent_started' || ev.event.startsWith('subagent_'));
   const traceEvents = events.filter(ev => ev.event !== 'user_input');
   
   const hasUnfinishedTrace = events.length > 0 && !['success', 'error'].includes(events[events.length - 1].event);
@@ -424,7 +473,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
     <div style={{ display: 'flex', flexDirection: 'row', gap: '20px', padding: '20px', backgroundColor: '#F3F4F6', height: '100%', width: '100%', boxSizing: 'border-box' }}>
       
       {/* Left Column: Workflow Graph */}
-      <div style={{ flex: '1 1 30%', backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: '0 0 28%', backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '16px', borderBottom: '1px solid #E5E7EB', fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Icons.GitBranch style={{ width: '18px', height: '18px', color: '#111827' }} /> Workflow Graph
@@ -434,10 +483,33 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
         <div style={{ flex: 1, position: 'relative' }}>
           <TeamWorkflowGraph events={events} />
         </div>
+        
+        {/* Cost Tracker Panel */}
+        <div style={{ padding: '16px', borderTop: '1px solid #E5E7EB', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600, letterSpacing: '0.5px' }}>TOTAL TOKENS</div>
+            <div style={{ fontSize: '16px', color: '#0F172A', fontWeight: 700, marginTop: '2px' }}>{costMetrics.totalTokens.toLocaleString()}</div>
+          </div>
+          <div style={{ width: '1px', height: '24px', backgroundColor: '#E2E8F0' }}></div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600, letterSpacing: '0.5px' }}>PROMPT</div>
+            <div style={{ fontSize: '16px', color: '#0F172A', fontWeight: 700, marginTop: '2px' }}>{costMetrics.promptTokens.toLocaleString()}</div>
+          </div>
+          <div style={{ width: '1px', height: '24px', backgroundColor: '#E2E8F0' }}></div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600, letterSpacing: '0.5px' }}>COMPLETION</div>
+            <div style={{ fontSize: '16px', color: '#0F172A', fontWeight: 700, marginTop: '2px' }}>{costMetrics.completionTokens.toLocaleString()}</div>
+          </div>
+          <div style={{ width: '1px', height: '24px', backgroundColor: '#E2E8F0' }}></div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#10B981', fontWeight: 600, letterSpacing: '0.5px' }}>EST. COST</div>
+            <div style={{ fontSize: '16px', color: '#10B981', fontWeight: 700, marginTop: '2px' }}>${costMetrics.cost.toFixed(4)}</div>
+          </div>
+        </div>
       </div>
 
       {/* Middle Column: Chat Timeline */}
-      <div style={{ flex: '1 1 45%', backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: '1 1 44%', backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ padding: '6px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
@@ -530,8 +602,40 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
           )}
 
           {chatEvents.map((ev, i) => {
-            const cleanedMsg = ev.event === 'user_input' ? ev.message : cleanAgentMessage(ev.message, true);
-            if (!cleanedMsg) return null;
+            if (ev.event.startsWith('subagent_')) {
+              return (
+                <div key={i} style={{ flexShrink: 0, display: 'flex', gap: '12px', animation: 'viewFadeIn 0.3s ease', paddingLeft: '48px', position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: '24px', top: '0', bottom: '0', width: '2px', backgroundColor: '#E5E7EB' }}></div>
+                  <div style={{ position: 'absolute', left: '21px', top: '16px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#9CA3AF', border: '2px solid #FFFFFF' }}></div>
+                  <div style={{ 
+                    backgroundColor: '#F9FAFB', padding: '10px 14px', 
+                    borderRadius: '8px', fontSize: '13px', lineHeight: '1.5',
+                    border: '1px dashed #D1D5DB', color: '#4B5563', maxWidth: '85%',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}>
+                    <span style={{ fontWeight: 600, color: '#374151', marginRight: '6px' }}>
+                      <Icons.Bot style={{ width: '12px', height: '12px', display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: '#6B7280' }} />
+                      {ev.agent} <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 'normal' }}>({ev.event.replace('subagent_', '')})</span>
+                    </span>
+                    <div style={{ marginTop: '4px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                      {ev.message}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            let finalMarkdown = ev.event === 'user_input' ? ev.message : cleanAgentMessage(ev.message, true);
+            if (!finalMarkdown) return null;
+
+            let extractedRoute = null;
+            if (ev.event !== 'user_input' && finalMarkdown) {
+              const routeMatch = finalMarkdown.match(/<ROUTE>([\s\S]*?)<\/ROUTE>/i);
+              if (routeMatch) {
+                extractedRoute = routeMatch[1].trim();
+                finalMarkdown = finalMarkdown.replace(/<ROUTE>[\s\S]*?<\/ROUTE>/gi, '');
+              }
+            }
 
             if (ev.agent === 'User') {
               return (
@@ -565,7 +669,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
                   boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
                   maxHeight: '400px', overflowY: 'auto', overflowX: 'hidden'
                 }}>
-                  {ev.message && (
+                  {finalMarkdown && (
                     <ErrorBoundary fallback={<div style={{color: 'red'}}>Failed to render markdown.</div>}>
                       <ReactMarkdown
                         components={{
@@ -594,9 +698,14 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
                           }
                         }}
                       >
-                        {cleanAgentMessage(ev.message, true)}
+                        {finalMarkdown}
                       </ReactMarkdown>
                     </ErrorBoundary>
+                  )}
+                  {extractedRoute && (
+                    <div style={{ marginTop: '12px', padding: '8px 12px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', color: '#1E3A8A', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      🚀 Routing to: {extractedRoute}
+                    </div>
                   )}
                   {ev.task && <div style={{ fontStyle: 'italic', color: '#6B7280', padding: '8px', background: '#F9FAFB', borderRadius: '8px', marginTop: '8px' }}>Task: {ev.task}</div>}
                   {ev.tool && <div style={{ marginTop: '8px' }}><kbd style={{ background: '#F3F4F6', color: '#111827', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E5E7EB', fontSize: '12px' }}>{ev.tool}</kbd> {ev.file && <span style={{color: '#6B7280', fontSize: '12px'}}>on {ev.file}</span>}</div>}
@@ -764,9 +873,65 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
         </div>
       </div>
 
-      {/* Right Column: System Trace Cards */}
-      <div style={{ flex: '1 1 25%', backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Right Column Container: Artifact Viewer & Trace */}
+      <div style={{ flex: '0 0 28%', display: 'flex', flexDirection: 'column', gap: '20px', overflow: 'hidden' }}>
+        
+        {/* Cost Tracker */}
+        {(costMetrics.totalTokens > 0 || costMetrics.cost > 0) && (
+          <div style={{ flex: '0 0 auto', backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center' }}>
+              <Icons.Activity style={{ width: '16px', height: '16px', marginRight: '8px', color: '#10B981' }} /> 资源消耗 (Cost Tracker)
+            </div>
+            <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase' }}>Total Tokens</span>
+                <span style={{ fontSize: '16px', fontWeight: 700, color: '#111827' }}>{costMetrics.totalTokens.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase' }}>Total Cost</span>
+                <span style={{ fontSize: '16px', fontWeight: 700, color: '#10B981' }}>${costMetrics.cost.toFixed(4)}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase' }}>Prompt Tokens</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4B5563' }}>{costMetrics.promptTokens.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase' }}>Completion Tokens</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4B5563' }}>{costMetrics.completionTokens.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Task Board */}
+        {taskBoardTasks.length > 0 && (
+          <div style={{ flex: '0 0 auto', maxHeight: '30%', backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1px solid #E5E7EB' }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center' }}>
+              <Icons.CheckSquare style={{ width: '16px', height: '16px', marginRight: '8px', color: '#3B82F6' }} /> Sub-Tasks
+            </div>
+            <div style={{ padding: '12px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {taskBoardTasks.map((task, i) => (
+                <div key={i} style={{ padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: '8px', backgroundColor: '#F9FAFB', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ fontWeight: 600, fontSize: '12px', color: '#111827' }}>{task.title}</div>
+                  <div style={{ fontSize: '11px', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Icons.Users style={{ width: '10px', height: '10px' }} /> {task.assigned}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Artifact Viewer (Top Half) */}
+        {activeArtifacts.length > 0 && (
+          <div style={{ flex: 1, backgroundColor: '#0D1117', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1px solid #30363D' }}>
+            <ArtifactViewer artifacts={activeArtifacts} />
+          </div>
+        )}
+
+        {/* System Trace Cards (Bottom Half or Full) */}
+        <div style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: '#111827' }}>
             <Icons.Terminal style={{ width: '18px', height: '18px' }} /> Trace
           </div>
@@ -874,6 +1039,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ projectPath }) => {
           })}
         </div>
       </div>
+    </div>
 
       {/* Interception Modal */}
       {pendingApproval && (

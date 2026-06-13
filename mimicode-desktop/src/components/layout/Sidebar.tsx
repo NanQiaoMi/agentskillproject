@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Icons } from '../Icons';
 import { useAppContext } from '../../context/AppContext';
 
@@ -104,10 +105,16 @@ export const Sidebar: React.FC = () => {
             </button>
           </div>
           
+          <AnimatePresence mode="popLayout">
           {tasks.length === 0 ? (
-             <div style={{ padding: '12px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+             <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ padding: '12px', fontSize: '12px', color: 'var(--color-text-muted)' }}
+             >
                {t.noTasks}
-             </div>
+             </motion.div>
           ) : tasks.map((task) => {
             const getStatusColor = (status: string) => {
               if (status === 'in_progress') return { hex: '#EF4444', glow: 'rgba(239, 68, 68, 0.15)' }; // Red
@@ -138,8 +145,13 @@ export const Sidebar: React.FC = () => {
             const agentTheme = getAgentColor(task.assignee);
 
             return (
-              <div 
+              <motion.div 
                 key={task.id}
+                layout
+                initial={{ opacity: 0, y: -5, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, scale: 0.95, filter: 'blur(2px)', transition: { duration: 0.2, ease: "easeIn" } }}
+                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1], layout: { type: 'spring', bounce: 0, duration: 0.4 } }}
                 className={`task-card-sidebar ${selectedTaskId === task.id ? 'active' : ''}`}
                 style={{ '--card-accent': agentTheme.color, '--card-glow': agentTheme.bg } as React.CSSProperties}
                 onClick={() => {
@@ -184,9 +196,10 @@ export const Sidebar: React.FC = () => {
                     {pri}
                   </span>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>
       </div>
 

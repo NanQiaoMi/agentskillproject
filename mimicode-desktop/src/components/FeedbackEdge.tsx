@@ -1,5 +1,5 @@
 import React from 'react';
-import { EdgeProps, useStore } from '@xyflow/react';
+import { EdgeProps, useReactFlow } from '@xyflow/react';
 
 export const FeedbackEdge: React.FC<EdgeProps> = ({
   id,
@@ -11,16 +11,16 @@ export const FeedbackEdge: React.FC<EdgeProps> = ({
   markerEnd,
   animated
 }) => {
-  // Find the right-most X coordinate among all nodes
-  const maxNodeX = useStore((s) => {
-    let maxX = Math.max(sourceX, targetX);
-    s.nodes.forEach(n => {
-      // Estimate node right edge: position.x + width (default to 220 since CustomLightNode is 220px wide)
-      const nodeRightX = n.position.x + (n.measured?.width || 220);
-      if (nodeRightX > maxX) maxX = nodeRightX;
-    });
-    return maxX;
+  const { getNodes } = useReactFlow();
+  
+  // Calculate maxNodeX dynamically on render
+  let maxX = Math.max(sourceX, targetX);
+  const nodes = getNodes();
+  nodes.forEach((n: any) => {
+    const nodeRightX = n.position.x + (n.measured?.width || 240);
+    if (nodeRightX > maxX) maxX = nodeRightX;
   });
+  const maxNodeX = maxX;
 
   // Calculate a padding out to the right
   const farRightX = maxNodeX + 60; // 60px clearance to the right of the right-most node

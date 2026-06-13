@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Icons } from '../Icons';
 import { Task } from '../../types';
 
@@ -39,7 +40,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const priStyle = getPriorityStyle(pri);
 
   return (
-    <div className="kanban-card" style={{ '--i': index, '--card-accent': columnColor } as React.CSSProperties} onClick={() => onSelectTask(task.id)}>
+    <motion.div 
+      layout
+      initial={{ opacity: 0, y: 15, filter: 'blur(4px)' }}
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: -10, filter: 'blur(4px)', scale: 0.98, transition: { duration: 0.2, ease: "easeIn" } }}
+      transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1], layout: { type: 'spring', bounce: 0, duration: 0.4 } }}
+      className="kanban-card" 
+      style={{ '--i': index, '--card-accent': columnColor } as React.CSSProperties} 
+      onClick={() => onSelectTask(task.id)}
+    >
       <div className="kanban-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span className="font-mono">{task.id}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -90,6 +100,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {pri}
         </span>
       </div>
-    </div>
+    </motion.div>
   );
 };

@@ -43,6 +43,36 @@ const buildMdContent = (taskData: any, selectedTask: any, commentsList: any[]) =
   return mdContent;
 };
 
+const TypewriterTitle: React.FC = () => {
+  const text1 = "你好，我是 ";
+  const text2 = "MIMIcode";
+  
+  return (
+    <h1 className="welcome-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+        {text1.split('').map((char, i) => (
+          <span key={`t1-${i}`} className="typewriter-char" style={{ animationDelay: `${i * 0.08}s` }}>
+            {char === ' ' ? '\u00A0' : char}
+          </span>
+        ))}
+        {text2.split('').map((char, i) => (
+          <span key={`t2-${i}`} className="typewriter-char" style={{ color: 'var(--color-primary-orange)', fontWeight: 700, animationDelay: `${(text1.length + i) * 0.08}s` }}>
+            {char}
+          </span>
+        ))}
+        <span style={{ 
+          display: 'inline-block', 
+          width: '3px', 
+          height: '28px', 
+          backgroundColor: 'var(--color-primary-orange)', 
+          marginLeft: '4px',
+          animation: 'blink-caret .75s step-end infinite' 
+        }}></span>
+      </div>
+    </h1>
+  );
+};
+
 export interface ChatViewProps {
   projectPath: string;
   selectedTask: Task | null;
@@ -848,8 +878,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {/* Chat Content */}
       {!selectedTask && localComments.length === 0 ? (
-        <div className="chat-welcome">
-          <h1 className="welcome-title">你好，我是 <span>MIMIcode</span></h1>
+        <div className="chat-welcome" key="welcome-screen">
+          <TypewriterTitle />
           <p className="welcome-subtitle">你的本地多智能体协同开发伙伴</p>
           <div className="welcome-actions">
             <button className="action-btn" onClick={() => (window as any).setShowInterceptionModal?.(true)}>
@@ -864,7 +894,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </div>
       ) : (
-        <div className="chat-scroll-area" ref={cliScrollRef}>
+        <div className="chat-scroll-area" ref={cliScrollRef} key="chat-screen">
           {selectedTask ? (
             <div className="chat-welcome" style={{ padding: '0 0 24px 0', borderBottom: '1px solid var(--color-border)' }}>
               <h1 className="welcome-title" style={{ fontSize: '24px' }}>{selectedTask.title}</h1>

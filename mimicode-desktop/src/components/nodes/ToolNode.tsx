@@ -40,25 +40,13 @@ export function ToolNode({ id, data }: any) {
         color: '#fff'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Icons.Tool style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
+          <Icons.Settings style={{ width: '16px', height: '16px', color: '#FFFFFF', flexShrink: 0 }} />
           <span>工具</span>
         </div>
         {isHovered && (
-          <button 
-            onClick={handleDelete}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '0',
-            }}
-          >
+          <div onClick={handleDelete} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.8 }} onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')} onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')} title="Delete node">
             <Icons.X style={{ width: '14px', height: '14px' }} />
-          </button>
+          </div>
         )}
       </div>
       

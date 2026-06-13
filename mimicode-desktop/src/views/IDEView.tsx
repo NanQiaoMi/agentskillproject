@@ -341,7 +341,7 @@ export const IDEView: React.FC<IDEViewProps> = ({ projectPath }) => {
     const separator = projectPath.includes('/') ? '/' : '\\';
     const filePath = file.startsWith(projectPath) ? file : projectPath + separator + file;
 
-    const existing = openedFiles.find(f => f.path === filePath);
+    const existing = openedFilesRef.current.find(f => f.path === filePath);
     if (existing) {
       setActiveFilePath(filePath);
       if (activeTab === 'git') loadGitDiff(filePath);

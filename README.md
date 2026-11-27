@@ -12,6 +12,39 @@ AgentFlow 是一套专为本地多智能体协作设计的**极简、高强度�
 
 ---
 
+## 🖥️ 桌面端工作台预览 (MIMIcode Studio)
+
+项目内置基于 Tauri + React 的桌面端可视化控制台（`mimicode-desktop`），支持多智能体编排、任务看板追踪与本地对话驱动：
+
+| 对话与欢迎工作台 | 多智能体角色矩阵 |
+| :---: | :---: |
+| ![MIMIcode Studio 对话工作台](docs/images/chat-welcome.png) | ![MIMIcode Studio 智能体矩阵](docs/images/agents-collab.png) |
+
+| 任务看板与状态流转 |
+| :---: |
+| ![MIMIcode Studio 任务看板](docs/images/tasks-board.png) |
+
+### 多智能体协作架构
+
+```mermaid
+flowchart LR
+    User["👤 人类总管<br/>需求定义 & 验收拍板"] --> Studio["🖥️ MIMIcode Studio<br/>桌面端控制台 / 对话入口"]
+    Studio --> Engine["⚙️ AgentFlow 控制引擎<br/>.agentflow/agentflow.py"]
+    Engine --> DB[("🗄️ SQLite 双写缓存<br/>.agentflow/tasks.db")]
+    Engine --> Tasks["📋 去中心化任务卡<br/>.agentflow/tasks/*.md"]
+
+    Tasks --> Planner["🧭 Hermes Agent<br/>头脑风暴 & SDD 拆单"]
+    Tasks --> FE["⚡ Antigravity<br/>前端开发 (src/frontend)"]
+    Tasks --> BE["🔧 Codex<br/>后端开发 (src/backend)"]
+    Tasks --> Audit["🛡️ Claude Code<br/>质量门禁 & 自动合入"]
+
+    FE --> Git["🌿 Git 隔离分支<br/>feature/task-xxx"]
+    BE --> Git
+    Audit --> Git
+```
+
+---
+
 ## 🧭 一、 Vibe Coding 哲学体系：道、法、术、器
 
 框架汲取了前沿 Vibe Coding 社区的核心心法（Brainstorm → Spec → Build），并将其体系化落地为“道、法、术、器”的开发范式：
